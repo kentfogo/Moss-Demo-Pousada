@@ -701,6 +701,8 @@ body.started .canvas { background: var(--bg-2); }
   .pageview { scroll-behavior: auto; }
 }
 </style>
+<link rel="stylesheet" href="site/design.css">
+<script src="site/design.js"></script>
 </head>
 <body>
 <div id="app">
@@ -867,7 +869,8 @@ const SECTION_META = {
   pricing: { label: 'Pricing', icon: 'tag' }, faq: { label: 'FAQ', icon: 'help' }, cta: { label: 'CTA', icon: 'arrow' }, footer: { label: 'Footer', icon: 'lines' },
   text: { label: 'Story', icon: 'text' }, stats: { label: 'Stats', icon: 'bars' }, contact: { label: 'Contact', icon: 'mail' }, booking: { label: 'Booking', icon: 'calendar' },
 };
-const CANON = ['hero', 'text', 'stats', 'features', 'testimonials', 'pricing', 'booking', 'contact', 'faq', 'cta', 'footer'];
+Object.entries(window.MossSite ? MossSite.NEW_TYPES : {}).forEach(([k, v]) => { SECTION_META[k] = { label: v.label, icon: v.icon }; });
+const CANON = ['hero', 'logos', 'text', 'stats', 'features', 'steps', 'gallery', 'testimonials', 'pricing', 'booking', 'contact', 'faq', 'callStrip', 'cta', 'footer'];
 
 /* =====================================================================
    THEME
@@ -935,7 +938,7 @@ const sound = (() => {
    PAGE MODEL: JSON state for pages / sections / links / flows + undo
    ===================================================================== */
 const pageModel = (() => {
-  const fresh = () => ({ business: null, palette: 'ice', pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
+  const fresh = () => ({ business: null, palette: 'ice', design: null, pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
   let state = fresh();
   const history = [];
   return {
@@ -1078,7 +1081,7 @@ const agent = (() => {
   function makeSection(type, c, opts = {}) {
     const id = uid(type.slice(0, 3));
     switch (type) {
-      case 'hero': return { id, type, data: { variant: opts.variant || 'split', eyebrow: opts.eyebrow || c.hero.eyebrow, headline: opts.headline || c.hero.headline, punchy: c.hero.punchy, punchIx: 0, sub: opts.sub || c.hero.sub, subShort: c.hero.subShort, primary: opts.primary || c.hero.primary, secondary: c.hero.secondary, card: c.hero.card, logos: null } };
+      case 'hero': return { id, type, data: { variant: opts.variant, eyebrow: opts.eyebrow || c.hero.eyebrow, headline: opts.headline || c.hero.headline, punchy: c.hero.punchy, punchIx: 0, sub: opts.sub || c.hero.sub, subShort: c.hero.subShort, primary: opts.primary || c.hero.primary, secondary: c.hero.secondary, card: c.hero.card, logos: null } };
       case 'features': return { id, type, data: clone(c.features) };
       case 'testimonials': return { id, type, data: Object.assign(clone(c.testimonials), { logos: c.hero.logos }) };
       case 'pricing': return { id, type, data: clone(c.pricing) };
@@ -1090,6 +1093,7 @@ const agent = (() => {
       case 'contact': return { id, type, data: clone(c.contact) };
       case 'booking': return { id, type, data: clone(c.booking) };
     }
+    if (window.MossSite && MossSite.NEW_TYPES[type]) return { id, type, data: MossSite.NEW_TYPES[type].defaults(c) };
     return null;
   }
   const PAGE_RECIPES = {
@@ -1150,7 +1154,8 @@ const agent = (() => {
     const c = copyFor(kind, extractName(text), extractPlace(text));
     const business = { kind, name: c.name, place: extractPlace(text), prompt: text, copy: c };
     const types = ['hero', 'features', 'testimonials', 'pricing', 'faq', 'cta', 'footer'];
-    const ops = [{ op: 'setBusiness', business }, { op: 'addPage', page: { id: 'home', name: 'Home', sections: [] }, navigate: true, quiet: true }];
+    const direction = { pousada: 'hospitality', coffee: 'editorial', saas: 'darktech' }[kind] || 'swiss';
+    const ops = [{ op: 'setBusiness', business }, { op: 'setDesign', design: { direction } }, { op: 'addPage', page: { id: 'home', name: 'Home', sections: [] }, navigate: true, quiet: true }];
     types.forEach((t) => ops.push({ op: 'addSection', page: 'home', section: makeSection(t, c) }));
     return {
       reply: `${c.name}, a ${c.kindLabel}${business.place ? ' in ' + business.place : ''}. I’ll lay out the landing page as seven modules: hero, features, testimonials, pricing, FAQ, a closing CTA and the footer.`,
@@ -1254,6 +1259,18 @@ const agent = (() => {
       return { reply: `Moved ${label(a.type)} ${how}.`, ops: [{ op: 'setOrder', page: cur.id, order: next }], suggestions: ['Undo', 'Warmer colors'] };
     }
 
+    const DIRECTION_WORDS = [
+      [/\bneo-?brutal(ist)?\b|\bbrutal(ist)?\b/, 'brutal'], [/\beditorial\b|\bmagazine\b/, 'editorial'], [/\bswiss\b/, 'swiss'],
+      [/\bdark tech\b|\btechy\b|\bdark mode\b|\bmake it dark\b/, 'darktech'], [/\bplayful\b|\brounded\b|\bfun\b/, 'playful'],
+      [/\bluxury\b|\bluxurious\b|\belegant\b|\bpremium\b/, 'luxury'], [/\bmono grid\b|\bportfolio (look|style)\b/, 'mono'],
+      [/\btrade\b|\bindustrial\b|\bcondensed\b/, 'trade'], [/\bhospitality\b|\bcosy look\b|\bcozy look\b/, 'hospitality'],
+    ];
+    const dirHit = DIRECTION_WORDS.find(([re]) => re.test(low));
+    if (dirHit && window.MossSite) {
+      const dd = MossSite.byId(dirHit[1]);
+      if (state.design && state.design.direction === dd.id) return { reply: `It's already in the ${dd.name} direction.`, ops: [] };
+      return { reply: `Switching to ${dd.name}: ${dd.mood.charAt(0).toLowerCase() + dd.mood.slice(1)}`, ops: [{ op: 'setDesign', design: { direction: dd.id } }], suggestions: ['Undo', 'Warmer colors'] };
+    }
     const restyle = [
       [/\b(warm|warmer|earthy|terracotta|sand|sunny|cozy|cosy)\b/, 'warm', 'Warmed it up: terracotta accents on a sand-toned base.'],
       [/\b(green|greener|natural|sage|botanical|calm|calmer)\b/, 'sage', 'Shifted to sage: a quieter green accent on an off-white base.'],
@@ -1330,7 +1347,7 @@ const agent = (() => {
     try {
       const r = await fetch('/api/agent', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-8) }),
+        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-8), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections() }),
       });
       const json = await r.json().catch(() => ({}));
       if (!r.ok) { if (r.status === 503 || r.status === 404) remoteDisabled = true; throw new Error(json.error || `HTTP ${r.status}`); }
@@ -1348,8 +1365,10 @@ const agent = (() => {
   function slimState(state) {
     const s = clone(state);
     if (s.business) s.business = { name: s.business.name, kind: s.business.kind, place: s.business.place };
+    if (s.design) s.design = { direction: s.design.direction, name: s.design.name, colors: s.design.colors, swatches: s.design.swatches, type: s.design.type, shape: s.design.shape, variants: s.design.variants, art: s.design.art };
     return s;
   }
+  function recentDirections() { try { return JSON.parse(localStorage.getItem('moss-recent-directions') || '[]'); } catch (e) { return []; } }
 
   // Keep only plain data: strings, numbers, booleans, small arrays and objects. Internal links only.
   function cleanValue(v, depth = 0) {
@@ -1489,6 +1508,9 @@ const agent = (() => {
         case 'setPalette':
           if (['ice', 'warm', 'sage', 'ink'].includes(raw.palette)) ops.push({ op: 'setPalette', palette: raw.palette });
           break;
+        case 'setDesign':
+          if (raw.design && typeof raw.design === 'object') ops.push({ op: 'setDesign', design: cleanValue(raw.design) });
+          break;
         case 'addLink': {
           const from = slug(raw.from) || sim.currentPage, to = slug(raw.to);
           if (!pageOf(from) || !pageOf(to) || from === to) break;
@@ -1558,30 +1580,40 @@ const renderer = (() => {
         ? `<div class="actions"><a class="text-link" href="#/home">${esc(d.secondary || 'Learn more')} ${icon('arrow')}</a></div>`
         : `<div class="actions"><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(d.primary)}</a><a class="btn btn-secondary" href="#/home">${esc(d.secondary || 'Learn more')}</a></div>`;
       const logos = logoRow(d.logos);
-      if (d.variant === 'centered') return `<div class="wrap"><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}${logos}</div>`;
+      if (d.variant === 'centered') return `<div class="wrap"><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${MossSite.rich(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}${logos}</div>`;
       const cd = d.card;
       const card = cd ? `<div class="hero-card glass"><div class="hc-head"><span class="hc-title">${esc(cd.title)}</span><span class="hc-tag">${esc(cd.tag || '')}</span></div><dl>${cd.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><p class="note">${esc(cd.note)}</p><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(cd.cta)}</a></div>` : '';
-      return `<div class="wrap"><div class="hero-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}</div>${card}</div>${logos}</div>`;
+      return `<div class="wrap"><div class="hero-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${MossSite.rich(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}</div>${card}</div>${logos}</div>`;
     },
-    features: (d) => `<div class="wrap"><div class="feat-split"><div class="fs-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p class="lede">${esc(d.lede || '')}</p></div><ol class="feat-list">${d.items.map(([ic, t, p], i) => `<li class="feat"><div class="ft"><span class="n">${String(i + 1).padStart(2, '0')}</span><h3>${esc(t)}</h3></div><p>${esc(p)}</p></li>`).join('')}</ol></div></div>`,
-    testimonials: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p></p></div><div class="quote-grid">${d.items.map(([q, n, r]) => `<figure class="quote" style="margin:0"><blockquote>“${esc(q)}”</blockquote><figcaption><span class="av">${esc(n.split(/\s|&/).filter(Boolean).map((w) => w[0]).slice(0, 2).join(''))}</span><span class="who"><b>${esc(n)}</b><span>${esc(r)}</span></span></figcaption></figure>`).join('')}</div>${logoRow(d.logos)}</div>`,
-    pricing: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p>${esc(d.lede || '')}</p></div><div class="price-grid">${d.plans.map(([n, p, f, feat]) => `<article class="plan ${feat ? 'featured' : ''}"><div class="ph"><span class="pn">${esc(n)}</span>${feat ? '<span class="pill">Most loved</span>' : ''}</div><div class="pr"><b>${esc(p)}</b><span>${esc(d.unit)}</span></div><ul>${f.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><a class="btn ${feat ? 'btn-primary' : 'btn-secondary'}" href="#/booking">${esc(d.cta)}</a></article>`).join('')}</div></div>`,
-    faq: (d) => `<div class="wrap"><div class="faq-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><div class="faq-list">${d.items.map(([q, a], i) => `<details ${i === 0 ? 'open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div></div></div>`,
-    cta: (d) => `<div class="wrap"><div class="cta-band"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2><p>${esc(d.sub)}</p></div><div><a class="btn btn-primary" href="${esc(d.href || '#/home')}">${esc(d.button)} ${icon('arrow')}</a>${d.href && d.href !== '#/home' ? `<span class="link-hint">→ ${esc(d.href.replace('#', ''))}</span>` : ''}</div></div></div>`,
+    features: (d) => `<div class="wrap"><div class="feat-split"><div class="fs-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${MossSite.rich(d.title)}</h2></div><p class="lede">${esc(d.lede || '')}</p></div><ol class="feat-list">${d.items.map(([ic, t, p], i) => `<li class="feat"><div class="ft"><span class="n">${String(i + 1).padStart(2, '0')}</span><h3>${esc(t)}</h3></div><p>${esc(p)}</p></li>`).join('')}</ol></div></div>`,
+    testimonials: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${MossSite.rich(d.title)}</h2></div><p></p></div><div class="quote-grid">${d.items.map(([q, n, r]) => `<figure class="quote" style="margin:0"><blockquote>“${esc(q)}”</blockquote><figcaption><span class="av">${esc(n.split(/\s|&/).filter(Boolean).map((w) => w[0]).slice(0, 2).join(''))}</span><span class="who"><b>${esc(n)}</b><span>${esc(r)}</span></span></figcaption></figure>`).join('')}</div>${logoRow(d.logos)}</div>`,
+    pricing: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${MossSite.rich(d.title)}</h2></div><p>${esc(d.lede || '')}</p></div><div class="price-grid">${d.plans.map(([n, p, f, feat]) => `<article class="plan ${feat ? 'featured' : ''}"><div class="ph"><span class="pn">${esc(n)}</span>${feat ? '<span class="pill">Most loved</span>' : ''}</div><div class="pr"><b>${esc(p)}</b><span>${esc(d.unit)}</span></div><ul>${f.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><a class="btn ${feat ? 'btn-primary' : 'btn-secondary'}" href="#/booking">${esc(d.cta)}</a></article>`).join('')}</div></div>`,
+    faq: (d) => `<div class="wrap"><div class="faq-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${MossSite.rich(d.title)}</h2></div><div class="faq-list">${d.items.map(([q, a], i) => `<details ${i === 0 ? 'open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div></div></div>`,
+    cta: (d) => `<div class="wrap"><div class="cta-band"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${MossSite.rich(d.title)}</h2><p>${esc(d.sub)}</p></div><div><a class="btn btn-primary" href="${esc(d.href || '#/home')}">${esc(d.button)} ${icon('arrow')}</a>${d.href && d.href !== '#/home' ? `<span class="link-hint">→ ${esc(d.href.replace('#', ''))}</span>` : ''}</div></div></div>`,
     footer: (d) => `<div class="wrap"><div class="foot-grid"><div><span class="s-brand"><i></i>${esc(d.name)}</span><p>${esc(d.blurb)}</p></div>${d.cols.map(([h, items]) => `<div><h4>${esc(h)}</h4><ul>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div><div class="foot-base"><span>${esc(d.base)}</span><span>Built with Moss</span></div></div>`,
-    text: (d) => `<div class="wrap"><div class="story"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><div class="body">${d.body.map((p) => `<p>${esc(p)}</p>`).join('')}</div></div></div>`,
+    text: (d) => `<div class="wrap"><div class="story"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${MossSite.rich(d.title)}</h2></div><div class="body">${d.body.map((p) => `<p>${esc(p)}</p>`).join('')}</div></div></div>`,
     stats: (d) => `<div class="wrap"><div class="stats">${d.items.map(([v, l]) => `<div class="stat"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div></div>`,
     contact: (d) => `<div class="wrap"><div class="form-grid"><div class="form-card"><div class="row2"><div class="field"><label>Name</label><div class="in">Your name</div></div><div class="field"><label>Email</label><div class="in">you@example.com</div></div></div><div class="field"><label>Message</label><div class="in tall">Tell us a little about your plans…</div></div><a class="btn btn-primary" href="#/contact">Send message</a></div><div class="details-card glass"><span class="eyebrow">Details</span><dl>${d.details.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></div></div></div>`,
     booking: (d) => `<div class="wrap"><div class="form-grid"><div class="form-card"><div class="row2"><div class="field"><label>Arrive</label><div class="in">Fri 14 Mar</div></div><div class="field"><label>Leave</label><div class="in">Mon 17 Mar</div></div></div><div class="field"><label>Choose</label><div class="room-opts">${d.rooms.map(([n, p], i) => `<div class="room-opt ${i === 1 ? 'on' : ''}">${esc(n)}<span>${esc(p)}</span></div>`).join('')}</div></div></div><div class="details-card glass"><span class="eyebrow">Summary</span><dl><div><dt>Selection</dt><dd>${esc(d.rooms[1][0])}</dd></div><div><dt>Dates</dt><dd>14 – 17 Mar · 3 nights</dd></div></dl><a class="btn btn-primary" style="width:100%;margin-top:20px" href="#/booking">Continue</a></div></div></div>`,
   };
   const CLS = { hero: (d) => `sec-hero ${d.variant === 'centered' ? 'centered' : ''}`, features: () => 'sec-pad', testimonials: () => 'sec-pad sec-tint', pricing: () => 'sec-pad', faq: () => 'sec-pad sec-tint', cta: () => 'sec-cta', footer: () => 'sec-footer', text: () => 'sec-pad', stats: () => 'sec-pad', contact: () => 'sec-pad', booking: () => 'sec-pad' };
 
-  function sectionHTML(sec) { return T[sec.type] ? T[sec.type](sec.data) : ''; }
+  const design = () => pageModel.get().design;
+  function resolved(sec) {
+    const v = window.MossSite ? MossSite.variantOf(sec, design()) : null;
+    return v ? Object.assign({}, sec, { data: Object.assign({}, sec.data, { variant: v }) }) : sec;
+  }
+  function sectionHTML(sec) {
+    const r = resolved(sec);
+    const custom = window.MossSite ? MossSite.render(r, design()) : null;
+    return custom != null ? custom : T[sec.type] ? T[sec.type](r.data) : '';
+  }
   function makeEl(sec) {
     const el = document.createElement('section');
-    el.className = `sec sec-${sec.type} ${CLS[sec.type] ? CLS[sec.type](sec.data) : ''}`;
+    const r = resolved(sec); const nt = window.MossSite && MossSite.NEW_TYPES[sec.type];
+    el.className = `sec sec-${sec.type} ${nt ? nt.cls : CLS[sec.type] ? CLS[sec.type](r.data) : ''} ${r.data.variant ? 'v-' + r.data.variant : ''}`;
     el.dataset.id = sec.id; el.dataset.type = sec.type; el.setAttribute('aria-label', SECTION_META[sec.type].label);
-    el.innerHTML = sectionHTML(sec); el.dataset.hash = JSON.stringify(sec.data);
+    el.innerHTML = sectionHTML(sec); el.dataset.hash = JSON.stringify(sec.data) + JSON.stringify(pageModel.get().design || null);
     return el;
   }
   function renderTop() {
@@ -1595,6 +1627,8 @@ const renderer = (() => {
     const site = siteEl(); site.dataset.palette = st.palette;
     renderTop();
     const box = $('#siteSections');
+    if (window.MossSite) MossSite.apply(site, st.design);
+    const designKey = JSON.stringify(st.design || null);
     if (box.dataset.page !== st.currentPage) { box.innerHTML = ''; box.dataset.page = st.currentPage; }
     const zoom = parseFloat(getComputedStyle(site).zoom) || 1;
     const before = new Map();
@@ -1603,7 +1637,7 @@ const renderer = (() => {
     const wanted = page ? page.sections : [];
     wanted.forEach((sec, i) => {
       let el = existing.get(sec.id);
-      const hash = JSON.stringify(sec.data);
+      const hash = JSON.stringify(sec.data) + designKey;
       if (!el) { el = makeEl(sec); if (sec.id === animateId) el.classList.add('unfold'); }
       else if (el.dataset.hash !== hash) {
         const fresh = makeEl(sec); fresh.classList.add('refresh'); el.replaceWith(fresh); el = fresh;
@@ -1634,7 +1668,7 @@ const renderer = (() => {
   }
   function flash(id) { const el = $(`#siteSections [data-id="${id}"]`); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1800 * SPEED); }
   // Used to vet model-written section data: it must render without throwing.
-  function validate(type, data) { try { return !!T[type] && typeof T[type](data) === 'string'; } catch (e) { return false; } }
+  function validate(type, data) { try { const sec = { type, data }; const html = sectionHTML(sec); return typeof html === 'string' && html.length > 0; } catch (e) { return false; } }
   return { render, removeSection, flash, validate };
 })();
 
@@ -2104,7 +2138,16 @@ const app = (() => {
     pv.scrollTo({ top: Math.max(0, top), behavior: reducedMotion.matches ? 'instant' : 'smooth' });
   }
 
-  const MUTATING = new Set(['setBusiness', 'addPage', 'addSection', 'updateSection', 'setOrder', 'deleteSection', 'deletePage', 'setPalette', 'addLink', 'addFlow']);
+  const PALETTES = {
+    ice: { bg: '#fbfbf9', surface: '#ffffff', ink: '#1b1c20', muted: '#43464e', accent: '#0d7480', accent2: '#5fdcea', inverse: '#17181c' },
+    warm: { bg: '#fcf6ee', surface: '#fffdfa', ink: '#2a211b', muted: '#5f5249', accent: '#a84b22', accent2: '#f2a66f', inverse: '#2a1d16' },
+    sage: { bg: '#f8faf5', surface: '#ffffff', ink: '#1b211c', muted: '#4a554c', accent: '#3b7049', accent2: '#98d6a2', inverse: '#18211b' },
+    ink: { bg: '#ffffff', surface: '#f5f5f4', ink: '#111214', muted: '#4d4f55', accent: '#2b2d33', accent2: '#c3c7cf', inverse: '#111214' },
+  };
+  function rememberDirection(id) {
+    try { const k = 'moss-recent-directions'; const list = JSON.parse(localStorage.getItem(k) || '[]').filter((x) => x !== id); list.unshift(id); localStorage.setItem(k, JSON.stringify(list.slice(0, 4))); } catch (e) {}
+  }
+  const MUTATING = new Set(['setBusiness', 'setDesign', 'addPage', 'addSection', 'updateSection', 'setOrder', 'deleteSection', 'deletePage', 'setPalette', 'addLink', 'addFlow']);
   async function applyOp(op, msgEl) {
     const st = pageModel.get();
     switch (op.op) {
@@ -2172,8 +2215,15 @@ const app = (() => {
         if (st.currentPage === op.page) navigate('home'); else renderAll();
         await wait(300); done(); break;
       }
+      case 'setDesign': {
+        st.design = MossSite.sanitizeDesign(op.design, st.design);
+        rememberDirection(st.design.direction);
+        const done = logLine(msgEl, 'style', `${st.design.name.toLowerCase()} · ${st.design.type.display.toLowerCase()}`);
+        renderer.render({ flip: false }); isoScene.render(); sound.play('rise'); await wait(500); done(); break;
+      }
       case 'setPalette': {
         st.palette = op.palette;
+        if (st.design && PALETTES[op.palette]) st.design = MossSite.sanitizeDesign({ direction: st.design.direction, colors: PALETTES[op.palette] }, st.design);
         const done = logLine(msgEl, 'style', `palette → ${op.palette}`);
         renderer.render(); sound.play('rise'); await wait(700); done(); break;
       }

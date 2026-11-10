@@ -1,0 +1,198 @@
+{
+ "Fraunces": {
+  "role": "display",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "fraunces-400-normal.woff2"
+   },
+   {
+    "weight": 400,
+    "style": "italic",
+    "file": "fraunces-400-italic.woff2"
+   },
+   {
+    "weight": 600,
+    "style": "normal",
+    "file": "fraunces-600-normal.woff2"
+   }
+  ]
+ },
+ "DM Serif Display": {
+  "role": "display",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "dm-serif-display-400-normal.woff2"
+   },
+   {
+    "weight": 400,
+    "style": "italic",
+    "file": "dm-serif-display-400-italic.woff2"
+   }
+  ]
+ },
+ "Instrument Serif": {
+  "role": "display",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "instrument-serif-400-normal.woff2"
+   },
+   {
+    "weight": 400,
+    "style": "italic",
+    "file": "instrument-serif-400-italic.woff2"
+   }
+  ]
+ },
+ "Space Grotesk": {
+  "role": "sans",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "space-grotesk-400-normal.woff2"
+   },
+   {
+    "weight": 500,
+    "style": "normal",
+    "file": "space-grotesk-500-normal.woff2"
+   },
+   {
+    "weight": 700,
+    "style": "normal",
+    "file": "space-grotesk-700-normal.woff2"
+   }
+  ]
+ },
+ "Archivo": {
+  "role": "sans",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "archivo-400-normal.woff2"
+   },
+   {
+    "weight": 600,
+    "style": "normal",
+    "file": "archivo-600-normal.woff2"
+   },
+   {
+    "weight": 800,
+    "style": "normal",
+    "file": "archivo-800-normal.woff2"
+   }
+  ]
+ },
+ "Bebas Neue": {
+  "role": "display",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "bebas-neue-400-normal.woff2"
+   }
+  ]
+ },
+ "Bowlby One": {
+  "role": "display",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "bowlby-one-400-normal.woff2"
+   }
+  ]
+ },
+ "Nunito": {
+  "role": "sans",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "nunito-400-normal.woff2"
+   },
+   {
+    "weight": 700,
+    "style": "normal",
+    "file": "nunito-700-normal.woff2"
+   },
+   {
+    "weight": 800,
+    "style": "normal",
+    "file": "nunito-800-normal.woff2"
+   }
+  ]
+ },
+ "Inter": {
+  "role": "sans",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "inter-400-normal.woff2"
+   },
+   {
+    "weight": 500,
+    "style": "normal",
+    "file": "inter-500-normal.woff2"
+   },
+   {
+    "weight": 600,
+    "style": "normal",
+    "file": "inter-600-normal.woff2"
+   },
+   {
+    "weight": 700,
+    "style": "normal",
+    "file": "inter-700-normal.woff2"
+   }
+  ]
+ },
+ "JetBrains Mono": {
+  "role": "mono",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "jetbrains-mono-400-normal.woff2"
+   },
+   {
+    "weight": 500,
+    "style": "normal",
+    "file": "jetbrains-mono-500-normal.woff2"
+   }
+  ]
+ },
+ "IBM Plex Mono": {
+  "role": "mono",
+  "license": "OFL-1.1",
+  "faces": [
+   {
+    "weight": 400,
+    "style": "normal",
+    "file": "ibm-plex-mono-400-normal.woff2"
+   },
+   {
+    "weight": 500,
+    "style": "normal",
+    "file": "ibm-plex-mono-500-normal.woff2"
+   }
+  ]
+ }
+}

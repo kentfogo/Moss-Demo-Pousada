@@ -45,16 +45,23 @@ OPS (applied in order):
 - {"op":"setOrder","page":pageId,"order":[every section id on that page, in the new order]}
 - {"op":"deleteSection","page":pageId,"id":sectionId}
 - {"op":"deletePage","page":pageId}   never delete "home".
-- {"op":"setPalette","palette":"ice"|"warm"|"sage"|"ink"}   ice = cool teal, warm = terracotta and sand, sage = soft green, ink = monochrome.
+- {"op":"setDesign","design":{"direction":directionId,"name"?:string,"colors"?:{"bg","surface","ink","muted","accent","accent2","inverse"},"swatches"?:{name:hex},"type"?:{"display","body","mono","case":"none"|"uppercase","weight","tracking","scale"},"shape"?:{"radius","button":"pill"|"square"|"brutal"|"outline"|"accent","border":"none"|"hairline"|"heavy","shadow":"none"|"soft"|"hard"},"density"?:"airy"|"regular"|"compact","texture"?:"none"|"grain"|"dotgrid"|"lines","variants"?:{sectionType:variant},"art"?:artKind}}
+    The site's whole design system. Start from a DIRECTION (listed under DIRECTIONS) and override only what makes it right for this business: hex colours, fonts from the font list, shape, layouts. Only send fields you change; the app keeps the rest and fixes contrast.
+    Use it on the first build (right after setBusiness), and for any style request: "make it bold", "navy and orange", "square buttons with a hard shadow", "uppercase headings", "use Fraunces".
+- {"op":"setPalette","palette":"ice"|"warm"|"sage"|"ink"}   quick preset colours only; prefer setDesign with explicit colours.
 - {"op":"addLink","from":pageId,"section":sectionId,"to":pageId}   also send an updateSection that sets that cta's "href" to "#/<to>".
 - {"op":"addFlow","flow":{"name":string,"nodes":[{"id":string,"label":string,"kind":"start"|"step"|"decision"|"end"}],"edges":[{"from":id,"to":id,"label"?:"yes"|"no"|string}]}}
     5–10 nodes, exactly one start, at least one end, labels under 28 characters. Layout is automatic.
 - {"op":"setView","view":"page"|"flow"}   send setView "flow" before addFlow.
 - {"op":"navigate","page":pageId}
 
-SECTION TYPES and their data (all text plain, no markdown, no emoji):
-- hero: {"variant":"split"|"centered","eyebrow","headline","sub","primary","secondary","card"?:{"title","tag","rows":[[label,value],[label,value],[label,value]],"cta","note"}}
-    Home uses "split" with a card that suits the business (a booking widget, this week's product, an account summary). Other pages use "centered" without a card.
+SECTION TYPES and their data (plain text, no markdown, no emoji). Wrap 1–3 words of a headline or title in *asterisks* to set them in the accent colour.
+Any section may carry "variant" (a layout) and visual sections may carry "art":{"kind":artKind,"seed":string,"label"?:string}. artKind ∈ orb, dotgrid, shapes, pattern, frame, iso (generated to match the palette).
+LAYOUTS (variant) per type — omit to use the design's default:
+  hero: split (copy + a card), centered, editorial (huge headline right, meta left, wide art below), bigtype (giant headline, art band below), spotlight (art above a centered headline)
+  features: list, cards, bento, icons · testimonials: grid, single, marquee · pricing: cards, table · faq: split, centered · cta: band, split, minimal · footer: columns, wordmark
+- hero: {"variant"?,"eyebrow","headline","sub","primary","secondary","card"?:{"title","tag","rows":[[label,value],[label,value],[label,value]],"cta","note"},"art"?}
+    The split layout shows the card (a booking widget, this week's special, an account summary); the other layouts show art. Other pages use "centered" without a card.
 - features: {"eyebrow","title","lede","items":[[icon,title,text] ×4]}   icon ∈ leaf, bed, wave, compass, cup, box, chart, shield, bolt, clock
 - testimonials: {"eyebrow","title","items":[[quote,name,role] ×3],"logos"?:string}   logos is a short label like "As featured in".
 - pricing: {"eyebrow","title","lede","unit","cta","plans":[[name,price,[feature,feature,feature],featured:boolean] ×3]}   exactly one featured.
@@ -65,9 +72,14 @@ SECTION TYPES and their data (all text plain, no markdown, no emoji):
 - stats: {"items":[[value,label] ×3]}
 - contact: {"eyebrow","headline","sub","details":[[label,value] ×3]}
 - booking: {"eyebrow","headline","sub","rooms":[[name,price] ×3]}
+- steps: {"eyebrow","title","lede"?,"items":[[title,text] ×3–4]}   how it works.
+- gallery: {"eyebrow","title","items":[[caption,artKind] ×6]}   menu, rooms, before-and-after, work.
+- logos: {"label"}   a row of client or press marks.
+- callStrip: {"title","sub","phone","button","href"?}   urgent call-to-action strip for local services.
 
 RULES
-- First message (STATE has no pages): setBusiness, addPage home, then addSection on "home" for hero, features, testimonials, pricing, faq, cta, footer, in that order, each with complete data.
+- First message (STATE has no pages): setBusiness, setDesign, addPage home, then 6–8 addSection ops on "home" chosen FOR THIS BUSINESS (not always the same set): always hero first and footer last; pick from features, steps, gallery, testimonials, logos, pricing, faq, callStrip, cta. A plumber wants steps + callStrip; a burger bar wants gallery + menu-like pricing; a SaaS wants logos + features + pricing.
+- DESIGN: every business gets its own look. Choose the direction whose "fits" matches best, avoid RECENT directions unless the user asked for one, then customise colours, fonts and layouts so it feels made for this business. Vary section layouts down the page (do not use the same layout twice in a row when an alternative fits).
 - New pages: addPage, then 3–5 fitting sections ending with footer (about: hero centered, text, stats, cta, footer; contact: hero centered, contact, footer; booking: hero centered, booking, faq, footer; pricing: hero centered, pricing, faq, cta, footer).
 - Edits: change only what was asked. Use updateSection with just the changed fields. Use the real section ids from STATE.
 - "@Name" refers to a page by name or a section on the current page by type (e.g. @Hero).
@@ -83,6 +95,7 @@ export function compactState(state = {}) {
     business: state.business ? { name: state.business.name, kind: state.business.kind, place: state.business.place } : null,
     currentPage: state.currentPage || 'home',
     palette: state.palette || 'ice',
+    design: state.design && typeof state.design === 'object' ? { direction: state.design.direction, name: state.design.name, colors: state.design.colors, swatches: state.design.swatches, type: state.design.type, shape: state.design.shape, variants: state.design.variants, art: state.design.art } : null,
     pages: pages.map((p) => ({ id: p.id, name: p.name, sections: (p.sections || []).map((s) => ({ id: s.id, type: s.type, data: stripLocal(s.data) })) })),
     links: Array.isArray(state.links) ? state.links : [],
     flows: (Array.isArray(state.flows) ? state.flows : []).map((f) => f.name),
@@ -104,25 +117,33 @@ export function extractJSON(text) {
   return JSON.parse(body.slice(start, end + 1));
 }
 
-export function buildMessages({ message, state, history }) {
+const FONT_LIST = 'display: Fraunces, DM Serif Display, Instrument Serif, Bebas Neue, Bowlby One, Inter, Space Grotesk, Archivo, Nunito · body: Inter, Archivo, Space Grotesk, Nunito · mono: JetBrains Mono, IBM Plex Mono';
+function designContext(directions, recent) {
+  const list = (Array.isArray(directions) ? directions : []).slice(0, 12).map((d) => ({ id: d.id, name: d.name, mood: d.mood, fits: d.fits, colors: d.colors, type: d.type, shape: d.shape, variants: d.variants, art: d.art }));
+  if (!list.length) return '';
+  const rec = (Array.isArray(recent) ? recent : []).filter((x) => typeof x === 'string').slice(0, 4);
+  return `DIRECTIONS:\n${JSON.stringify(list)}\nFONTS: ${FONT_LIST}\nRECENT (avoid unless asked): ${rec.join(', ') || 'none'}\n\n`;
+}
+
+export function buildMessages({ message, state, history, directions, recentDirections }) {
   const turns = (Array.isArray(history) ? history : []).slice(-8)
     .filter((t) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string')
     .map((t) => ({ role: t.role, content: t.content.slice(0, 1500) }));
   return [
     { role: 'system', content: SYSTEM_PROMPT },
     ...turns,
-    { role: 'user', content: `STATE:\n${JSON.stringify(compactState(state))}\n\nMESSAGE:\n${message}` },
+    { role: 'user', content: `${designContext(directions, recentDirections)}STATE:\n${JSON.stringify(compactState(state))}\n\nMESSAGE:\n${message}` },
   ];
 }
 
-export async function callMoss({ message, state, history }, env = process.env, fetchImpl = fetch) {
+export async function callMoss({ message, state, history, directions, recentDirections }, env = process.env, fetchImpl = fetch) {
   const { token, base, model } = mossSettings(env);
   if (!token) {
     // Names only (never values), so a misnamed or wrongly scoped variable is easy to spot.
     const seen = Object.keys(env).filter((k) => /moss/i.test(k)).sort();
     throw Object.assign(new Error(`Moss inference is not configured (set MOSS_PROJECT_ID and MOSS_PROJECT_KEY). Moss variables visible to this deployment: ${seen.length ? seen.join(', ') : 'none'}`), { status: 503 });
   }
-  const payload = { model, messages: buildMessages({ message, state, history }), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
+  const payload = { model, messages: buildMessages({ message, state, history, directions, recentDirections }), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
   const post = (body) => fetchImpl(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
@@ -157,7 +178,7 @@ export default async function handler(req, res) {
   if (message.length > MAX_MESSAGE) return res.status(413).json({ error: 'message too long' });
   if (JSON.stringify(body.state || {}).length > MAX_STATE) return res.status(413).json({ error: 'state too large' });
   try {
-    const result = await callMoss({ message, state: body.state, history: body.history });
+    const result = await callMoss({ message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections });
     res.setHeader('cache-control', 'no-store');
     return res.status(200).json(result);
   } catch (err) {
