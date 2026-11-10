@@ -225,10 +225,11 @@ body:not(.started) .scene::before { display: none; }
 .iso .mod .float { animation: float var(--fd, 6s) ease-in-out var(--fdel, 0s) infinite alternate; }
 @keyframes float { from { transform: translateY(0); } to { transform: translateY(-4px); } }
 .iso .mod.leaving { opacity: 0; }
-.iso .mod .glow { opacity: .5; transition: opacity var(--t2); }
+.iso .mod .glow { opacity: 0; transition: opacity var(--t2); }
 .iso .mod.flash .glow { animation: glowflash calc(1600ms * var(--speed)) var(--ease); }
 @keyframes glowflash { 0%, 50% { opacity: 1; stroke-width: 6; } }
-.iso .mod.active .glow { opacity: .95; }
+.iso .mod.active .glow { opacity: .9; }
+.iso .mod.active polygon[fill="var(--mod-top)"] { fill: var(--surface); }
 .iso .mod-label { font: 500 9px var(--f-mono); letter-spacing: .14em; fill: var(--ink-3); text-transform: uppercase; }
 .iso .ghost polygon { fill: none; stroke: var(--line-2); stroke-dasharray: 3 4; }
 .iso .link-path { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 1 5; stroke-linecap: round; opacity: .7; }
@@ -284,7 +285,7 @@ body:not(.started) .frame-wrap { display: none; }
    THE BUILT SITE (scoped, palette-driven)
    ===================================================================== */
 .site {
-  --s-bg: #fbfbf9; --s-tint: #f2f5f5; --s-accent: #0d7480; --s-glow: #5fdcea; --s-ink: #1b1c20; --s-ink-2: #4a4d56; --s-line: rgba(27,28,32,.09); --s-card: #ffffff; --s-dark: #17181c;
+  --s-bg: #fbfbf9; --s-tint: #f2f5f5; --s-accent: #0d7480; --s-glow: #5fdcea; --s-ink: #1b1c20; --s-ink-2: #43464e; --s-line: rgba(27,28,32,.09); --s-card: #ffffff; --s-dark: #17181c;
   width: var(--site-w, 1200px); zoom: var(--zoom, .68);
   background: var(--s-bg); color: var(--s-ink); container-type: inline-size;
   transition: background-color var(--t3) var(--ease), color var(--t3) var(--ease);
@@ -328,10 +329,10 @@ body:not(.started) .frame-wrap { display: none; }
 @keyframes flash { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
 
 /* hero */
-.sec-hero { padding: 40px 0 56px; }
+.sec-hero { padding: 40px 0 24px; }
 .hero-grid { display: grid; grid-template-columns: 1.12fr .88fr; gap: 56px; align-items: center; }
 .sec-hero h1 { font-size: 68px; line-height: 1.0; margin: 18px 0 20px; text-wrap: balance; }
-.sec-hero .sub { font-size: 18px; line-height: 1.55; color: var(--s-ink-2); max-width: 30em; }
+.sec-hero .sub { font-size: 19px; line-height: 1.55; color: var(--s-ink-2); max-width: 30em; }
 .sec-hero .actions { display: flex; gap: 12px; margin-top: 32px; }
 .sec-hero.centered { text-align: center; padding: 72px 0 64px; }
 .sec-hero.centered .sub { margin: 0 auto; }
@@ -346,7 +347,7 @@ body:not(.started) .frame-wrap { display: none; }
 .hero-card dd { margin: 0; font-weight: 500; }
 .hero-card .btn { width: 100%; margin-top: 16px; }
 .hero-card .note { margin-top: 12px; text-align: center; font: 11px var(--f-mono); color: var(--s-ink-2); letter-spacing: .02em; }
-.logo-row { display: flex; align-items: center; gap: 40px; margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--s-line); }
+.logo-row { display: flex; align-items: center; gap: 40px; margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--s-line); }
 .logo-row .lbl { font: 500 10.5px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--s-ink-2); white-space: nowrap; }
 .logo-row .logos { display: flex; flex: 1; justify-content: space-between; align-items: center; opacity: .42; }
 .ph-logo { display: flex; align-items: center; gap: 7px; }
@@ -354,26 +355,32 @@ body:not(.started) .frame-wrap { display: none; }
 .ph-logo b { display: block; height: 8px; border-radius: 4px; background: var(--s-ink); }
 
 /* section heads */
-.sec-pad { padding: 88px 0; }
+.sec-pad { padding: 96px 0; }
+.sec-hero + .sec-pad { padding-top: 72px; }
 .sec-tint { background: var(--s-tint); }
 .s-head { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: end; margin-bottom: 48px; }
 .s-head h2 { font-size: 46px; line-height: 1.04; margin-top: 14px; text-wrap: balance; }
-.s-head p { color: var(--s-ink-2); font-size: 16px; line-height: 1.6; max-width: 30em; }
+.s-head p { color: var(--s-ink-2); font-size: 17px; line-height: 1.6; max-width: 30em; }
 .s-head.center { display: block; text-align: center; }
 .s-head.center p { margin: 14px auto 0; }
 
 /* features */
-.feat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.feat { padding: 24px; border-radius: var(--r3); background: var(--s-card); border: 1px solid var(--s-line); }
-.feat .ic { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; color: var(--s-ink); background: var(--s-tint); box-shadow: inset 0 0 0 1px var(--s-line), inset 0 0 18px -6px var(--s-glow); margin-bottom: 32px; }
-.feat .ic svg.i { width: 19px; height: 19px; }
-.feat h3 { font: 600 15px/1.3 var(--f-sans); letter-spacing: -.01em; margin-bottom: 8px; }
-.feat p { color: var(--s-ink-2); font-size: 14px; line-height: 1.55; }
+.feat-split { display: grid; grid-template-columns: 5fr 7fr; gap: 72px; align-items: start; }
+.feat-split h2 { font-size: 52px; line-height: 1.02; margin-top: 16px; text-wrap: balance; }
+.feat-split .lede { margin-top: 20px; color: var(--s-ink-2); font-size: 18px; line-height: 1.6; max-width: 24em; }
+.feat-list { list-style: none; margin: 0; padding: 0; counter-reset: f; }
+.feat { display: grid; grid-template-columns: 56px 1fr 28px; gap: 0 24px; align-items: baseline; padding: 26px 0; border-top: 1px solid var(--s-line); }
+.feat:last-child { border-bottom: 1px solid var(--s-line); }
+.feat::before { counter-increment: f; content: counter(f, decimal-leading-zero); font: 500 12px var(--f-mono); letter-spacing: .1em; color: var(--s-accent); }
+.feat h3 { font: 400 26px/1.15 var(--f-display); letter-spacing: -.01em; }
+.feat p { grid-column: 2; margin-top: 8px; color: var(--s-ink-2); font-size: 17px; line-height: 1.55; max-width: 34em; }
+.feat .ic { grid-column: 3; grid-row: 1; color: var(--s-ink-2); align-self: center; }
+.feat .ic svg.i { width: 22px; height: 22px; stroke-width: 1.25; }
 
 /* testimonials */
 .quote-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 16px; }
 .quote { padding: 28px; border-radius: var(--r3); background: var(--s-card); border: 1px solid var(--s-line); display: flex; flex-direction: column; justify-content: space-between; gap: 32px; }
-.quote blockquote { margin: 0; font: 400 21px/1.35 var(--f-display); letter-spacing: -.01em; }
+.quote blockquote { margin: 0; font: 400 22px/1.32 var(--f-display); letter-spacing: -.01em; }
 .quote:first-child blockquote { font-size: 27px; }
 .quote figcaption { display: flex; align-items: center; gap: 12px; font-size: 13px; }
 .quote .av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--s-tint); font: 500 11px var(--f-mono); color: var(--s-ink-2); box-shadow: inset 0 0 0 1px var(--s-line); }
@@ -389,7 +396,7 @@ body:not(.started) .frame-wrap { display: none; }
 .plan .pr { margin: 22px 0 20px; display: flex; align-items: baseline; gap: 6px; }
 .plan .pr b { font: 400 46px/1 var(--f-display); letter-spacing: -.02em; }
 .plan .pr span { color: var(--s-ink-2); font-size: 14px; }
-.plan ul { list-style: none; margin: 0 0 28px; padding: 18px 0 0; border-top: 1px solid var(--s-line); display: grid; gap: 10px; font-size: 14px; color: var(--s-ink-2); }
+.plan ul { list-style: none; margin: 0 0 28px; padding: 18px 0 0; border-top: 1px solid var(--s-line); display: grid; gap: 10px; font-size: 15px; color: var(--s-ink-2); }
 .plan li { display: flex; gap: 10px; align-items: center; }
 .plan li svg.i { width: 14px; height: 14px; color: var(--s-accent); }
 .plan .btn { margin-top: auto; }
@@ -456,7 +463,10 @@ body:not(.started) .frame-wrap { display: none; }
   .s-links { display: none; }
   .hero-grid, .s-head, .faq-grid, .story, .form-grid, .cta-band { grid-template-columns: 1fr; gap: 28px; }
   .sec-hero h1, .sec-hero.centered h1 { font-size: 42px; }
-  .feat-grid, .quote-grid, .price-grid { grid-template-columns: 1fr; }
+  .feat-split, .quote-grid, .price-grid { grid-template-columns: 1fr; gap: 28px; }
+  .feat-split h2 { font-size: 34px; }
+  .feat { grid-template-columns: 36px 1fr 24px; gap: 0 12px; }
+  .feat h3 { font-size: 21px; }
   .s-head h2, .faq-grid h2, .story h2 { font-size: 34px; }
   .cta-band { padding: 40px 24px; }
   .cta-band h2 { font-size: 36px; }
@@ -1243,7 +1253,7 @@ const renderer = (() => {
       const card = cd ? `<div class="hero-card glass"><div class="hc-head"><span class="hc-title">${esc(cd.title)}</span><span class="pill">${esc(cd.tag || '')}</span></div><dl>${cd.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><a class="btn btn-primary" href="#/booking">${esc(cd.cta)}</a><div class="note">${esc(cd.note)}</div></div>` : '';
       return `<div class="wrap"><div class="hero-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}</div>${card}</div>${logos}</div>`;
     },
-    features: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p>${esc(d.lede || '')}</p></div><div class="feat-grid">${d.items.map(([ic, t, p]) => `<article class="feat"><div class="ic">${icon(ic)}</div><h3>${esc(t)}</h3><p>${esc(p)}</p></article>`).join('')}</div></div>`,
+    features: (d) => `<div class="wrap"><div class="feat-split"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2><p class="lede">${esc(d.lede || '')}</p></div><ol class="feat-list">${d.items.map(([ic, t, p]) => `<li class="feat"><h3>${esc(t)}</h3><span class="ic">${icon(ic)}</span><p>${esc(p)}</p></li>`).join('')}</ol></div></div>`,
     testimonials: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p></p></div><div class="quote-grid">${d.items.map(([q, n, r]) => `<figure class="quote" style="margin:0"><blockquote>“${esc(q)}”</blockquote><figcaption><span class="av">${esc(n.split(/\s|&/).filter(Boolean).map((w) => w[0]).slice(0, 2).join(''))}</span><span class="who"><b>${esc(n)}</b><span>${esc(r)}</span></span></figcaption></figure>`).join('')}</div></div>`,
     pricing: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p>${esc(d.lede || '')}</p></div><div class="price-grid">${d.plans.map(([n, p, f, feat]) => `<article class="plan ${feat ? 'featured' : ''}"><div class="ph"><span class="pn">${esc(n)}</span>${feat ? '<span class="pill">Most loved</span>' : ''}</div><div class="pr"><b>${esc(p)}</b><span>${esc(d.unit)}</span></div><ul>${f.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><a class="btn ${feat ? 'btn-primary' : 'btn-secondary'}" href="#/booking">${esc(d.cta)}</a></article>`).join('')}</div></div>`,
     faq: (d) => `<div class="wrap"><div class="faq-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><div class="faq-list">${d.items.map(([q, a], i) => `<details ${i === 0 ? 'open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div></div></div>`,
@@ -1406,7 +1416,7 @@ const isoScene = (() => {
       const id = `lk-${secs[i].id}`;
       out += `<g data-for="${secs[i].id}">${isNew ? `<mask id="m-${id}" maskUnits="userSpaceOnUse" x="-100" y="-100" width="1400" height="460"><path class="link-reveal" d="${d}" pathLength="1"/></mask>` : ''}
         <path id="${id}" class="link-path" d="${d}" ${isNew ? `mask="url(#m-${id})"` : ''}/>
-        ${reducedMotion.matches ? '' : `<circle class="pulse-halo" r="5"><animateMotion dur="${(2.6 + (i % 3) * 0.5).toFixed(1)}s" repeatCount="indefinite" begin="${(-i * 0.8).toFixed(1)}s"><mpath href="#${id}"/></animateMotion></circle><circle class="pulse" r="1.8"><animateMotion dur="${(2.6 + (i % 3) * 0.5).toFixed(1)}s" repeatCount="indefinite" begin="${(-i * 0.8).toFixed(1)}s"><mpath href="#${id}"/></animateMotion></circle>`}</g>`;
+        ${reducedMotion.matches || i !== secs.length - 1 ? '' : `<circle class="pulse-halo" r="5"><animateMotion dur="${(2.6 + (i % 3) * 0.5).toFixed(1)}s" repeatCount="indefinite" begin="${(-i * 0.8).toFixed(1)}s"><mpath href="#${id}"/></animateMotion></circle><circle class="pulse" r="1.8"><animateMotion dur="${(2.6 + (i % 3) * 0.5).toFixed(1)}s" repeatCount="indefinite" begin="${(-i * 0.8).toFixed(1)}s"><mpath href="#${id}"/></animateMotion></circle>`}</g>`;
     }
     layer.innerHTML = out;
     const rv = layer.querySelector('.link-reveal');
@@ -1801,7 +1811,7 @@ const app = (() => {
     const ops = res.ops || [];
     if (ops.some((o) => MUTATING.has(o.op))) pageModel.snapshot();
     for (const op of ops) await applyOp(op, msg);
-    isoScene.setActive(null);
+    const curP = pageModel.current(); isoScene.setActive(curP && curP.sections.length ? curP.sections[curP.sections.length - 1].id : null);
     if (res.after) await stream(msg.querySelector('.after'), res.after);
     setSuggestions(res.suggestions);
     setBusy(false);
