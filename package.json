@@ -1,0 +1,9 @@
+{
+  "name": "moss-builder",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node tests/agent-api.mjs && node tests/remote.cjs && node tests/functional.cjs"
+  }
+}

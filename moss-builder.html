@@ -1140,7 +1140,7 @@ const agent = (() => {
     };
   }
 
-  async function respond(message, state) {
+  async function localRespond(message, state) {
     await wait(260);
     const text = message.trim();
     const low = text.toLowerCase();
@@ -1294,7 +1294,227 @@ const agent = (() => {
       ops: [], suggestions: ['Make the headline punchier', 'Warmer colors', 'Add a Contact page', 'Map the booking flow'],
     };
   }
-  return { respond, parseMentions, findSections };
+
+  /* ---------------- Remote agent: Moss inference via /api/agent ----------------
+     respond() calls the Vercel function when the page is served over http(s); it falls back to the
+     scripted agent above when opened from disk, with ?offline, for undo, or when the endpoint fails.
+     Everything the model returns is normalized before it can touch the page. */
+  const REMOTE = /^https?:$/.test(location.protocol) && !new URLSearchParams(location.search).has('offline');
+  const turns = [];
+  let remoteDisabled = false, warned = false;
+  const UNDO_RE = /^\s*(undo|revert)\b|\bundo\b|take that back|go back a step/;
+
+  async function respond(message, state) {
+    const low = message.trim().toLowerCase();
+    if (!REMOTE || remoteDisabled || UNDO_RE.test(low)) return localRespond(message, state);
+    try {
+      const r = await fetch('/api/agent', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-8) }),
+      });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) { if (r.status === 503 || r.status === 404) remoteDisabled = true; throw new Error(json.error || `HTTP ${r.status}`); }
+      const res = normalize(json, state, message);
+      turns.push({ role: 'user', content: message }, { role: 'assistant', content: res.reply });
+      return res;
+    } catch (err) {
+      console.warn('Moss inference unavailable, using the offline agent:', err.message);
+      const res = await localRespond(message, state);
+      if (!warned) { warned = true; res.reply = `Moss inference isn’t reachable (${err.message}), so the offline demo agent answered. ${res.reply}`; }
+      return res;
+    }
+  }
+
+  function slimState(state) {
+    const s = clone(state);
+    if (s.business) s.business = { name: s.business.name, kind: s.business.kind, place: s.business.place };
+    return s;
+  }
+
+  // Keep only plain data: strings, numbers, booleans, small arrays and objects. Internal links only.
+  function cleanValue(v, depth = 0) {
+    if (depth > 5 || v == null) return undefined;
+    if (typeof v === 'string') return v.replace(/\s+/g, ' ').trim().slice(0, 600);
+    if (typeof v === 'number') return isFinite(v) ? v : undefined;
+    if (typeof v === 'boolean') return v;
+    if (Array.isArray(v)) return v.slice(0, 12).map((x) => cleanValue(x, depth + 1)).filter((x) => x !== undefined);
+    if (typeof v === 'object') {
+      const out = {};
+      Object.keys(v).slice(0, 24).forEach((k) => {
+        if (/^(__proto__|prototype|constructor)$/.test(k)) return;
+        let x = cleanValue(v[k], depth + 1);
+        if (/href$/i.test(k)) x = typeof x === 'string' && /^#\/[a-z0-9-]{1,24}$/.test(x) ? x : undefined;
+        if (x !== undefined) out[k] = x;
+      });
+      return out;
+    }
+    return undefined;
+  }
+  // Models sometimes send [{title, text}] where the renderer expects [[title, text]].
+  const TUPLE_FIELDS = ['items', 'plans', 'rows', 'cols', 'details', 'rooms'];
+  function tuplify(data) {
+    if (!data || typeof data !== 'object') return data;
+    TUPLE_FIELDS.forEach((k) => { if (Array.isArray(data[k])) data[k] = data[k].map((it) => (it && typeof it === 'object' && !Array.isArray(it) ? Object.values(it) : it)); });
+    if (data.card && typeof data.card === 'object') tuplify(data.card);
+    return data;
+  }
+  const slug = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
+  const str = (v, max = 200) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+
+  function mergeSectionData(type, base, incoming) {
+    const merged = Object.assign({}, base, tuplify(cleanValue(incoming) || {}));
+    if (type === 'hero' && !['split', 'centered'].includes(merged.variant)) merged.variant = base.variant;
+    return renderer.validate(type, merged) ? merged : base;
+  }
+
+  // Layered left-to-right layout from the start node; wraps after 5 columns.
+  const NODE_SIZE = { step: [168, 52], start: [168, 44], end: [168, 44], decision: [120, 120] };
+  function layoutFlow(nodes, edges) {
+    const out = new Map(nodes.map((n) => [n.id, []]));
+    edges.forEach((e) => out.get(e.from) && out.get(e.from).push(e.to));
+    const start = nodes.find((n) => n.kind === 'start') || nodes[0];
+    const rank = new Map([[start.id, 0]]); const q = [start.id];
+    while (q.length) { const id = q.shift(); for (const t of out.get(id) || []) if (!rank.has(t)) { rank.set(t, rank.get(id) + 1); q.push(t); } }
+    let maxR = Math.max(0, ...rank.values());
+    nodes.forEach((n) => { if (!rank.has(n.id)) rank.set(n.id, ++maxR); });
+    const cols = new Map();
+    nodes.forEach((n) => { const r = rank.get(n.id); if (!cols.has(r)) cols.set(r, []); cols.get(r).push(n); });
+    const PER_ROW = 5;
+    const rowHeight = Math.max(...[...cols.values()].map((c) => c.length)) * 150 + 90;
+    nodes.forEach((n) => {
+      const r = rank.get(n.id), i = cols.get(r).indexOf(n);
+      const [w, h] = NODE_SIZE[n.kind];
+      const cx = (r % PER_ROW) * 220 + 84, cy = Math.floor(r / PER_ROW) * rowHeight + 26 + i * 150;
+      n.x = Math.round(cx - w / 2); n.y = Math.round(cy - h / 2);
+    });
+  }
+
+  function normalize(json, state, message) {
+    const sim = clone(slimState(state));
+    sim.pages.forEach((pg) => (pg.sections = pg.sections.map((x) => ({ id: x.id, type: x.type, data: x.data }))));
+    let copy = state.business && state.business.copy;
+    const pageOf = (id) => sim.pages.find((pg) => pg.id === id);
+    const findSec = (pageId, ref) => {
+      const pg = pageOf(pageId); if (!pg || ref == null) return null;
+      return pg.sections.find((x) => x.id === ref) || pg.sections.find((x) => x.type === String(ref).toLowerCase()) || null;
+    };
+    const ops = [];
+    for (const raw of Array.isArray(json.ops) ? json.ops.slice(0, 60) : []) {
+      if (!raw || typeof raw.op !== 'string') continue;
+      const pageId = slug(raw.page) || sim.currentPage;
+      switch (raw.op) {
+        case 'setBusiness': {
+          const b = raw.business || {};
+          const name = str(b.name, 60) || 'Untitled';
+          const kindText = String(b.kind || '').toLowerCase();
+          const kind = (KINDS.find((k) => k.re.test(kindText)) || { kind: 'generic' }).kind;
+          copy = copyFor(kind, name, str(b.place, 60));
+          copy.name = name; copy.kindLabel = str(b.kind, 60) || copy.kindLabel;
+          if (b.announce && str(b.announce.text, 90)) copy.announce = { tag: str(b.announce.tag, 12) || 'New', text: str(b.announce.text, 90) };
+          if (str(b.primary, 32)) copy.primary = str(b.primary, 32);
+          ops.push({ op: 'setBusiness', business: { kind, name, place: str(b.place, 60), prompt: message, copy } });
+          sim.business = { name };
+          break;
+        }
+        case 'addPage': {
+          const pg = raw.page || {}; const id = slug(pg.id || pg.name);
+          if (!id || pageOf(id)) break;
+          const name = str(pg.name, 30) || cap(id);
+          sim.pages.push({ id, name, sections: [] }); sim.currentPage = id;
+          ops.push({ op: 'addPage', page: { id, name, sections: [] }, navigate: raw.navigate !== false, quiet: id === 'home' && sim.pages.length === 1 });
+          break;
+        }
+        case 'addSection': {
+          const pg = pageOf(pageId); const sec = raw.section || {}; const type = String(sec.type || '').toLowerCase();
+          if (!pg || !SECTION_META[type]) break;
+          if (!copy) copy = copyFor('generic', sim.business && sim.business.name, null);
+          const base = makeSection(type, copy);
+          base.data = mergeSectionData(type, base.data, sec.data);
+          const index = Number.isInteger(raw.index) ? Math.max(0, Math.min(raw.index, pg.sections.length)) : null;
+          pg.sections.splice(index == null ? pg.sections.length : index, 0, { id: base.id, type, data: base.data });
+          ops.push({ op: 'addSection', page: pg.id, section: base, index });
+          break;
+        }
+        case 'updateSection': {
+          const target = findSec(pageId, raw.id ?? raw.type); if (!target) break;
+          const merged = mergeSectionData(target.type, target.data, raw.patch);
+          if (merged === target.data) break;
+          const patch = {}; Object.keys(merged).forEach((k) => { if (JSON.stringify(merged[k]) !== JSON.stringify(target.data[k])) patch[k] = merged[k]; });
+          if (!Object.keys(patch).length) break;
+          target.data = merged;
+          ops.push({ op: 'updateSection', page: pageId, id: target.id, patch, note: str(raw.note, 40) || `edited ${SECTION_META[target.type].label.toLowerCase()}` });
+          break;
+        }
+        case 'setOrder': {
+          const pg = pageOf(pageId); if (!pg || !Array.isArray(raw.order)) break;
+          const ids = raw.order.map((ref) => (findSec(pageId, ref) || {}).id).filter(Boolean);
+          const order = [...new Set(ids)]; pg.sections.forEach((x) => { if (!order.includes(x.id)) order.push(x.id); });
+          pg.sections = order.map((id) => pg.sections.find((x) => x.id === id));
+          ops.push({ op: 'setOrder', page: pageId, order });
+          break;
+        }
+        case 'deleteSection': {
+          const target = findSec(pageId, raw.id ?? raw.type); if (!target) break;
+          const pg = pageOf(pageId); pg.sections = pg.sections.filter((x) => x.id !== target.id);
+          ops.push({ op: 'deleteSection', page: pageId, id: target.id });
+          break;
+        }
+        case 'deletePage': {
+          const id = slug(raw.page); if (!id || id === 'home' || !pageOf(id)) break;
+          sim.pages = sim.pages.filter((pg) => pg.id !== id);
+          ops.push({ op: 'deletePage', page: id });
+          break;
+        }
+        case 'setPalette':
+          if (['ice', 'warm', 'sage', 'ink'].includes(raw.palette)) ops.push({ op: 'setPalette', palette: raw.palette });
+          break;
+        case 'addLink': {
+          const from = slug(raw.from) || sim.currentPage, to = slug(raw.to);
+          if (!pageOf(from) || !pageOf(to) || from === to) break;
+          const target = findSec(from, raw.section) || findSec(from, 'cta'); if (!target) break;
+          if (target.type === 'cta' && target.data.href !== '#/' + to) {
+            target.data = Object.assign({}, target.data, { href: '#/' + to });
+            ops.push({ op: 'updateSection', page: from, id: target.id, patch: { href: '#/' + to }, note: `link cta → /${to}` });
+          }
+          ops.push({ op: 'addLink', from, section: target.id, to });
+          break;
+        }
+        case 'addFlow': {
+          const f = raw.flow || {};
+          const seen = new Set();
+          const nodes = (Array.isArray(f.nodes) ? f.nodes : []).slice(0, 14).map((n, i) => {
+            let id = slug(n && n.id) || `n${i}`; while (seen.has(id)) id += 'x'; seen.add(id);
+            return { id, label: str(n && n.label, 40) || `Step ${i + 1}`, kind: ['start', 'step', 'decision', 'end'].includes(n && n.kind) ? n.kind : 'step', _src: n && n.id };
+          });
+          if (nodes.length < 2) break;
+          const byRef = (ref) => nodes.find((n) => n._src === ref || n.id === slug(ref));
+          const edges = (Array.isArray(f.edges) ? f.edges : []).slice(0, 24).map((e) => {
+            const a = e && byRef(e.from), b = e && byRef(e.to);
+            return a && b && a !== b ? { from: a.id, to: b.id, label: str(e.label, 16) || undefined } : null;
+          }).filter(Boolean);
+          nodes.forEach((n) => delete n._src);
+          layoutFlow(nodes, edges);
+          ops.push({ op: 'addFlow', flow: { id: uid('flow'), name: str(f.name, 40) || 'Flow', nodes, edges } });
+          break;
+        }
+        case 'setView':
+          if (raw.view === 'page' || raw.view === 'flow') ops.push({ op: 'setView', view: raw.view });
+          break;
+        case 'navigate': {
+          const id = slug(raw.page); if (pageOf(id)) { sim.currentPage = id; ops.push({ op: 'navigate', page: id }); }
+          break;
+        }
+      }
+    }
+    return {
+      reply: str(json.reply, 600) || (ops.length ? 'On it.' : 'Could you say a little more about what you want changed?'),
+      ops,
+      after: str(json.after, 300) || undefined,
+      suggestions: Array.isArray(json.suggestions) ? json.suggestions.map((x) => str(x, 48)).filter(Boolean).slice(0, 4) : undefined,
+    };
+  }
+
+  return { respond, localRespond, normalize, layoutFlow, parseMentions, findSections, isRemote: () => REMOTE && !remoteDisabled };
 })();
 
 /* =====================================================================
@@ -1392,7 +1612,9 @@ const renderer = (() => {
     await wait(540);
   }
   function flash(id) { const el = $(`#siteSections [data-id="${id}"]`); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1800 * SPEED); }
-  return { render, removeSection, flash };
+  // Used to vet model-written section data: it must render without throwing.
+  function validate(type, data) { try { return !!T[type] && typeof T[type](data) === 'string'; } catch (e) { return false; } }
+  return { render, removeSection, flash, validate };
 })();
 
 /* =====================================================================
