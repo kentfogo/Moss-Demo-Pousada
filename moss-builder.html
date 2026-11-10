@@ -225,12 +225,17 @@ body:not(.started) .scene::before { display: none; }
 .iso .mod .float { animation: float var(--fd, 6s) ease-in-out var(--fdel, 0s) infinite alternate; }
 @keyframes float { from { transform: translateY(0); } to { transform: translateY(-4px); } }
 .iso .mod.leaving { opacity: 0; }
+.iso .layer-mods.has-active .mod:not(.active) .float { opacity: .82; }
+.iso .mod .float { transition: opacity var(--t2); }
 .iso .mod .glow { opacity: 0; transition: opacity var(--t2); }
 .iso .mod.flash .glow { animation: glowflash calc(1600ms * var(--speed)) var(--ease); }
 @keyframes glowflash { 0%, 50% { opacity: 1; stroke-width: 6; } }
 .iso .mod.active .glow { opacity: .9; }
 .iso .mod.active polygon[fill="var(--mod-top)"] { fill: var(--surface); }
-.iso .mod-label { font: 500 9px var(--f-mono); letter-spacing: .14em; fill: var(--ink-3); text-transform: uppercase; }
+.iso .mod-label { font: 500 10px var(--f-mono); letter-spacing: .12em; fill: var(--ink-3); text-transform: uppercase; transition: fill var(--t2); }
+.iso .mod.active .mod-label { fill: var(--ink); }
+.iso .leader { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 4; opacity: .55; }
+.iso .leader-dot { fill: var(--accent-glow); }
 .iso .ghost polygon { fill: none; stroke: var(--line-2); stroke-dasharray: 3 4; }
 .iso .link-path { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 1 5; stroke-linecap: round; opacity: .7; }
 .iso .link-reveal { fill: none; stroke: #fff; stroke-width: 8; stroke-dasharray: 1 1; stroke-dashoffset: 1; }
@@ -239,7 +244,8 @@ body:not(.started) .scene::before { display: none; }
 .iso .pulse-halo { fill: var(--accent-glow); opacity: .25; }
 .scene-panel {
   position: absolute; right: 28px; top: 26px; width: 232px; padding: var(--s3) var(--s4);
-  transform: perspective(900px) rotateY(-16deg) rotateX(7deg) rotateZ(-1deg) translate3d(var(--ppx, 0px), var(--ppy, 0px), 0);
+  transform: perspective(1200px) rotateY(-9deg) rotateX(4deg) translate3d(var(--ppx, 0px), var(--ppy, 0px), 0);
+  box-shadow: var(--sh1), inset 0 1px 0 var(--glass-edge);
   transform-origin: right center; transition: transform calc(900ms * var(--speed)) var(--ease), opacity var(--t2);
   border-radius: var(--r2);
 }
@@ -299,7 +305,7 @@ body:not(.started) .frame-wrap { display: none; }
 :root[data-theme="dark"] .site[data-palette="ink"]  { --s-bg: #131417; --s-tint: #1a1b1f; --s-accent: #e6e7ea; --s-glow: #9ea3ad; --s-card: #1c1d22; --s-dark: #08090a; }
 .site .btn-primary { background: var(--s-ink); color: var(--s-bg); }
 .site .btn-secondary { color: var(--s-ink); border-color: color-mix(in srgb, var(--s-ink) 22%, transparent); }
-.site .eyebrow { color: var(--s-accent); }
+.site .eyebrow { color: var(--s-accent); font-size: 13px; letter-spacing: .14em; }
 .site h1, .site h2, .site h3 { font-family: var(--f-display); font-weight: 400; letter-spacing: -.02em; margin: 0; }
 .site p { margin: 0; }
 .site .wrap { max-width: 1080px; margin: 0 auto; padding: 0 56px; }
@@ -348,7 +354,7 @@ body:not(.started) .frame-wrap { display: none; }
 .hero-card .btn { width: 100%; margin-top: 16px; }
 .hero-card .note { margin-top: 12px; text-align: center; font: 11px var(--f-mono); color: var(--s-ink-2); letter-spacing: .02em; }
 .logo-row { display: flex; align-items: center; gap: 40px; margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--s-line); }
-.logo-row .lbl { font: 500 10.5px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--s-ink-2); white-space: nowrap; }
+.logo-row .lbl { font: 500 12.5px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--s-ink-2); white-space: nowrap; }
 .logo-row .logos { display: flex; flex: 1; justify-content: space-between; align-items: center; opacity: .42; }
 .ph-logo { display: flex; align-items: center; gap: 7px; }
 .ph-logo i { display: block; background: var(--s-ink); }
@@ -662,6 +668,7 @@ body:not(.started) .chat { visibility: hidden; }
             <g class="layer-grid"><rect x="-200" y="-100" width="1600" height="460" fill="url(#isoGrid)" mask="url(#fadeMask)"/></g>
             <g class="layer-links" id="isoLinks"></g>
             <g class="layer-mods" id="isoMods"></g>
+            <g id="isoLeader"></g>
           </svg>
           <div class="scene-panel glass" id="scenePanel" aria-hidden="true">
             <div class="row"><span class="eyebrow">Moss · agent</span><span class="dot"></span></div>
@@ -1341,7 +1348,7 @@ const isoScene = (() => {
     const xs = raw.map(([x, y]) => L(x, y)[0]);
     const minX = Math.min(...xs, 0), maxX = Math.max(...xs, 0);
     const panel = window.innerWidth > 1100 && document.body.classList.contains('started');
-    const cx = panel ? 520 : 600;
+    const cx = panel ? 460 : 600;
     origin = [Math.round(cx - (minX + maxX) / 2 - (W - D) * C * G / 2), document.body.classList.contains('started') ? 104 : 128];
     return raw;
   }
@@ -1397,6 +1404,7 @@ const isoScene = (() => {
         g = fresh; mods.set(sec.id, g);
       }
       requestAnimationFrame(() => { g.style.transform = `translate(${x}px, ${y}px)`; });
+      g.addEventListener('transitionend', () => { if (g.classList.contains('active')) drawLeader(sec.id); }, { once: true });
       seen.add(sec.id);
     });
     // depth order: back-to-front by index
@@ -1423,7 +1431,26 @@ const isoScene = (() => {
     if (rv) requestAnimationFrame(() => requestAnimationFrame(() => rv.classList.add('go')));
   }
   function flash(id) { const g = mods.get(id); if (!g) return; g.classList.remove('flash'); void g.getBBox(); g.classList.add('flash'); setTimeout(() => g.classList.remove('flash'), 1800 * SPEED); }
-  function setActive(id) { mods.forEach((g, k) => g.classList.toggle('active', k === id)); }
+  function setActive(id) {
+    mods.forEach((g, k) => g.classList.toggle('active', k === id));
+    $('#isoMods').classList.toggle('has-active', !!id && mods.has(id));
+    drawLeader(id);
+  }
+  // Hairline from the active module's top face to the agent panel, so the panel reads as part of the system.
+  function drawLeader(id) {
+    const out = $('#isoLeader'); out.innerHTML = '';
+    const g = id && mods.get(id); const panel = $('#scenePanel');
+    if (!g || !panel || getComputedStyle(panel).display === 'none') return;
+    const svg = $('#iso'); const ctm = svg.getScreenCTM(); if (!ctm) return;
+    const inv = ctm.inverse(); const pr = panel.getBoundingClientRect();
+    const pt = svg.createSVGPoint(); pt.x = pr.left; pt.y = pr.top + pr.height * 0.62;
+    const end = pt.matrixTransform(inv);
+    const t = new DOMMatrix(getComputedStyle(g).transform);
+    const top = L(W / 2, D / 2, H); const sx = t.e + top[0], sy = t.f + top[1] - 6;
+    const mx = sx + (end.x - sx) * 0.35;
+    out.innerHTML = `<path class="leader" d="M${sx.toFixed(1)} ${sy.toFixed(1)} L${sx.toFixed(1)} ${(end.y).toFixed(1)} L${end.x.toFixed(1)} ${end.y.toFixed(1)}"/><circle class="leader-dot" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="2.2"/>`;
+    void mx;
+  }
   function reset() { mods.forEach((g) => g.remove()); mods.clear(); }
   function initParallax() {
     const scene = $('#scene');
