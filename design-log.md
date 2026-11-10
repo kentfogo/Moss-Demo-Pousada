@@ -259,3 +259,33 @@ Run after the 6-iteration cap at the user's request, to measure one change: **In
 5. The hero booking card isn't aligned to the headline's cap height; the 3-line headline is cramped. Align the card top, use a hairline, break the headline in 2 lines.
 
 Gaps 1–4 are the same structural complaints as iterations 3–6, aimed at elements PROMPT.md §4 requires (option 1 in the summary above). Gap 5 is a new, small layout fix.
+
+---
+
+## Iteration 8 (option 1: plain rail, isometric scene only while building)
+
+User-approved change to PROMPT.md §4 for the builder chrome:
+- **Module rail** is a plain numbered list (mono index, label, 2px accent bar on the active section); clicking a row jumps to that section.
+- **Isometric scene** becomes a compact build stage (bottom-right card, about 560×184) that fades in only while sections are being built: the module drops, the connector draws, the section unfolds, and the stage fades out when the turn ends. Its viewport fits the modules present, so they render near 1:1.
+- **Mirrored agent panel removed**; the agent's message lives in the chat only.
+- **Chat checklist** collapses to one line ("7 modules built") with an expander.
+- **Hero**: the default headline is now "The quiet side of Trancoso." (two lines), and the booking card is top-aligned with the text column.
+- **Fixed screenshot state changed**, because the scene is no longer visible at rest: `tests/screenshot.cjs` now captures a real mid-build frame. A test-only `?pauseAfter=3` URL flag freezes the first build after its third section (hero, features, testimonials), with the build stage showing.
+
+| | |
+|---|---|
+| Screenshot | `screenshots/iter-8.png` |
+| Our letter | A |
+| Our rank | **4 / 5** (B > E > C > A > D) |
+| Our scores | Composition 3 · Spacing 4 · Typography 4 · Color 4 · Components 4 · Originality 3 |
+| Our total | **22 / 30** (up from 21; ties our best on reference set 2) |
+| Others | B 27 · E 26 · C 25 · D 21 |
+
+**Top gaps for A (critic, in order of impact).** No changes made after this run.
+1. The "Assembling" stage covers feature rows 03–04 and truncates a title: the worst hierarchy failure. Dock it as a 56px strip at the canvas bottom, or move it into the chat panel under the checklist; never cover the preview.
+2. No focal point across the panes: collapse the 200px rail to a 48px icon rail, widen the canvas, add 24px of top padding so the page frame reads as an object.
+3. Teal spaced-mono eyebrows used 5 times blur product chrome with page content: mono for chrome only, neutral small-caps sans in the preview, teal for the live-status dot.
+4. The booking card sits ~25px above the headline's cap height; "See the rooms" and "Check availability" still compete. Use a hairline instead of the shadow; demote "See the rooms" to a text link.
+5. Feature rows sit on four baselines; drop the icons and align the description column with the paragraph above.
+
+**Reading.** The rail and agent-panel complaints from iterations 3–7 are gone. The new #1 gap is caused by where the build stage sits (it covers the preview in the mid-build frame), not by having it.
