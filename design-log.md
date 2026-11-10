@@ -233,3 +233,29 @@ Functional tests after changes: **33/33 pass**.
 - Relax §4 for the builder chrome (for example a flat numbered module list, with the isometric scene shown only while a module is being placed, and no mirrored agent panel), then rescore.
 - Allow one embedded display serif (base64 in the file, so still no external assets).
 - Re-pin the fixed screenshot state to the hero only, if "3 sections visible" can be dropped. That rule is what forces the preview down to ~0.7 scale.
+
+---
+
+## Iteration 7 (extra round, user chose option 2: embed a display serif)
+
+Run after the 6-iteration cap at the user's request, to measure one change: **Instrument Serif** (SIL OFL 1.1) embedded as base64, about 58 KB for the latin regular and italic. The license is in `fonts/OFL-InstrumentSerif.txt`. Display sizes and tracking were retuned for its narrower proportions (hero 76px, section heads 56–60px, tracking −0.5% instead of −2%).
+
+| | |
+|---|---|
+| Screenshot | `screenshots/iter-7.png` |
+| Our letter | B |
+| Our rank | **4 / 5** (C > A > D > B > E) |
+| Our scores | Composition 3 · Spacing 4 · Typography **4** · Color 3 · Components 4 · Originality 3 |
+| Our total | **21 / 30** (same as iteration 6) |
+| Others | C 26 · A 25 · D 24 · E 20 |
+
+**Effect of the font.** Typography went from 3 to 4, and the critic no longer calls the headline a default face; it now reads as "condensed display serif". Rank went from 5th to 4th. The total didn't move because Color dropped from 4 to 3, so the font fixed what it targeted but didn't change the overall picture.
+
+**Top gaps for B (critic, in order of impact).** No changes made after this run.
+1. The three-pane shell has equal weight: collapse the module rail to a 56px icon strip, narrow the chat to 320px, give the canvas at least 65% of the width.
+2. The isometric module rail is decorative filler that clashes with the flat line icons. Use a numbered list with a 2px active bar.
+3. Redundant status: the agent card repeats the chat, and the chat's 7-row checklist repeats the rail. Delete the card; collapse the checklist to "7 modules built".
+4. Four type voices, with teal mono-caps eyebrows on every section. Keep mono for the builder chrome; use neutral small-caps sans eyebrows in the preview.
+5. The hero booking card isn't aligned to the headline's cap height; the 3-line headline is cramped. Align the card top, use a hairline, break the headline in 2 lines.
+
+Gaps 1–4 are the same structural complaints as iterations 3–6, aimed at elements PROMPT.md §4 requires (option 1 in the summary above). Gap 5 is a new, small layout fix.
