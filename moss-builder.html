@@ -32,7 +32,7 @@
   --t2: calc(320ms * var(--speed));
   --t3: calc(640ms * var(--speed));
 
-  --chat-w: 384px;
+  --chat-w: 344px;
   --rail-w: 232px;
   --top-h: 56px;
   --scene-h: 156px;
@@ -336,8 +336,8 @@ body:not(.started) .frame-wrap { display: none; }
 @keyframes flash { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
 
 /* hero */
-.sec-hero { padding: 40px 0 40px; }
-.sec-hero + .sec-pad { padding-top: 24px; padding-bottom: 64px; }
+.sec-hero { padding: 40px 0 32px; }
+.sec-hero + .sec-pad { padding-top: 24px; padding-bottom: 56px; }
 .hero-grid { display: grid; grid-template-columns: 1.35fr .9fr; gap: 56px; align-items: center; }
 .sec-hero h1 { font-size: 60px; line-height: 1.02; margin: 18px 0 20px; text-wrap: balance; }
 .sec-hero .sub { font-size: 20px; line-height: 1.55; color: var(--s-ink-2); max-width: 30em; }
@@ -346,7 +346,10 @@ body:not(.started) .frame-wrap { display: none; }
 .sec-hero.centered .sub { margin: 0 auto; }
 .sec-hero.centered .actions { justify-content: center; }
 .sec-hero.centered h1 { font-size: 64px; max-width: 13em; margin-left: auto; margin-right: auto; }
-.hero-card { padding: 24px; }
+.site .hero-card.glass { padding: 26px; background: var(--s-card); border: 1px solid var(--s-line); box-shadow: 0 1px 2px rgba(var(--shadow-c), .04), 0 18px 40px -18px rgba(var(--shadow-c), .16); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.site .btn { height: 48px; padding: 0 26px; font-size: 16px; }
+.site .btn-sm { height: 38px; padding: 0 18px; font-size: 15px; }
+.site .btn svg.i { width: 18px; height: 18px; }
 .hero-card .hc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .hero-card .hc-title { font: 400 25px var(--f-display); }
 .hero-card dl { margin: 0; display: grid; gap: 0; }
@@ -376,13 +379,13 @@ body:not(.started) .frame-wrap { display: none; }
 .feat-split h2 { font-size: 52px; line-height: 1.02; margin-top: 16px; text-wrap: balance; }
 .feat-split .lede { color: var(--s-ink-2); font-size: 19px; line-height: 1.55; max-width: 24em; }
 .feat-list { list-style: none; margin: 0; padding: 0; counter-reset: f; }
-.feat { display: grid; grid-template-columns: 48px 260px 1fr 24px; gap: 0 24px; align-items: baseline; padding: 18px 0; border-top: 1px solid var(--s-line); }
+.feat { display: grid; grid-template-columns: 36px 22px 280px 1fr; gap: 0 20px; align-items: baseline; padding: 16px 0; border-top: 1px solid var(--s-line); }
 .feat:last-child { border-bottom: 1px solid var(--s-line); }
 .feat::before { counter-increment: f; content: counter(f, decimal-leading-zero); font: 500 13px var(--f-mono); letter-spacing: .08em; color: var(--s-ink-2); }
 .feat h3 { font: 400 26px/1.2 var(--f-display); letter-spacing: -.01em; }
 .feat p { color: var(--s-ink-2); font-size: 18px; line-height: 1.5; }
-.feat .ic { grid-column: 4; grid-row: 1; color: var(--s-ink-2); align-self: center; }
-.feat .ic svg.i { width: 22px; height: 22px; stroke-width: 1.25; }
+.feat .ic { color: var(--s-ink); align-self: center; }
+.feat .ic svg.i { width: 20px; height: 20px; stroke-width: 1.5; display: block; }
 
 /* testimonials */
 .quote-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 16px; }
@@ -472,9 +475,8 @@ body:not(.started) .frame-wrap { display: none; }
   .sec-hero h1, .sec-hero.centered h1 { font-size: 42px; }
   .feat-split, .quote-grid, .price-grid { grid-template-columns: 1fr; gap: 28px; }
   .feat-split h2 { font-size: 34px; }
-  .feat { grid-template-columns: 32px 1fr 22px; }
-  .feat p { grid-column: 2; margin-top: 6px; }
-  .feat .ic { grid-column: 3; }
+  .feat { grid-template-columns: 28px 22px 1fr; gap: 0 12px; }
+  .feat p { grid-column: 3; margin-top: 6px; }
   .feat h3 { font-size: 21px; }
   .s-head h2, .faq-grid h2, .story h2 { font-size: 34px; }
   .cta-band { padding: 40px 24px; }
@@ -578,8 +580,8 @@ body:not(.started) .chat { visibility: hidden; }
 .typing i:nth-child(2) { animation-delay: calc(150ms * var(--speed)); }
 .typing i:nth-child(3) { animation-delay: calc(300ms * var(--speed)); }
 @keyframes typing { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
-.suggest { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 var(--s5) var(--s3); flex: none; }
-.suggest .chip { min-height: 30px; padding: 4px 12px; font-size: 12.5px; white-space: nowrap; background: transparent; }
+.suggest { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 var(--s4) var(--s3); flex: none; }
+.suggest .chip { min-height: 30px; padding: 4px 11px; font-size: 12.5px; white-space: nowrap; background: transparent; }
 .composer-wrap { position: relative; padding: 0 var(--s4) var(--s4); flex: none; }
 .composer { display: flex; align-items: flex-end; gap: var(--s2); padding: 6px 6px 6px var(--s4); border-radius: var(--r3); background: var(--surface); border: 1px solid var(--line-2); transition: border-color var(--t1), box-shadow var(--t1); }
 .composer:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 0 0 4px var(--accent-soft); }
@@ -608,6 +610,7 @@ body:not(.started) .chat { visibility: hidden; }
   body.started .scene { position: absolute; left: 0; top: 0; bottom: 0; width: var(--rail-w); height: auto; z-index: 4; border-right: 1px solid var(--line); overflow: hidden; }
   body.started .scene svg.iso { overflow: hidden; }
   body.started .scene::before { display: none; }
+  body.started .scene .layer-grid { opacity: .45; }
   body.started .pageview { left: var(--rail-w); }
   body.started .frame-wrap { margin-top: 0; padding-top: 24px; }
   body.started .scene-panel { left: 16px; right: 16px; top: auto; bottom: 20px; width: auto; transform: translate3d(var(--ppx, 0px), var(--ppy, 0px), 0); }
@@ -616,6 +619,9 @@ body:not(.started) .chat { visibility: hidden; }
 }
 .rail-head { display: none; position: absolute; left: 20px; right: 16px; top: 20px; justify-content: space-between; align-items: center; z-index: 1; pointer-events: none; }
 .rail-head .mono { font-size: 11px; color: var(--ink-3); }
+.rail-head .eyebrow { color: var(--ink-3); }
+body.started .canvas { background: var(--bg-2); }
+body.started .scene { background: var(--bg); }
 @media (max-width: 1100px) { :root { --chat-w: 340px; } }
 @media (max-width: 760px) {
   :root { --top-h: 52px; --scene-h: 150px; }
@@ -1278,14 +1284,17 @@ const renderer = (() => {
   const logoRow = (label) => label ? `<div class="logo-row"><span class="lbl">${esc(label)}</span><div class="logos">${LOGO_SHAPES.map((s) => `<span class="ph-logo" aria-hidden="true">${s}</span>`).join('')}</div></div>` : '';
   const T = {
     hero(d) {
-      const actions = `<div class="actions"><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(d.primary)}</a><a class="btn btn-secondary" href="#/home">${esc(d.secondary || 'Learn more')}</a></div>`;
+      const owned = d.variant !== 'centered' && d.card;
+      const actions = owned
+        ? `<div class="actions"><a class="btn btn-secondary" href="#/home">${esc(d.secondary || 'Learn more')} ${icon('arrow')}</a></div>`
+        : `<div class="actions"><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(d.primary)}</a><a class="btn btn-secondary" href="#/home">${esc(d.secondary || 'Learn more')}</a></div>`;
       const logos = logoRow(d.logos);
       if (d.variant === 'centered') return `<div class="wrap"><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}${logos}</div>`;
       const cd = d.card;
-      const card = cd ? `<div class="hero-card glass"><div class="hc-head"><span class="hc-title">${esc(cd.title)}</span><span class="pill">${esc(cd.tag || '')}</span></div><dl>${cd.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><a class="btn btn-primary" href="#/booking">${esc(cd.cta)}</a><div class="note">${esc(cd.note)}</div></div>` : '';
+      const card = cd ? `<div class="hero-card glass"><div class="hc-head"><span class="hc-title">${esc(cd.title)}</span><span class="pill">${esc(cd.tag || '')}</span></div><dl>${cd.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(cd.cta)}</a><div class="note">${esc(cd.note)}</div></div>` : '';
       return `<div class="wrap"><div class="hero-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}</div>${card}</div>${logos}</div>`;
     },
-    features: (d) => `<div class="wrap"><div class="feat-split"><div class="fs-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p class="lede">${esc(d.lede || '')}</p></div><ol class="feat-list">${d.items.map(([ic, t, p]) => `<li class="feat"><h3>${esc(t)}</h3><p>${esc(p)}</p><span class="ic">${icon(ic)}</span></li>`).join('')}</ol></div></div>`,
+    features: (d) => `<div class="wrap"><div class="feat-split"><div class="fs-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p class="lede">${esc(d.lede || '')}</p></div><ol class="feat-list">${d.items.map(([ic, t, p]) => `<li class="feat"><span class="ic">${icon(ic)}</span><h3>${esc(t)}</h3><p>${esc(p)}</p></li>`).join('')}</ol></div></div>`,
     testimonials: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p></p></div><div class="quote-grid">${d.items.map(([q, n, r]) => `<figure class="quote" style="margin:0"><blockquote>“${esc(q)}”</blockquote><figcaption><span class="av">${esc(n.split(/\s|&/).filter(Boolean).map((w) => w[0]).slice(0, 2).join(''))}</span><span class="who"><b>${esc(n)}</b><span>${esc(r)}</span></span></figcaption></figure>`).join('')}</div>${logoRow(d.logos)}</div>`,
     pricing: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p>${esc(d.lede || '')}</p></div><div class="price-grid">${d.plans.map(([n, p, f, feat]) => `<article class="plan ${feat ? 'featured' : ''}"><div class="ph"><span class="pn">${esc(n)}</span>${feat ? '<span class="pill">Most loved</span>' : ''}</div><div class="pr"><b>${esc(p)}</b><span>${esc(d.unit)}</span></div><ul>${f.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><a class="btn ${feat ? 'btn-primary' : 'btn-secondary'}" href="#/booking">${esc(d.cta)}</a></article>`).join('')}</div></div>`,
     faq: (d) => `<div class="wrap"><div class="faq-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><div class="faq-list">${d.items.map(([q, a], i) => `<details ${i === 0 ? 'open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div></div></div>`,
@@ -1929,10 +1938,10 @@ const app = (() => {
     const fit = () => {
       const w = pv.clientWidth; const mobile = w < 700;
       const fw = mobile ? w - 32 : Math.min(w - 64, 900);
-      const zoom = mobile ? 1 : fw / 1080;
+      const zoom = mobile ? 1 : fw / 1120;
       document.documentElement.style.setProperty('--frame-w', fw + 'px');
       document.documentElement.style.setProperty('--zoom', zoom.toFixed(4));
-      document.documentElement.style.setProperty('--site-w', (mobile ? fw - 2 : 1080) + 'px');
+      document.documentElement.style.setProperty('--site-w', (mobile ? fw - 2 : 1120) + 'px');
       if (document.body.classList.contains('started')) isoScene.render();
     };
     new ResizeObserver(fit).observe(pv); fit();

@@ -145,9 +145,42 @@ Stall guard: 1 run without improvement on reference set 2 (21 → 18). One more 
 
 **Changes made**
 1. **Iso scene becomes a left rail** *(gaps 1, 2)*: the scene leaves the top of the canvas and becomes a 232px column. Modules stack straight down the iso grid, labels sit on one column ("01 Hero" … in 12px mono, sentence case), so labels can't collide. Drop shadows are removed in the rail; the glow stays only on the active module. It's still the brief's isometric module metaphor (drop, connect, unfold) but it no longer competes with the preview. Mobile keeps the compact top strip.
-2. **The preview fills the height at a legible scale** *(gaps 1, 3)*: the site now renders at 1080px virtual width at 0.83 scale (was 1400px at 0.59), and site type is bumped (body 18px, hero sub 20px, card rows 16px, eyebrows 14px). Effective body size went from ~9.5px to ~15px. Features became a heading row plus a full-width single-line list.
+2. **The preview fills the height at a legible scale** *(gaps 1, 3)*: the site now renders at 1080px virtual width at ~0.71 scale (was 1400px at ~0.59), and site type is bumped (body 18px, hero sub 20px, card rows 16px, eyebrows 14px). Effective body size went from ~9.5px to ~12.7px. *(Corrected in iteration 5; this line first said 0.83 scale and ~15px.)* Features became a heading row plus a full-width single-line list.
 3. **Agent panel anchored at the rail foot** *(gap 4)*: the brief requires this panel, so it stays, now at the bottom of the rail where it closes the module column instead of floating off-grid. Up to 6 lines, so it's no longer cut off.
 4. **Chat details** *(gap 5)*: 14/16px spacing around the checklist card, suggestion chips wrap instead of clipping, footer hints at 11px with normal tracking.
 5. **Fixed screenshot state adjusted** to the new layout: the hero eyebrow sits 20px below the top of the page view. The view shows the headline, Features and the top of Testimonials. The script also waits 1s so the app's own smooth scroll settles first (it had raced the capture).
+
+Functional tests after changes: **33/33 pass**.
+
+---
+
+## Iteration 5
+
+| | |
+|---|---|
+| Screenshot | `screenshots/iter-5.png` (taken after the iteration 4 changes) |
+| Our letter | C |
+| Our rank | **4 / 5** (D > B > A > C > E) |
+| Our scores | Composition 3 · Spacing 4 · Typography 4 · Color 4 · Components 4 · Originality 3 |
+| Our total | **22 / 30** (up from 18; best so far on reference set 2) |
+| Others | D 26 · B 25 · A 24 · E 21 |
+
+Stall guard reset (improved). Hard cap: iteration 6 is the last run.
+
+**Top gaps for C (critic, in order of impact)**
+1. Rail, preview and chat sit at equal weight. Dim the rail, give the preview a deeper canvas tone with the page lifted on it, narrow the chat to ~320px.
+2. Rail: iso tiles, dotted connectors and grid texture are decoration for a 7-item list. Use a plain numbered list and drop the grid.
+3. Duplication: the agent card repeats the chat's last message, and "Check availability" appears twice within 300px. Delete the card; the left hero CTA becomes "See the rooms" only.
+4. Booking card: the cyan glow border is the only glow on the page, and the ~10px button text looks unfinished. Use a hairline plus a soft 8% shadow, a 44px button with a 14px label.
+5. Teal mono eyebrows appear in 7+ places and flatten the hierarchy.
+6. Feature-row icons stranded at the far right edge read as leftovers.
+
+**Changes made.** Gap 2 (replace the iso modules with a plain list) and the "delete the agent card" half of gap 3 conflict with PROMPT.md §4, which requires both, so they were reduced rather than removed.
+1. **Pane hierarchy** *(gap 1)*: the canvas behind the preview is a step deeper (`--bg-2`), so the page reads as lifted. The rail sits on the base tone, its grid texture drops to 45% opacity, and its "Modules" header is neutral grey instead of teal. Chat narrowed from 384 to 344px.
+2. **One primary action in the hero** *(gap 3)*: when the hero has the booking card, the card owns "Check availability"; the left column keeps one outlined "See the rooms →".
+3. **Booking card** *(gap 4)*: no glow or blur. 1px hairline, a soft long shadow, opaque card fill. Teal is left only on the "3 nights" tag. Site buttons are 48px tall with 16px labels (~12px on screen).
+4. **Feature icons** *(gap 6)*: moved beside the row number at 20px with a 1.5px stroke, in full ink. Feature title column widened so titles don't run into descriptions.
+5. **Teal in the chrome** *(gap 5)*: the rail header is neutral. Site eyebrows stay teal because §4 asks for accent-coloured eyebrow labels.
+6. Suggestion chips wrap two per row in the narrower chat. The site renders at 1120px virtual width (scale ~0.71), and the fixed state puts the hero eyebrow 16px below the top of the page view, so the Testimonials eyebrow stays in frame.
 
 Functional tests after changes: **33/33 pass**.
