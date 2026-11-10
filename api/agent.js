@@ -125,25 +125,25 @@ function designContext(directions, recent) {
   return `DIRECTIONS:\n${JSON.stringify(list)}\nFONTS: ${FONT_LIST}\nRECENT (avoid unless asked): ${rec.join(', ') || 'none'}\n\n`;
 }
 
-export function buildMessages({ message, state, history, directions, recentDirections }) {
+export function buildMessages({ message, state, history, directions, recentDirections, live }) {
   const turns = (Array.isArray(history) ? history : []).slice(-8)
     .filter((t) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string')
     .map((t) => ({ role: t.role, content: t.content.slice(0, 1500) }));
   return [
     { role: 'system', content: SYSTEM_PROMPT },
     ...turns,
-    { role: 'user', content: `${designContext(directions, recentDirections)}STATE:\n${JSON.stringify(compactState(state))}\n\nMESSAGE:\n${message}` },
+    { role: 'user', content: `${designContext(directions, recentDirections)}${live ? 'VOICE: live spoken conversation. Keep reply under 25 words and "after" under 15 words; they are read aloud.\n\n' : ''}STATE:\n${JSON.stringify(compactState(state))}\n\nMESSAGE:\n${message}` },
   ];
 }
 
-export async function callMoss({ message, state, history, directions, recentDirections }, env = process.env, fetchImpl = fetch) {
+export async function callMoss({ message, state, history, directions, recentDirections, live }, env = process.env, fetchImpl = fetch) {
   const { token, base, model } = mossSettings(env);
   if (!token) {
     // Names only (never values), so a misnamed or wrongly scoped variable is easy to spot.
     const seen = Object.keys(env).filter((k) => /moss/i.test(k)).sort();
     throw Object.assign(new Error(`Moss inference is not configured (set MOSS_PROJECT_ID and MOSS_PROJECT_KEY). Moss variables visible to this deployment: ${seen.length ? seen.join(', ') : 'none'}`), { status: 503 });
   }
-  const payload = { model, messages: buildMessages({ message, state, history, directions, recentDirections }), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
+  const payload = { model, messages: buildMessages({ message, state, history, directions, recentDirections, live }), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
   const post = (body) => fetchImpl(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
@@ -178,7 +178,7 @@ export default async function handler(req, res) {
   if (message.length > MAX_MESSAGE) return res.status(413).json({ error: 'message too long' });
   if (JSON.stringify(body.state || {}).length > MAX_STATE) return res.status(413).json({ error: 'state too large' });
   try {
-    const result = await callMoss({ message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections });
+    const result = await callMoss({ message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live });
     res.setHeader('cache-control', 'no-store');
     return res.status(200).json(result);
   } catch (err) {

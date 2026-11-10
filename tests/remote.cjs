@@ -42,6 +42,7 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       const json = JSON.parse(body); requests.push(json);
       const m = json.message.toLowerCase();
+      if (m.includes('slow')) { setTimeout(() => { try { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(REPLIES.about)); } catch (e) {} }, 2500); return; }
       if (m.includes('fail')) { res.writeHead(500, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ error: 'Moss inference returned 500' })); }
       const key = m.includes('rooftop') ? 'build' : m.includes('punch') ? 'punchier' : m.includes('move') ? 'reorder' : m.includes('flow') ? 'flow' : 'about';
       res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(REPLIES[key]));
@@ -127,6 +128,18 @@ const server = http.createServer((req, res) => {
   check('endpoint error falls back to offline agent with a notice', lastReply.includes('offline demo agent') && requests.length === before + 1, lastReply.slice(0, 90));
   await say('make the headline punchier');
   check('remote retried on the next message after a 500', requests.length === before + 2 && (await page.evaluate(() => window.moss.agent.isRemote())));
+
+  // interrupting while Moss is thinking aborts the request: no ops, no offline fallback, and Moss is told
+  const pagesBefore = await page.evaluate(() => window.moss.pageModel.get().pages.length);
+  const userBefore = await page.locator('.msg.user').count();
+  page.evaluate(() => window.moss.app.send('slow: add a gallery page'));
+  await page.waitForTimeout(400);
+  await page.evaluate(() => window.moss.app.interrupt());
+  await page.waitForTimeout(2600);
+  const stopped = await page.locator('.msg.agent').last().innerText();
+  check('interrupt while thinking aborts the request cleanly', (await page.evaluate(() => window.moss.pageModel.get().pages.length)) === pagesBefore && stopped.includes('before any changes') && !stopped.includes('offline demo agent'), stopped.replace(/\s+/g, ' ').slice(0, 80));
+  await say('make the headline punchier');
+  check('the next request tells Moss it was interrupted', JSON.stringify(requests.at(-1).history).includes('[Interrupted by the user before any changes.]') && (await page.locator('.msg.user').count()) === userBefore + 2);
 
   check('no alert fired', !alerted);
   check('no console/page errors', errors.length === 0, errors.slice(0, 3).join(' | '));

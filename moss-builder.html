@@ -1341,13 +1341,21 @@ const agent = (() => {
   let remoteDisabled = false, warned = false;
   const UNDO_RE = /^\s*(undo|revert)\b|\bundo\b|take that back|go back a step/;
 
-  async function respond(message, state) {
+  // Commands that never need the model: undo, view switches, going to an existing page.
+  const VIEW_RE = /^(show (me )?(the )?)?(flow|page) view$|^(back to|switch to|open) (the )?(flow|page)( view)?$/;
+  function isLocalCommand(low, state) {
+    const l = low.replace(/[.!?]/g, '').trim();
+    if (UNDO_RE.test(l) || VIEW_RE.test(l)) return true;
+    const go = l.match(/^(go to|open|show( me)?|take me to)\s+(the\s+)?@?([a-z][\w-]*)(\s+page)?$/);
+    return !!(go && state.pages.find((p) => p.name.toLowerCase() === go[4] || p.id === go[4]));
+  }
+  async function respond(message, state, opts = {}) {
     const low = message.trim().toLowerCase();
-    if (!REMOTE || remoteDisabled || UNDO_RE.test(low)) return localRespond(message, state);
+    if (!REMOTE || remoteDisabled || isLocalCommand(low, state)) return localRespond(message.replace(/^(go to|open|show( me)?|take me to)\s+(the\s+)?([A-Za-z])/i, (m, a, b, c, d) => `${a} @${d}`), state);
     try {
       const r = await fetch('/api/agent', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-8), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections() }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, signal: opts.signal,
+        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-8), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections(), live: !!opts.live }),
       });
       const json = await r.json().catch(() => ({}));
       if (!r.ok) { if (r.status === 503 || r.status === 404) remoteDisabled = true; throw new Error(json.error || `HTTP ${r.status}`); }
@@ -1355,6 +1363,7 @@ const agent = (() => {
       turns.push({ role: 'user', content: message }, { role: 'assistant', content: res.reply });
       return res;
     } catch (err) {
+      if (err && err.name === 'AbortError') return { reply: '', ops: [], aborted: true };
       console.warn('Moss inference unavailable, using the offline agent:', err.message);
       const res = await localRespond(message, state);
       if (!warned) { warned = true; res.reply = `Moss inference isn’t reachable (${err.message}), so the offline demo agent answered. ${res.reply}`; }
@@ -1560,7 +1569,9 @@ const agent = (() => {
     };
   }
 
-  return { respond, localRespond, normalize, layoutFlow, parseMentions, findSections, isRemote: () => REMOTE && !remoteDisabled };
+  // Append a note (e.g. an interruption) to the last assistant turn so the model knows what really happened.
+  function note(text) { const last = turns[turns.length - 1]; if (last && last.role === 'assistant') last.content += ' ' + text; else turns.push({ role: 'assistant', content: text }); }
+  return { respond, localRespond, normalize, layoutFlow, parseMentions, findSections, note, isRemote: () => REMOTE && !remoteDisabled };
 })();
 
 /* =====================================================================
@@ -2045,6 +2056,60 @@ const voice = (() => {
     try { rec.start(); active = true; } catch (e) { active = false; return false; }
     return true;
   }
+  /* Live session: the mic stays on (auto-restarting) until stopLive(). Each utterance is committed after a pause.
+     Moss's own speech is filtered out by word overlap with what it is saying (echo on laptop speakers). */
+  const SILENCE = 900;
+  let live = null;
+  const speech = { text: '', until: 0 };
+  const words = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9'à-ÿ ]+/g, ' ').split(/\s+/).filter(Boolean);
+  function isEcho(heard) {
+    if (!speech.text || Date.now() > speech.until + 900) return false;
+    const said = new Set(words(speech.text)); const w = words(heard);
+    if (!w.length) return true;
+    return w.filter((x) => said.has(x)).length / w.length >= 0.6;
+  }
+  function openLive() {
+    if (!live) return;
+    const r = new SR(); live.rec = r; rec = r;
+    r.lang = lang(); r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
+    r.onresult = (e) => {
+      if (!live || live.rec !== r) return;
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const x = e.results[i]; const t = x[0].transcript;
+        if (x.isFinal) { if (!isEcho(t)) live.pending += ' ' + t; } else interim += t;
+      }
+      const shownInterim = interim && !isEcho(interim) ? interim : '';
+      if (shownInterim && live.h.onSpeech) live.h.onSpeech(shownInterim); // barge-in signal
+      const heard = `${live.pending} ${shownInterim}`.replace(/\s+/g, ' ').trim();
+      if (live.h.onInterim) live.h.onInterim(heard);
+      clearTimeout(live.timer);
+      if (heard) live.timer = setTimeout(commitLive, SILENCE);
+    };
+    r.onerror = (e) => { if (!live) return; live.h.onError && live.h.onError(e.error || 'error'); if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) stopLive(); };
+    r.onend = () => { if (live && live.rec === r) { live.restarts++; setTimeout(() => { if (live && live.rec === r) openLive(); }, 150); } };
+    try { r.start(); active = true; } catch (e) { /* already started; onend will retry */ }
+  }
+  function commitLive() {
+    if (!live) return;
+    const t = live.pending.replace(/\s+/g, ' ').trim(); live.pending = '';
+    if (t && live.h.onUtterance) live.h.onUtterance(t);
+  }
+  function startLive(h = {}) {
+    if (!SR) return false;
+    if (live) return true;
+    if (rec && active) { try { rec.abort(); } catch (e) {} }
+    live = { h, pending: '', timer: null, rec: null, restarts: 0 };
+    openLive();
+    return true;
+  }
+  function stopLive() {
+    if (!live) return;
+    const l = live; live = null; active = false;
+    clearTimeout(l.timer);
+    try { l.rec && l.rec.abort(); } catch (e) {}
+    l.h.onStop && l.h.onStop();
+  }
   function stop() { if (rec && active) { try { rec.stop(); } catch (e) {} } }       // finish and deliver what was heard
   function abort() { if (rec && active) { handlers.onEnd = null; try { rec.abort(); } catch (e) {} active = false; } } // discard
   function speak(text) {
@@ -2053,10 +2118,15 @@ const voice = (() => {
     const u = new SpeechSynthesisUtterance(t);
     const v = pickVoice(); if (v) u.voice = v;
     u.lang = v ? v.lang : lang(); u.rate = 1.04;
+    // remember what Moss is saying, and roughly until when, so the live mic can ignore it
+    const now = Date.now(); const est = words(t).length * 380 + 700;
+    speech.text = (now < speech.until ? speech.text + ' ' : '') + t;
+    speech.until = Math.max(speech.until, now) + est;
+    u.onend = () => { if (!synth.speaking) speech.until = Math.min(speech.until, Date.now()); };
     synth.speak(u);
   }
-  function cancelSpeech() { if (synth) synth.cancel(); }
-  return { supported: () => !!SR, start, stop, abort, speak, cancelSpeech, isListening: () => active, forSpeech };
+  function cancelSpeech() { if (synth) synth.cancel(); speech.until = Math.min(speech.until, Date.now()); }
+  return { supported: () => !!SR, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0) };
 })();
 
 const app = (() => {
@@ -2069,7 +2139,7 @@ const app = (() => {
   ];
 
   function setStatus(text, isBusy) { const s = $('#status'); s.classList.toggle('busy', !!isBusy); s.querySelector('span').textContent = text; }
-  function setBusy(v) { busy = v; $$('.send-btn').forEach((b) => (b.disabled = v)); if (!v) { setStatus('Ready', false); idleWaiters.splice(0).forEach((r) => r()); } }
+  function setBusy(v) { busy = v; $$('.send-btn').forEach((b) => (b.disabled = v)); if (!v) { if (typeof isLive !== 'undefined' && isLive) setStatus('Live · say “stop listening”', true); else setStatus('Ready', false); idleWaiters.splice(0).forEach((r) => r()); } }
 
   function formatText(text) {
     const st = pageModel.get();
@@ -2085,9 +2155,10 @@ const app = (() => {
     el.innerHTML = `<span class="agent-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3l7.5 4.3v9.4L12 21l-7.5-4.3V7.3z M4.5 7.3L12 11.6l7.5-4.3M12 11.6V21"/></svg></span><div class="body"><span class="typing" aria-label="Moss is typing"><i></i><i></i><i></i></span><div class="text"></div><ul class="log"></ul><div class="text after"></div></div>`;
     $('#messages').appendChild(el); scrollChat(); return el;
   }
-  async function stream(el, text) {
+  async function stream(el, text, t) {
     const parts = text.split(/(\s+)/); let acc = '';
-    for (const w of parts) { acc += w; el.textContent = acc; if (w.trim()) { setPanel(acc); await wait(26); } }
+    for (const w of parts) { if (t && t.aborted) break; acc += w; el.textContent = acc; if (w.trim()) { setPanel(acc); await wait(26); } }
+    if (t && t.aborted) { el.textContent = acc.trim() + (acc.trim() ? '…' : ''); return; }
     el.innerHTML = formatText(text); setPanel(text); scrollChat();
   }
   function setPanel(text) { $('#scenePanelText').textContent = text.replace(/\s+/g, ' '); }
@@ -2302,18 +2373,77 @@ const app = (() => {
     if (ok) { setMic(true); sound.play('click'); }
   }
   const micTarget = () => (document.body.classList.contains('started') ? $('#chatInput') : $('#introInput'));
-  function toggleMic(ta) { if (voice.isListening()) voice.stop(); else startListening(ta || micTarget()); }
+  function toggleMic(ta) { if (voice.isLive()) voice.stopLive(); else if (voice.isListening()) voice.stop(); else goLive(); }
+
+  /* ---- live conversation: the mic stays on until the button, Escape or "stop listening" ---- */
+  let isLive = false;
+  const liveStatus = () => setStatus('Live · say “stop listening”', true);
+  function setLive(on) {
+    isLive = on;
+    $$('.mic-btn').forEach((b) => { b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'Turn the mic off' : 'Talk to Moss'); });
+    $('#composer').classList.toggle('listening', on);
+    document.body.classList.toggle('live', on);
+    if (on) liveStatus(); else if (!busy) setStatus('Ready', false);
+  }
+  function goLive() {
+    sound.unlock();
+    const ok = voice.startLive({
+      onInterim: (heard) => { const ta = micTarget(); ta.value = heard; autosize(ta); },
+      onSpeech: () => voice.cancelSpeech(), // you started talking: Moss stops mid-sentence
+      onUtterance: (heard) => { handleUtterance(heard); },
+      onError: (err) => { if (/not-allowed|service-not-allowed/.test(err)) setStatus('Mic blocked', false); },
+      onStop: () => { setLive(false); sound.play('click'); },
+    });
+    if (ok) { setLive(true); sound.play('click'); }
+  }
+  const STOP_LISTENING = /^(stop listening|stop the mic|mic off|turn (the )?mic off|turn off the mic|mute( the)? mic|mute|pause listening|that's all|thats all|i'm done|im done)$/;
+  const STOP_TURN = /^(stop|wait|hold on|hang on|pause|cancel|cancel that|never ?mind|one sec(ond)?|stop stop|no stop)$/;
+  async function handleUtterance(heard) {
+    const ta = micTarget(); ta.value = ''; autosize(ta);
+    const text = fromSpeech(heard);
+    const low = text.toLowerCase().replace(/[.!?,]/g, '').replace(/\s+/g, ' ').trim();
+    if (STOP_LISTENING.test(low)) { voice.stopLive(); voice.speak('Mic off.'); return; }
+    if (STOP_TURN.test(low)) {
+      if (busy) { await interrupt(); voice.speak('Stopped. What should I change?'); }
+      return;
+    }
+    if (busy) await interrupt();
+    send(text, { voice: true });
+  }
+
+  /* ---- interruptible turns ---- */
+  let turn = null;
+  function interrupt() {
+    if (!turn) return Promise.resolve();
+    turn.aborted = true;
+    try { turn.controller.abort(); } catch (e) {}
+    voice.cancelSpeech();
+    return whenIdle();
+  }
   function initVoice() {
     if (!voice.supported()) { document.body.classList.add('no-voice'); return; }
+    // the mic button toggles the live conversation
     $('#micBtn').addEventListener('click', () => toggleMic($('#chatInput')));
     $('#introMic').addEventListener('click', () => toggleMic($('#introInput')));
     const typing = (el) => el && (el.closest('input, textarea, select, button, [contenteditable="true"], .flowview') !== null);
     window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && voice.isLive()) { voice.stopLive(); return; }
       if (e.code === 'Escape' && voice.isListening()) { voice.abort(); setMic(false); return; }
-      if (e.code !== 'Space' || e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      if (e.code !== 'Space' || e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing(e.target) || voice.isLive()) return;
       e.preventDefault(); startListening(micTarget());
     });
-    window.addEventListener('keyup', (e) => { if (e.code === 'Space' && voice.isListening() && !typing(e.target)) { e.preventDefault(); voice.stop(); } });
+    window.addEventListener('keyup', (e) => { if (e.code === 'Space' && !voice.isLive() && voice.isListening() && !typing(e.target)) { e.preventDefault(); voice.stop(); } });
+  }
+
+  // Close out an interrupted turn: note it in the chat and tell the agent what actually got done.
+  function finishInterrupted(msg, doneOps, total) {
+    const built = doneOps.filter((o) => o.op === 'addSection').map((o) => SECTION_META[o.section.type].label.toLowerCase());
+    const li = document.createElement('li'); li.className = 'done';
+    li.innerHTML = `<span class="st">${icon('check')}</span><span class="k">stopped</span><span>${esc(total ? `after ${doneOps.length} of ${total} steps` : 'before any changes')}</span>`;
+    msg.querySelector('.log').appendChild(li);
+    agent.note(`[Interrupted by the user${built.length ? ` after building: ${built.join(', ')}` : ''}${total ? ` (${doneOps.length} of ${total} changes applied)` : ' before any changes'}.]`);
+    const curP = pageModel.current(); isoScene.setActive(curP && curP.sections.length ? curP.sections[curP.sections.length - 1].id : null);
+    scrollChat();
   }
 
   async function send(raw, opts = {}) {
@@ -2329,19 +2459,28 @@ const app = (() => {
     setBusy(true); setStatus('Thinking', true); setSuggestions([]);
     addUser(text); flashMentions(text);
     const msg = addAgent();
+    const t = turn = { controller: new AbortController(), aborted: false };
     let res;
-    const ack = spoken ? setTimeout(() => voice.speak('On it.'), 1200) : null; // fill a slow Moss turn
-    try { res = await agent.respond(text, pageModel.get()); }
+    const ack = spoken ? setTimeout(() => { if (!t.aborted) voice.speak('On it.'); }, 1200) : null; // fill a slow Moss turn
+    try { res = await agent.respond(text, pageModel.get(), { signal: t.controller.signal, live: isLive }); }
     catch (err) { res = { reply: 'Something went wrong on my side. Try that again?', ops: [] }; console.error(err); }
     clearTimeout(ack);
     msg.querySelector('.typing').remove();
+    if (t.aborted || res.aborted) { finishInterrupted(msg, [], 0); turn = null; setBusy(false); return; }
     if (spoken) voice.speak(res.reply);
-    await stream(msg.querySelector('.text'), res.reply);
+    await stream(msg.querySelector('.text'), res.reply, t);
     const ops = res.ops || [];
     const building = ops.some((o) => o.op === 'addSection');
     if (building) document.body.classList.add('building');
     if (ops.some((o) => MUTATING.has(o.op))) pageModel.snapshot();
-    for (const op of ops) await applyOp(op, msg);
+    const doneOps = [];
+    for (const op of ops) { if (t.aborted) break; await applyOp(op, msg); doneOps.push(op); }
+    if (t.aborted) {
+      if (building) document.body.classList.remove('building');
+      finishInterrupted(msg, doneOps, ops.length);
+      turn = null; setBusy(false); return;
+    }
+    turn = null;
     const curP = pageModel.current(); isoScene.setActive(curP && curP.sections.length ? curP.sections[curP.sections.length - 1].id : null);
     if (building) { await wait(700); document.body.classList.remove('building'); }
     const logEl = msg.querySelector('.log');
@@ -2455,7 +2594,7 @@ const app = (() => {
     setSuggestions([]);
   }
   const whenIdle = () => new Promise((r) => { if (!busy) r(); else idleWaiters.push(r); });
-  return { init, send, openPage, whenIdle, isBusy: () => busy, view: () => view, fromSpeech };
+  return { init, send, openPage, whenIdle, isBusy: () => busy, view: () => view, fromSpeech, interrupt, isLive: () => isLive };
 })();
 
 app.init();

@@ -65,7 +65,11 @@ check('MOSS_API_KEY works as the project key', mossSettings({ MOSS_PROJECT_ID: '
 check('a full id:key token is used as is', mossSettings({ MOSS_API_KEY: 'p:k3' }).token === 'p:k3');
 check('missing key half → not configured', mossSettings({ MOSS_PROJECT_ID: 'p' }).token === '');
 
-// 6. helpers
+// 6. live voice turns ask for short replies
+const live = (await import('../api/agent.js')).buildMessages({ message: 'hi', state: {}, live: true }).at(-1).content;
+check('live mode asks for short spoken replies', live.includes('VOICE: live spoken conversation'));
+
+// 7. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');
 check('compactState keeps flow names only', JSON.stringify(compactState({ flows: [{ name: 'Booking', nodes: [1, 2] }] }).flows) === '["Booking"]');
 
