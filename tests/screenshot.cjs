@@ -22,13 +22,14 @@ const URL = 'file://' + path.resolve(__dirname, '..', 'moss-builder.html') + '?s
     await page.evaluate(async () => { await window.moss.app.send('map the booking flow'); });
     await page.evaluate(() => window.moss.app.whenIdle());
   }
-  // Fixed scroll (from iteration 4): the hero eyebrow sits 24px below the pinned iso scene, so the
+  // Fixed scroll (from iteration 4): the hero eyebrow sits 20px below the top of the page view (from iteration 5 the iso scene is a left rail), so the
   // hero headline, all of Features and the start of Testimonials are in view.
+  await page.waitForTimeout(1000); // let the app's own smooth auto-scroll finish first
   await page.evaluate(() => {
     const pv = document.querySelector('#pageView'); pv.style.scrollBehavior = 'auto'; pv.scrollTop = 0;
     const e = document.querySelector('#siteSections .sec-hero .eyebrow');
-    const sceneBottom = document.querySelector('#scene').getBoundingClientRect().bottom;
-    if (e) pv.scrollTop = Math.max(0, e.getBoundingClientRect().top - sceneBottom - 24);
+    const sceneBottom = document.querySelector('#pageView').getBoundingClientRect().top;
+    if (e) pv.scrollTop = Math.max(0, e.getBoundingClientRect().top - sceneBottom - 20);
   });
   await page.mouse.move(0, 0);
   await page.waitForTimeout(1200);

@@ -118,3 +118,36 @@ Left out: the 4 GIFs (blurry captures; two have no UI) and `11.19.48 PM.png` (bo
 5. **Teal narrowed** *(gap 5)*: the numerals in the Features list are neutral ink now. Teal remains on eyebrows, active states and @mentions, which the brief specifies.
 
 Functional tests after changes: **33/33 pass**.
+
+---
+
+## Iteration 4
+
+| | |
+|---|---|
+| Screenshot | `screenshots/iter-4.png` (taken after the iteration 3 changes) |
+| Our letter | E |
+| Our rank | **5 / 5** (B > D > A > C > E) |
+| Our scores | Composition 3 · Spacing 3 · Typography 3 · Color 3 · Components 3 · Originality 3 |
+| Our total | **18 / 30** (down from 21) |
+| Others | B 27 · D 26 · A 25 · C 24 |
+
+Stall guard: 1 run without improvement on reference set 2 (21 → 18). One more triggers a stop.
+
+**Top gaps for E (critic, in order of impact)**
+1. The iso strip, agent panel, preview and chat all compete with no dominant surface. Remove the top strip, put section navigation in a slim left rail, let the preview fill the height.
+2. The iso tile row (glossy 3D tiles, shadows, dotted connectors, staggered labels) is the most AI-trope element, and "03 TESTIMONIALS" nearly collides with its neighbours. Use a flat stepper on one baseline.
+3. The preview type is the least legible thing on screen (body ~10px, feature rows ~9px, card labels ~7px). Render at true scale or crop.
+4. The agent panel duplicates the chat and is truncated.
+5. Chat details: no spacing around the checklist card, suggestion chips clipped, tiny tracked-mono footer hints.
+
+**What went wrong in iteration 3.** Shrinking the preview to fit three sections cost legibility (gap 3). This iteration fixes the structure instead of scaling down further.
+
+**Changes made**
+1. **Iso scene becomes a left rail** *(gaps 1, 2)*: the scene leaves the top of the canvas and becomes a 232px column. Modules stack straight down the iso grid, labels sit on one column ("01 Hero" … in 12px mono, sentence case), so labels can't collide. Drop shadows are removed in the rail; the glow stays only on the active module. It's still the brief's isometric module metaphor (drop, connect, unfold) but it no longer competes with the preview. Mobile keeps the compact top strip.
+2. **The preview fills the height at a legible scale** *(gaps 1, 3)*: the site now renders at 1080px virtual width at 0.83 scale (was 1400px at 0.59), and site type is bumped (body 18px, hero sub 20px, card rows 16px, eyebrows 14px). Effective body size went from ~9.5px to ~15px. Features became a heading row plus a full-width single-line list.
+3. **Agent panel anchored at the rail foot** *(gap 4)*: the brief requires this panel, so it stays, now at the bottom of the rail where it closes the module column instead of floating off-grid. Up to 6 lines, so it's no longer cut off.
+4. **Chat details** *(gap 5)*: 14/16px spacing around the checklist card, suggestion chips wrap instead of clipping, footer hints at 11px with normal tracking.
+5. **Fixed screenshot state adjusted** to the new layout: the hero eyebrow sits 20px below the top of the page view. The view shows the headline, Features and the top of Testimonials. The script also waits 1s so the app's own smooth scroll settles first (it had raced the capture).
+
+Functional tests after changes: **33/33 pass**.
