@@ -50,7 +50,7 @@ Functional tests after changes: **33/33 pass**.
 | Our total | **22 / 30** (no change from iteration 1) |
 | Others | B 23 · D 21 · A 20 · C 17 |
 
-The top-ranked design (B) is the reference with an isometric agent and integrations diagram. The critic noted it was the only full-UI screenshot that was sharp, which favours ours on fine detail and blurs the comparison for the rest.
+The top-ranked design (B) is the reference with an isometric agent and integrations diagram. The critic noted that ours (E) was the only sharp, full-UI capture and that A–D were soft and low-resolution, so its fine-detail scores for the references are less certain.
 
 **Top gaps.** None were listed for E (ranked 2nd). Lowest criteria again: Composition & hierarchy (3), Originality & restraint (3). Gaps the critic gave other designs that also apply to ours:
 - (to D) Equal tiles with no focal point: every item competes. Our seven identical scene modules have the same problem.
