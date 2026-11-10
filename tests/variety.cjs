@@ -1,5 +1,5 @@
 // Design variety: every direction and every layout renders, fonts load, contrast holds; saves a contact sheet.
-// Run: node tests/variety.cjs   (writes screenshots/variety/*.png and screenshots/variety-sheet.png)
+// Run: node tests/variety.cjs   (writes screenshots/variety/*.png; UPDATE_SHEET=1 also refreshes screenshots/variety-sheet.png)
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
@@ -7,6 +7,8 @@ const fs = require('fs');
 const ROOT = path.resolve(__dirname, '..');
 const URL = 'file://' + path.join(ROOT, 'moss-builder.html') + '?speed=0.02';
 const OUT = path.join(ROOT, 'screenshots', 'variety');
+// The committed sheet only changes on request (UPDATE_SHEET=1), so test runs leave the tree clean.
+const SHEET = process.env.UPDATE_SHEET ? path.join(ROOT, 'screenshots', 'variety-sheet.png') : path.join(OUT, 'sheet.png');
 const results = [];
 const check = (name, ok, detail = '') => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); };
 
@@ -96,8 +98,8 @@ for i, (im, f) in enumerate(zip(ims, files)):
     x = 20 + (i % cols) * (w + 20); y = 20 + (i // cols) * (h + 20)
     sheet.paste(im, (x, y + 26)); d.text((x, y + 6), os.path.basename(f)[:-4], fill=(40, 40, 40))
 sheet.save(sys.argv[2])
-`, OUT, path.join(ROOT, 'screenshots', 'variety-sheet.png'), ids.join(',')]);
-    console.log('contact sheet: screenshots/variety-sheet.png');
+`, OUT, SHEET, ids.join(',')]);
+    console.log('contact sheet:', path.relative(ROOT, SHEET));
   } catch (e) { console.log('contact sheet skipped:', e.message); }
 
   const failed = results.filter((x) => !x).length;
