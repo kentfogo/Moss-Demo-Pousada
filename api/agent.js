@@ -117,7 +117,11 @@ export function buildMessages({ message, state, history }) {
 
 export async function callMoss({ message, state, history }, env = process.env, fetchImpl = fetch) {
   const { token, base, model } = mossSettings(env);
-  if (!token) throw Object.assign(new Error('Moss inference is not configured (set MOSS_PROJECT_ID and MOSS_PROJECT_KEY)'), { status: 503 });
+  if (!token) {
+    // Names only (never values), so a misnamed or wrongly scoped variable is easy to spot.
+    const seen = Object.keys(env).filter((k) => /moss/i.test(k)).sort();
+    throw Object.assign(new Error(`Moss inference is not configured (set MOSS_PROJECT_ID and MOSS_PROJECT_KEY). Moss variables visible to this deployment: ${seen.length ? seen.join(', ') : 'none'}`), { status: 503 });
+  }
   const payload = { model, messages: buildMessages({ message, state, history }), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
   const post = (body) => fetchImpl(`${base}/chat/completions`, {
     method: 'POST',
