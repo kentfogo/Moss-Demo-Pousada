@@ -32,6 +32,9 @@ const REPLIES = {
   punchier: { reply: 'Shorter and sharper.', ops: [{ op: 'updateSection', page: 'home', id: 'hero', patch: { headline: 'Porto, from above.' }, note: 'rewrote headline' }] },
   reorder: { reply: 'Testimonials now lead.', ops: [{ op: 'setOrder', page: 'home', order: ['hero', 'testimonials', 'features', 'stats', 'cta', 'footer'] }] },
   flow: { reply: 'Mapping reservations.', ops: [{ op: 'setView', view: 'flow' }, { op: 'addFlow', flow: { name: 'Reservation flow', nodes: [{ id: 'a', label: 'Guest opens site', kind: 'start' }, { id: 'b', label: 'Picks a time', kind: 'step' }, { id: 'c', label: 'Table free?', kind: 'decision' }, { id: 'd', label: 'Confirms booking', kind: 'step' }, { id: 'e', label: 'Joins waitlist', kind: 'step' }, { id: 'f', label: 'Gets confirmation', kind: 'end' }], edges: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'd', label: 'yes' }, { from: 'c', to: 'e', label: 'no' }, { from: 'd', to: 'f' }, { from: 'e', to: 'b' }, { from: 'zz', to: 'a' }] } }] },
+  wipeAbout: { reply: 'Removing @About.', ops: [{ op: 'deleteSection', page: 'about-us', id: 'hero' }, { op: 'deleteSection', page: 'about-us', id: 'footer' }] },
+  restyleDark: { reply: 'Going dark.', ops: [{ op: 'setDesign', design: { direction: 'darktech', colors: { bg: '#07090c', surface: '#10151b', ink: '#e8edf2', muted: '#98a4b0', accent: '#5ccfee', accent2: '#1a2a33', inverse: '#10151b' } } }] },
+  startOver: { reply: 'Starting over.', ops: [{ op: 'resetSite' }, { op: 'setBusiness', business: { name: 'Miradouro', kind: 'rooftop bar', place: 'Porto', primary: 'Book' } }, { op: 'setDesign', design: { direction: 'swiss', hue: 200 } }, { op: 'addPage', page: { id: 'home', name: 'Home' } }, { op: 'addSection', page: 'home', section: { type: 'hero', data: { headline: 'Porto, *six floors up*.', sub: 'Cocktails with a view.', primary: 'Book', secondary: 'Menu', eyebrow: 'Rooftop bar' } } }] },
   about: { reply: 'Adding @About.', ops: [{ op: 'setView', view: 'page' }, { op: 'addPage', page: { id: 'About Us', name: 'About' } }, { op: 'addSection', page: 'about-us', section: { type: 'hero', data: { variant: 'centered', eyebrow: 'About', headline: 'Two bartenders and a very good view.', sub: 'Opened in 2021.' } } }, { op: 'addSection', page: 'about-us', section: { type: 'footer', data: {} } }] },
 };
 
@@ -44,7 +47,7 @@ const server = http.createServer((req, res) => {
       const m = json.message.toLowerCase();
       if (m.includes('slow')) { setTimeout(() => { try { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(REPLIES.about)); } catch (e) {} }, 2500); return; }
       if (m.includes('fail')) { res.writeHead(500, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ error: 'Moss inference returned 500' })); }
-      const key = m.includes('rooftop') ? 'build' : m.includes('punch') ? 'punchier' : m.includes('move') ? 'reorder' : m.includes('flow') ? 'flow' : 'about';
+      const key = m.includes('everything off') ? 'wipeAbout' : m.includes('dark') ? 'restyleDark' : m.includes('start over') ? 'startOver' : m.includes('rooftop') ? 'build' : m.includes('punch') ? 'punchier' : m.includes('move') ? 'reorder' : m.includes('flow') ? 'flow' : 'about';
       res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(REPLIES[key]));
     });
     return;
@@ -53,7 +56,8 @@ const server = http.createServer((req, res) => {
   const file = pathname === '/' ? 'moss-builder.html' : pathname.replace(/^\/+/, '');
   const full = path.join(ROOT, file);
   if (!full.startsWith(ROOT) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) { res.writeHead(404); return res.end(); }
-  res.writeHead(200, { 'content-type': file.endsWith('.html') ? 'text/html' : 'application/octet-stream' }); fs.createReadStream(full).pipe(res);
+  const TYPES = { html: 'text/html', js: 'text/javascript', css: 'text/css', woff2: 'font/woff2', json: 'application/json', png: 'image/png' };
+  res.writeHead(200, { 'content-type': TYPES[file.split('.').pop()] || 'application/octet-stream' }); fs.createReadStream(full).pipe(res);
 });
 
 (async () => {
@@ -119,6 +123,20 @@ const server = http.createServer((req, res) => {
   const pages = await page.evaluate(() => window.moss.pageModel.get().pages.map((p) => p.id + ':' + p.sections.length));
   check('page id slugged, sections filled', pages.includes('about-us:2'), pages.join(','));
 
+  // one-step page removal: per-section deletes that empty a page collapse into a single deletePage
+  const logBefore = await page.locator('.log li').count();
+  await say('take everything off the about page');
+  const afterWipe = await page.evaluate(() => window.moss.pageModel.get().pages.map((p) => p.id));
+  const wipeLog = await page.locator('.msg.agent').last().locator('.log li').allInnerTexts();
+  check('emptying a page section by section becomes one deletePage', !afterWipe.includes('about-us') && wipeLog.length === 1 && /removed/.test(wipeLog[0]), wipeLog.join(' | '));
+  await say('undo');
+
+  // a direction's sample palette sent back unchanged is re-derived, so sites don't share a scheme
+  await say('make it dark');
+  const dark = await page.evaluate(() => { const d = window.moss.pageModel.get().design; return { direction: d.direction, colors: d.colors, readable: MossSite.ratio(d.colors.ink, d.colors.bg) >= 4.5 }; });
+  check('copied sample colours are replaced by a generated palette', dark.direction === 'darktech' && dark.colors.accent !== '#5ccfee' && dark.readable, JSON.stringify(dark.colors));
+  await say('undo');
+
   await say('undo');
   check('undo stays local (no request)', !requests.at(-1).message.includes('undo'));
 
@@ -140,6 +158,12 @@ const server = http.createServer((req, res) => {
   check('interrupt while thinking aborts the request cleanly', (await page.evaluate(() => window.moss.pageModel.get().pages.length)) === pagesBefore && stopped.includes('before any changes') && !stopped.includes('offline demo agent'), stopped.replace(/\s+/g, ' ').slice(0, 80));
   await say('make the headline punchier');
   check('the next request tells Moss it was interrupted', JSON.stringify(requests.at(-1).history).includes('[Interrupted by the user before any changes.]') && (await page.locator('.msg.user').count()) === userBefore + 2);
+
+  // "start over" clears everything in one step, then rebuilds
+  await say('start over please');
+  const fresh = await page.evaluate(() => { const s = window.moss.pageModel.get(); return { pages: s.pages.map((p) => p.id + ':' + p.sections.length), dir: s.design && s.design.direction, hue: s.design && s.design.hue, flows: s.flows.length }; });
+  check('resetSite then rebuild leaves only the new site', JSON.stringify(fresh.pages) === '["home:1"]' && fresh.dir === 'swiss' && fresh.hue === 200 && fresh.flows === 0, JSON.stringify(fresh));
+  check('accent words in headlines render', (await page.locator('.sec-hero h1 em.acc').innerText()) === 'six floors up');
 
   check('no alert fired', !alerted);
   check('no console/page errors', errors.length === 0, errors.slice(0, 3).join(' | '));

@@ -55,6 +55,15 @@ const check = (name, ok, detail = '') => { results.push(!!ok); console.log(`${ok
   });
   check('all directions pass contrast (text ≥ 4.5, accent ≥ 3)', contrast.low.length === 0, contrast.low.join(', '));
   check('contrast guard repairs an unreadable custom palette', contrast.fixed.ink >= 4.5 && contrast.fixed.muted >= 4.5 && contrast.fixed.accent >= 3, JSON.stringify(contrast.fixed));
+  const pal = await page.evaluate(() => ['Pipeline Plumbing', 'Drain Kings', 'Austin Rooter'].map((n) => MossSite.sanitizeDesign({ direction: 'trade' }, null, { seed: n }).colors));
+  const accents = new Set(pal.map((c) => c.accent));
+  const pass = await page.evaluate((list) => list.every((c) => MossSite.ratio(c.ink, c.bg) >= 4.5 && MossSite.ratio(c.muted, c.bg) >= 4.5), pal);
+  check('three businesses in one direction get three palettes, all readable', accents.size === 3 && pass, [...accents].join(' '));
+  const hueKept = await page.evaluate(() => MossSite.sanitizeDesign({ direction: 'darktech', hue: 140 }, null, { seed: 'x' }).colors.accent);
+  check('a chosen brand hue drives the accent', /^#[0-9a-f]{6}$/.test(hueKept) && hueKept !== '#5ccfee', hueKept);
+  const named = await page.evaluate(() => MossSite.sanitizeDesign({ direction: 'swiss', colors: { accent: '#ff7a00', ink: '#0b1f44' } }, null, { seed: 'x' }).colors);
+  const near = await page.evaluate((c) => { const d = (a, b) => Math.hypot(...[1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16))); return d(c.accent, '#ff7a00') < 40 && MossSite.ratio(c.accent, c.bg) >= 3; }, named);
+  check('colours the user names pass through (only nudged for contrast)', named.ink === '#0b1f44' && near, JSON.stringify({ ink: named.ink, accent: named.accent }));
   const junk = await page.evaluate(() => { const d = MossSite.sanitizeDesign({ direction: 'nope', colors: { bg: 'red; background:url(x)' }, type: { display: 'Comic Sans' }, shape: { button: 'blink' } }, null); return { dir: d.direction, bg: d.colors.bg, display: d.type.display, button: d.shape.button }; });
   check('invalid tokens fall back safely', junk.dir === 'hospitality' && /^#[0-9a-f]{6}$/.test(junk.bg) && junk.display === 'Instrument Serif' && junk.button === 'pill', JSON.stringify(junk));
 

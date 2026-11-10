@@ -103,15 +103,64 @@
     return out;
   }
 
+
+  /* ---------------------------------------------------------------- generated palettes
+     Each direction has a colour STRATEGY (how light, how saturated, how the accent relates to the base),
+     not a fixed palette. paletteFor() turns a strategy + brand hue into colours, so two sites in the same
+     direction get different schemes. h: hue offset from the brand hue (null = neutral grey), s: saturation %, l: lightness %. */
+  const STRATEGY = {
+    editorial:   { desc: 'warm paper base tinted toward the brand, near-black ink, one rich accent', bg: [25, 20, 94], surface: [25, 25, 98], ink: [0, 25, 10], muted: [0, 10, 36], accent: [0, 62, 40], accent2: [30, 50, 82] },
+    swiss:       { desc: 'pure white, black ink, one loud signal colour', bg: [null, 0, 100], surface: [null, 0, 95], ink: [null, 0, 7], muted: [null, 0, 34], accent: [0, 82, 48], accent2: [null, 0, 7] },
+    brutal:      { desc: 'pastel base, black outlines, a saturated accent plus a contrasting second colour', bg: [150, 55, 88], surface: [150, 30, 98], ink: [null, 0, 10], muted: [null, 0, 23], accent: [0, 78, 56], accent2: [120, 65, 68] },
+    darktech:    { desc: 'near-black base with a cool cast, one luminous accent, grey text', bg: [0, 25, 4.5], surface: [0, 22, 8.5], ink: [0, 18, 92], muted: [0, 10, 64], accent: [0, 80, 62], accent2: [0, 35, 17] },
+    hospitality: { desc: 'soft sand base, deep warm ink, an earthy accent and a pale companion', bg: [15, 45, 96], surface: [15, 60, 99], ink: [10, 25, 13], muted: [10, 12, 37], accent: [0, 55, 40], accent2: [10, 50, 84] },
+    playful:     { desc: 'creamy bright base, deep ink, a vivid accent and a sunny second colour', bg: [40, 90, 97], surface: [40, 60, 100], ink: [200, 40, 18], muted: [200, 18, 40], accent: [0, 88, 60], accent2: [45, 95, 68] },
+    mono:        { desc: 'grey paper, black ink, accent kept almost neutral', bg: [null, 3, 92], surface: [null, 3, 96], ink: [null, 0, 7], muted: [null, 0, 34], accent: [0, 12, 12], accent2: [null, 3, 78] },
+    luxury:      { desc: 'deep warm charcoal, ivory text, one metallic accent', bg: [0, 10, 6.5], surface: [0, 10, 10], ink: [0, 25, 91], muted: [0, 8, 62], accent: [0, 45, 60], accent2: [0, 15, 16] },
+    trade:       { desc: 'clean white, deep brand-tinted navy ink, one safety-bright accent', bg: [null, 0, 100], surface: [180, 25, 96], ink: [180, 55, 11], muted: [180, 18, 34], accent: [0, 95, 54], accent2: [180, 55, 11] },
+  };
+  function hsl(h, sat, l) {
+    sat /= 100; l /= 100; const k = (n) => (n + h / 30) % 12; const a = sat * Math.min(l, 1 - l);
+    const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return toHex([f(0) * 255, f(8) * 255, f(4) * 255]);
+  }
+  const hashHue = (seed) => { let a = 7; for (const ch of String(seed || 'moss')) a = (a * 33 + ch.charCodeAt(0)) >>> 0; return a % 360; };
+  function paletteFor(directionId, hue, hue2) {
+    const st = STRATEGY[directionId] || STRATEGY.hospitality;
+    const H = ((Number(hue) % 360) + 360) % 360;
+    const out = {};
+    Object.keys(st).forEach((k) => {
+      if (k === 'desc') return;
+      const [off, sat, l] = st[k];
+      let h = off == null ? H : (H + off) % 360;
+      if (k === 'accent2' && Number.isFinite(Number(hue2))) h = ((Number(hue2) % 360) + 360) % 360;
+      out[k] = hsl(h, off == null ? sat : sat, l);
+    });
+    out.inverse = lum(out.bg) < 0.2 ? out.surface : out.ink;
+    return guard(out);
+  }
+  const dist = (a, b) => { const x = rgb(a), y = rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+  /** True when colours are (nearly) a direction's sample palette, i.e. copied rather than designed. */
+  function isSample(colors, dir) {
+    const bg = hex(colors && colors.bg), ac = hex(colors && colors.accent);
+    return !!(dir && ((bg && dist(bg, dir.colors.bg) < 22) || !bg) && ac && dist(ac, dir.colors.accent) < 40);
+  }
+
   /* ---------------------------------------------------------------- design normalisation */
-  function sanitizeDesign(raw, current) {
+  function sanitizeDesign(raw, current, opts = {}) {
     raw = raw && typeof raw === 'object' ? raw : {};
     const base = byId(raw.direction) || (current && byId(current.direction)) || byId('hospitality');
     const prev = current && current.direction === base.id ? current : JSON.parse(JSON.stringify(base));
     const d = { direction: base.id, name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 40) : (prev.name || base.name) };
-    const colors = Object.assign({}, base.colors, prev.colors);
-    Object.keys(base.colors).forEach((k) => { const h = raw.colors && hex(raw.colors[k]); if (h) colors[k] = h; });
+    // Colours: keep the current palette for small patches; otherwise generate one from the brand hue.
+    // Explicit colours (the user named them) win, unless they are just the direction's sample copied back.
+    const sameDir = current && current.direction === base.id;
+    const hue = Number.isFinite(Number(raw.hue)) && raw.hue !== null && raw.hue !== '' ? Number(raw.hue) : null;
+    const explicit = raw.colors && typeof raw.colors === 'object' && Object.keys(base.colors).some((k) => hex(raw.colors[k])) && !isSample(raw.colors, base);
+    let colors = sameDir && hue == null && current.colors ? Object.assign({}, current.colors) : paletteFor(base.id, hue != null ? hue : hashHue(opts.seed || (current && current.name) || base.id), raw.hue2);
+    if (explicit) Object.keys(base.colors).forEach((k) => { const h = hex(raw.colors[k]); if (h) colors[k] = h; });
     d.colors = guard(colors);
+    d.hue = hue != null ? ((hue % 360) + 360) % 360 : (sameDir && current.hue != null ? current.hue : null);
     d.swatches = Object.assign({}, prev.swatches || {});
     if (raw.swatches && typeof raw.swatches === 'object') Object.keys(raw.swatches).slice(0, 12).forEach((n) => { const h = hex(raw.swatches[n]); const name = String(n).toLowerCase().replace(/[^a-z0-9 -]/g, '').trim().slice(0, 24); if (h && name) d.swatches[name] = h; });
     const t = Object.assign({}, base.type, prev.type, raw.type && typeof raw.type === 'object' ? raw.type : {});
@@ -130,7 +179,7 @@
     d.art = ART_KINDS.includes(raw.art) ? raw.art : (prev.art || base.art);
     return d;
   }
-  const fromDirection = (id) => sanitizeDesign({ direction: id }, null);
+  const fromDirection = (id, seed) => sanitizeDesign({ direction: id }, null, { seed: seed || id });
 
   /* ---------------------------------------------------------------- apply to the page */
   const DENSITY = { airy: 1.2, regular: 1, compact: 0.8 };
@@ -269,7 +318,8 @@
     return fn ? fn(sec.data || {}, design) : null;
   }
   /** Compact library for the model's prompt. */
-  const library = () => DIRECTIONS.map((d) => ({ id: d.id, name: d.name, mood: d.mood, fits: d.fits, colors: d.colors, type: { display: d.type.display, body: d.type.body, case: d.type.case }, shape: d.shape, mode: d.mode, variants: d.variants, art: d.art }));
+  // Sent to the model: colour STRATEGIES, never sample hex values, so it invents a palette per brand.
+  const library = () => DIRECTIONS.map((d) => ({ id: d.id, name: d.name, mood: d.mood, fits: d.fits, palette: STRATEGY[d.id].desc, type: { display: d.type.display, body: d.type.body, case: d.type.case }, shape: d.shape, mode: d.mode, variants: d.variants, art: d.art }));
 
-  window.MossSite = { FONTS, DIRECTIONS, VARIANTS, ART_KINDS, NEW_TYPES, byId, fromDirection, sanitizeDesign, apply, art, render, variantOf, rich, ratio, guard, library, ensureFont };
+  window.MossSite = { paletteFor, isSample, hashHue, STRATEGY, FONTS, DIRECTIONS, VARIANTS, ART_KINDS, NEW_TYPES, byId, fromDirection, sanitizeDesign, apply, art, render, variantOf, rich, ratio, guard, library, ensureFont };
 })();

@@ -108,6 +108,19 @@ const sectionTypes = (page) => page.$$eval('#siteSections > section', (els) => e
   check('4. connector endpoint sits on node', onEdge, JSON.stringify(touch));
   await page.click('#viewPage');
 
+  // 4b. Whole-page actions happen in one step
+  await say(page, 'delete the about page');
+  const del = await page.evaluate(() => ({ pages: window.moss.pageModel.get().pages.map((p) => p.id), log: [...document.querySelectorAll('.msg.agent:last-child .log li')].map((l) => l.innerText.replace(/\s+/g, ' ')) }));
+  check('4b. delete a page in one step', !del.pages.includes('about') && del.log.length === 1, del.log.join(' | '));
+  await say(page, 'redo the home page');
+  types = await sectionTypes(page);
+  check('4b. redo a page: one clear, then a fresh build', (await page.evaluate(() => window.moss.pageModel.get().currentPage)) === 'home' && types.length === 7 && types[0] === 'hero', types.join(','));
+  await say(page, 'start over');
+  const so = await page.evaluate(() => { const s = window.moss.pageModel.get(); return { pages: s.pages.map((p) => p.id), flows: s.flows.length, links: s.links.length, business: s.business && s.business.name }; });
+  check('4b. "start over" clears everything, then rebuilds', JSON.stringify(so.pages) === '["home"]' && so.flows === 0 && so.links === 0 && so.business === 'Pousada Maré', JSON.stringify(so));
+  await say(page, 'undo');
+  check('4b. undo brings the previous site back', (await page.evaluate(() => window.moss.pageModel.get().pages.length)) >= 2);
+
   // 5. Theme
   const bg0 = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   await page.click('#themeBtn');

@@ -1179,7 +1179,18 @@ const agent = (() => {
     if (/^\s*(undo|revert)\b|\bundo\b|take that back|go back a step/.test(low)) {
       return pageModel.canUndo() ? { reply: 'Rolled back the last change.', ops: [{ op: 'undo' }] } : { reply: 'Nothing to undo yet.', ops: [] };
     }
-    if (!state.pages.length || /\b(start over|new site|rebuild everything)\b/.test(low)) return build(text, state);
+    if (!state.pages.length) return build(text, state);
+    if (/\b(start over|start again|start from scratch|from scratch|scrap (it|this|everything)|redo (the whole thing|everything|it all|the (whole )?site)|rebuild everything|new site)\b/.test(low)) {
+      const again = state.business ? build(state.business.prompt || state.business.name, Object.assign({}, state, { pages: [] })) : null;
+      return { reply: 'Starting over from a blank canvas.', ops: [{ op: 'resetSite' }, ...(again ? again.ops : [])], after: again && again.after, suggestions: again && again.suggestions };
+    }
+    const redoPage = low.match(/\b(redo|rebuild|clear|wipe|empty)\s+(the\s+)?@?([a-z][\w-]*)\s+page\b/);
+    if (redoPage && state.pages.find((p) => p.id === redoPage[3])) {
+      const id = redoPage[3];
+      if (/clear|wipe|empty/.test(redoPage[1])) return { reply: `Cleared @${pageName(state, id)}.`, ops: [{ op: 'resetPage', page: id }], suggestions: ['Undo'] };
+      const sections = id === 'home' ? ['hero', 'features', 'testimonials', 'pricing', 'faq', 'cta', 'footer'].map((t) => makeSection(t, c)) : (PAGE_RECIPES[id] ? PAGE_RECIPES[id](c) : []);
+      return { reply: `Rebuilding @${pageName(state, id)} from scratch.`, ops: [{ op: 'resetPage', page: id }, ...sections.map((sec) => ({ op: 'addSection', page: id, section: sec }))], suggestions: ['Undo'] };
+    }
 
     if (/(map|draw|chart|diagram|sketch|plot|lay out)\b.*\b(flow|journey|funnel|process)\b|flow ?chart/.test(low)) {
       const key = /book|reserv/.test(low) ? 'booking' : /sign ?up|onboard|trial|register/.test(low) ? 'signup' : /checkout|purchase|subscri|order|buy/.test(low) ? 'checkout' : /contact|lead|enquir|inquir/.test(low) ? 'contact' : (c ? c.flow : 'contact');
@@ -1229,8 +1240,10 @@ const agent = (() => {
     }
 
     if (/\b(delete|remove|drop|get rid of|lose|kill|cut)\b/.test(low)) {
-      if (/\bpage\b/.test(low) && (refs.pages.length || namedPages.length)) {
-        const id = refs.pages.length ? refs.pages[0].id : namedPages[0];
+      const namedDel = low.match(/\b(?:delete|remove|drop|get rid of|lose|kill|cut)\s+(?:the\s+)?@?([a-z][\w-]*)\s+page\b/);
+      const delId = namedDel && state.pages.find((p) => p.id === namedDel[1]) ? namedDel[1] : null;
+      if (/\bpage\b/.test(low) && (refs.pages.length || namedPages.length || delId)) {
+        const id = refs.pages.length ? refs.pages[0].id : delId || namedPages[0];
         if (id === 'home') return { reply: 'Home is the root page, so it stays. I can clear its sections instead.', ops: [] };
         if (!pageModel.page(id)) return { reply: `There’s no ${cap(id)} page.`, ops: [] };
         return { reply: `Removed the ${pageName(state, id)} page.`, ops: [{ op: 'deletePage', page: id }], suggestions: ['Undo'] };
@@ -1346,6 +1359,9 @@ const agent = (() => {
   function isLocalCommand(low, state) {
     const l = low.replace(/[.!?]/g, '').trim();
     if (UNDO_RE.test(l) || VIEW_RE.test(l)) return true;
+    const del = l.match(/^(delete|remove|get rid of|drop)\s+(the\s+)?@?([a-z][\w-]*)\s+page$/);
+    if (del && del[3] !== 'home' && state.pages.find((p) => p.id === del[3])) return true;
+    if (/^(clear|wipe|empty)\s+(the\s+)?@?[a-z][\w-]*\s+page$/.test(l)) return true;
     const go = l.match(/^(go to|open|show( me)?|take me to)\s+(the\s+)?@?([a-z][\w-]*)(\s+page)?$/);
     return !!(go && state.pages.find((p) => p.name.toLowerCase() === go[4] || p.id === go[4]));
   }
@@ -1509,9 +1525,20 @@ const agent = (() => {
           break;
         }
         case 'deletePage': {
-          const id = slug(raw.page); if (!id || id === 'home' || !pageOf(id)) break;
+          const id = slug(raw.page); if (!id || !pageOf(id)) break;
+          if (id === 'home') { pageOf('home').sections = []; ops.push({ op: 'resetPage', page: 'home' }); break; } // Home is cleared, never removed
           sim.pages = sim.pages.filter((pg) => pg.id !== id);
           ops.push({ op: 'deletePage', page: id });
+          break;
+        }
+        case 'resetPage': {
+          const pg = pageOf(slug(raw.page) || sim.currentPage); if (!pg) break;
+          pg.sections = []; ops.push({ op: 'resetPage', page: pg.id });
+          break;
+        }
+        case 'resetSite': {
+          sim.pages = []; sim.currentPage = 'home'; sim.business = null; copy = null;
+          ops.push({ op: 'resetSite' });
           break;
         }
         case 'setPalette':
@@ -1558,6 +1585,18 @@ const agent = (() => {
         }
       }
     }
+    // Deleting every section of a page one by one becomes a single step: deletePage (or resetPage for Home).
+    const startPages = slimState(state).pages;
+    startPages.forEach((pg0) => {
+      const dels = ops.filter((o) => o.op === 'deleteSection' && o.page === pg0.id);
+      if (!pg0.sections.length || dels.length < pg0.sections.length) return;
+      const first = ops.indexOf(dels[0]);
+      const one = pg0.id === 'home' ? { op: 'resetPage', page: 'home' } : { op: 'deletePage', page: pg0.id };
+      const rest = ops.filter((o) => !dels.includes(o));
+      rest.splice(Math.min(first, rest.length), 0, one);
+      ops.length = 0; ops.push(...rest);
+      if (one.op === 'deletePage') sim.pages = sim.pages.filter((p) => p.id !== pg0.id);
+    });
     // Keep @ only for real pages (existing or added in this turn); "@Pipeline Plumbing" becomes "Pipeline Plumbing".
     const pageNames = new Set(sim.pages.map((pg) => pg.name.toLowerCase()));
     const unAt = (t) => t && t.replace(/@([A-Za-z][\w-]*)/g, (m, n) => (pageNames.has(n.toLowerCase()) ? m : n));
@@ -1649,6 +1688,7 @@ const renderer = (() => {
     if (flip) [...box.children].forEach((el) => before.set(el.dataset.id, el.getBoundingClientRect().top));
     const existing = new Map([...box.children].map((el) => [el.dataset.id, el]));
     const wanted = page ? page.sections : [];
+    box.querySelector('.frame-empty') && box.querySelector('.frame-empty').remove();
     wanted.forEach((sec, i) => {
       let el = existing.get(sec.id);
       const hash = JSON.stringify(sec.data) + designKey;
@@ -1659,7 +1699,8 @@ const renderer = (() => {
       existing.delete(sec.id);
       if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null);
     });
-    existing.forEach((el) => el.remove());
+    existing.forEach((el) => { if (!el.classList.contains('frame-empty')) el.remove(); });
+    if (!wanted.length && document.body.classList.contains('started')) box.insertAdjacentHTML('beforeend', '<div class="frame-empty">Blank canvas · tell Moss what to build</div>');
     if (flip && !reducedMotion.matches) {
       [...box.children].forEach((el) => {
         const t0 = before.get(el.dataset.id); if (t0 == null) return;
@@ -2218,10 +2259,17 @@ const app = (() => {
     sage: { bg: '#f8faf5', surface: '#ffffff', ink: '#1b211c', muted: '#4a554c', accent: '#3b7049', accent2: '#98d6a2', inverse: '#18211b' },
     ink: { bg: '#ffffff', surface: '#f5f5f4', ink: '#111214', muted: '#4d4f55', accent: '#2b2d33', accent2: '#c3c7cf', inverse: '#111214' },
   };
+  // Fade the whole page out in one motion (deleting or clearing a page is one step, not section by section).
+  async function fadePage() {
+    const box = $('#siteSections'); if (!box.children.length) return;
+    box.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-10px)' }], { duration: 420 * SPEED, easing: 'cubic-bezier(.65,0,.35,1)', fill: 'forwards' });
+    await wait(440);
+    box.getAnimations().forEach((a) => a.cancel());
+  }
   function rememberDirection(id) {
     try { const k = 'moss-recent-directions'; const list = JSON.parse(localStorage.getItem(k) || '[]').filter((x) => x !== id); list.unshift(id); localStorage.setItem(k, JSON.stringify(list.slice(0, 4))); } catch (e) {}
   }
-  const MUTATING = new Set(['setBusiness', 'setDesign', 'addPage', 'addSection', 'updateSection', 'setOrder', 'deleteSection', 'deletePage', 'setPalette', 'addLink', 'addFlow']);
+  const MUTATING = new Set(['resetPage', 'resetSite', 'setBusiness', 'setDesign', 'addPage', 'addSection', 'updateSection', 'setOrder', 'deleteSection', 'deletePage', 'setPalette', 'addLink', 'addFlow']);
   async function applyOp(op, msgEl) {
     const st = pageModel.get();
     switch (op.op) {
@@ -2283,14 +2331,35 @@ const app = (() => {
         break;
       }
       case 'deletePage': {
+        const pg = pageModel.page(op.page); if (!pg) break;
+        const done = logLine(msgEl, 'page', `removed /${op.page} · ${pg.sections.length} sections`);
+        if (st.currentPage === op.page) await fadePage();
+        $(`.tab[data-page="${op.page}"]`)?.classList.add('leaving');
         st.pages = st.pages.filter((p) => p.id !== op.page); st.links = st.links.filter((l) => l.from !== op.page && l.to !== op.page);
         delete st.pagePos[op.page];
-        const done = logLine(msgEl, 'page', `removed /${op.page}`);
         if (st.currentPage === op.page) navigate('home'); else renderAll();
-        await wait(300); done(); break;
+        sound.play('click'); await wait(250); done(); break;
+      }
+      case 'resetPage': {
+        const pg = pageModel.page(op.page); if (!pg) break;
+        const done = logLine(msgEl, 'page', `cleared /${op.page === 'home' ? '' : op.page} · ${pg.sections.length} sections`);
+        if (st.currentPage !== op.page) navigate(op.page);
+        await fadePage();
+        pg.sections = [];
+        isoScene.reset(); renderAll({ flip: false }); sound.play('click');
+        await wait(250); done(); break;
+      }
+      case 'resetSite': {
+        const done = logLine(msgEl, 'site', 'cleared everything');
+        await fadePage();
+        Object.assign(st, { business: null, design: null, palette: 'ice', pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
+        history.replaceState(null, '', '#/home');
+        $('#siteSections').dataset.page = '';
+        isoScene.reset(); renderAll({ flip: false }); sound.play('click');
+        await wait(250); done(); break;
       }
       case 'setDesign': {
-        st.design = MossSite.sanitizeDesign(op.design, st.design);
+        st.design = MossSite.sanitizeDesign(op.design, st.design, { seed: st.business && st.business.name });
         rememberDirection(st.design.direction);
         const done = logLine(msgEl, 'style', `${st.design.name.toLowerCase()} · ${st.design.type.display.toLowerCase()}`);
         renderer.render({ flip: false }); isoScene.render(); sound.play('rise'); await wait(500); done(); break;
