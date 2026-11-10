@@ -357,7 +357,8 @@ body:not(.started) .frame-wrap { display: none; }
 .hero-card dt { color: var(--s-ink-2); }
 .hero-card dd { margin: 0; font-weight: 500; }
 .hero-card .btn { width: 100%; margin-top: 16px; }
-.hero-card .note { margin-top: 12px; text-align: center; font: 12.5px var(--f-mono); color: var(--s-ink-2); letter-spacing: .02em; }
+.hero-card .note { margin: 16px 0 0; font-size: 16px; color: var(--s-ink-2); }
+.hero-card .hc-tag { font-size: 16px; color: var(--s-ink-2); }
 .logo-row { display: flex; align-items: center; gap: 40px; margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--s-line); }
 .logo-row .lbl { font: 500 12.5px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--s-ink-2); white-space: nowrap; }
 .logo-row .logos { display: flex; flex: 1; justify-content: space-between; align-items: center; opacity: .42; }
@@ -1291,7 +1292,7 @@ const renderer = (() => {
       const logos = logoRow(d.logos);
       if (d.variant === 'centered') return `<div class="wrap"><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}${logos}</div>`;
       const cd = d.card;
-      const card = cd ? `<div class="hero-card glass"><div class="hc-head"><span class="hc-title">${esc(cd.title)}</span><span class="pill">${esc(cd.tag || '')}</span></div><dl>${cd.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(cd.cta)}</a><div class="note">${esc(cd.note)}</div></div>` : '';
+      const card = cd ? `<div class="hero-card glass"><div class="hc-head"><span class="hc-title">${esc(cd.title)}</span><span class="hc-tag">${esc(cd.tag || '')}</span></div><dl>${cd.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><p class="note">${esc(cd.note)}</p><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(cd.cta)}</a></div>` : '';
       return `<div class="wrap"><div class="hero-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}</div>${card}</div>${logos}</div>`;
     },
     features: (d) => `<div class="wrap"><div class="feat-split"><div class="fs-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p class="lede">${esc(d.lede || '')}</p></div><ol class="feat-list">${d.items.map(([ic, t, p]) => `<li class="feat"><span class="ic">${icon(ic)}</span><h3>${esc(t)}</h3><p>${esc(p)}</p></li>`).join('')}</ol></div></div>`,

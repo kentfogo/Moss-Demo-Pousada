@@ -184,3 +184,52 @@ Stall guard reset (improved). Hard cap: iteration 6 is the last run.
 6. Suggestion chips wrap two per row in the narrower chat. The site renders at 1120px virtual width (scale ~0.71), and the fixed state puts the hero eyebrow 16px below the top of the page view, so the Testimonials eyebrow stays in frame.
 
 Functional tests after changes: **33/33 pass**.
+
+---
+
+## Iteration 6 (final, hard cap reached)
+
+| | |
+|---|---|
+| Screenshot | `screenshots/iter-6.png` (taken after the iteration 5 changes) |
+| Our letter | A |
+| Our rank | **5 / 5** (D > C > E > B > A) |
+| Our scores | Composition 3 · Spacing 4 · Typography 3 · Color 4 · Components 4 · Originality 3 |
+| Our total | **21 / 30** (down from 22) |
+| Others | D 26 · C 25 · E 24 · B 22 |
+
+**Top gaps for A (critic, in order of impact)**
+1. Rail, preview and chat at equal weight; the headline competes with the black chat bubble and the black CTA. Dim the chrome, collapse the rail to a 56px icon strip, put the canvas on a tinted backdrop.
+2. The serif headline renders as a Times-like default with loose leading. Use a real display serif at line-height 1.0, −1.5% tracking.
+3. Wide-tracked teal mono eyebrows used everywhere are an AI-template tell. Keep mono for the builder chrome; use neutral small-caps sans inside the page.
+4. The module rail (iso tiles, zigzag connectors) is filler for a 7-word list, and the agent card duplicates the chat.
+5. Booking card: the "3 NIGHTS" badge and the mono footnote are ~9px and orphaned.
+
+**Changes made** (not scored; the cap ends the loop after this iteration)
+1. **Booking card** *(gap 5)*: the teal badge became plain "3 nights" in the card header; the price line moved above the button in 16px sans (~11.4px on screen). No mono micro-text left in the card.
+
+**Not acted on.** Gaps 1, 3 and 4 again ask to remove or flatten what PROMPT.md §4 requires: the isometric module scene, the floating agent panel mirroring the chat, and accent-coloured spaced-caps eyebrows. Gap 2 is about font choice; the page uses system fonts only (no external assets), and the user asked not to focus on font families.
+
+Functional tests after changes: **33/33 pass**.
+
+---
+
+## Final summary
+
+| Iteration | Reference set | Our letter | Rank | Total |
+|---|---|---|---|---|
+| 1 | 1 (GIFs) | D | 1 / 5 | 22 |
+| 2 | 1 (GIFs) | E | 2 / 5 | 22 |
+| 3 | 2 (PNGs) | C | 5 / 5 | 21 |
+| 4 | 2 | E | 5 / 5 | 18 |
+| 5 | 2 | C | 4 / 5 | 22 |
+| 6 | 2 | A | 5 / 5 | 21 |
+
+**Stopped because the 6-iteration hard cap was reached.** The Phase 2 goal (#1 or #2 in two consecutive runs on the real-UI references) was not met.
+
+**What the critic kept saying.** Across iterations 3–6 the top gaps came back to the same three elements: the isometric module scene, the floating agent panel, and teal mono eyebrows. Each is required by PROMPT.md §4, so the loop could shrink, move and quieten them but not remove them. Reducing them helped (rail: 18 → 22) but couldn't close the gap on the references (24–27). The other recurring gap is type quality, limited by system-only fonts.
+
+**Options for another round**, if wanted:
+- Relax §4 for the builder chrome (for example a flat numbered module list, with the isometric scene shown only while a module is being placed, and no mirrored agent panel), then rescore.
+- Allow one embedded display serif (base64 in the file, so still no external assets).
+- Re-pin the fixed screenshot state to the hero only, if "3 sections visible" can be dropped. That rule is what forces the preview down to ~0.7 scale.
