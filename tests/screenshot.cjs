@@ -1,7 +1,6 @@
 // Captures the fixed, comparable design state used every iteration (PROMPT.md, Section 8).
 // Usage: node tests/screenshot.cjs <out.png> [--dark] [--flow]
-// State: light mode, 1440x900, first example prompt built on Home, fixed scroll offset,
-// scrolled so the iso scene, chat panel and hero/features/testimonials are all visible.
+// State: light mode, 1440x900, first example prompt built on Home, fixed scroll offset (see below).
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -23,15 +22,17 @@ const URL = 'file://' + path.resolve(__dirname, '..', 'moss-builder.html') + '?s
     await page.evaluate(async () => { await window.moss.app.send('map the booking flow'); });
     await page.evaluate(() => window.moss.app.whenIdle());
   }
-  // Fixed scroll: Features section starts 430px from the top of the viewport, so the end of the hero,
-  // all of Features and the start of Testimonials sit under the sticky iso scene.
+  // Fixed scroll (from iteration 4): the hero eyebrow sits 24px below the pinned iso scene, so the
+  // hero headline, all of Features and the start of Testimonials are in view.
   await page.evaluate(() => {
     const pv = document.querySelector('#pageView'); pv.style.scrollBehavior = 'auto'; pv.scrollTop = 0;
-    const f = document.querySelector('#siteSections [data-type="features"]');
-    if (f) pv.scrollTop = Math.max(0, f.getBoundingClientRect().top - 430);
+    const e = document.querySelector('#siteSections .sec-hero .eyebrow');
+    const sceneBottom = document.querySelector('#scene').getBoundingClientRect().bottom;
+    if (e) pv.scrollTop = Math.max(0, e.getBoundingClientRect().top - sceneBottom - 24);
   });
   await page.mouse.move(0, 0);
   await page.waitForTimeout(1200);
+  if (process.env.MEASURE) console.log(await page.evaluate(() => [...document.querySelectorAll("#siteSections > section")].map((e) => e.dataset.type + ":" + Math.round(e.getBoundingClientRect().top)).join(" ")));
   await page.screenshot({ path: out });
   await browser.close();
   console.log('saved', out);

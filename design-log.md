@@ -66,7 +66,7 @@ Functional tests after changes: **33/33 pass**.
 
 ---
 
-## Phase 1 summary (stopped for approval)
+## Phase 1 summary (stopped for approval; superseded below)
 
 | Iteration | Our letter | Rank | Total |
 |---|---|---|---|
@@ -74,3 +74,47 @@ Functional tests after changes: **33/33 pass**.
 | 2 | E | 2 / 5 | 22 |
 
 The rank held in the top two both times, but the total did not improve (22 → 22). The iteration 2 changes have not been scored yet; the next critic run will be the first to see them. If iteration 3 also fails to beat 22, the stall guard stops the loop.
+
+---
+
+## Reference set 2 (from iteration 3)
+
+After Phase 1 the user added five sharp PNG screenshots of real interfaces to `/references`. Adding them counted as approval for Phase 2. The critic still takes exactly 5 images (ours plus 4), so iteration 3 onward uses these four:
+
+- `Screenshot 2026-11-09 at 11.03.01 PM.png`: reading-app dashboard
+- `Screenshot 2026-11-09 at 11.18.49 PM.png`: photographic portfolio
+- `Screenshot 2026-11-09 at 11.19.19 PM.png`: biologics hero (serif, glass sphere)
+- `Screenshot 2026-11-09 at 11.20.26 PM.png`: software studio site
+
+Left out: the 4 GIFs (blurry captures; two have no UI) and `11.19.48 PM.png` (bookshop page; its lower half is a cut-off product page, the weakest of the new five). The references are no longer upscaled when they're 1440px or wider.
+
+**Re-baseline.** Scores against a different reference set aren't comparable with iterations 1–2. From iteration 3, the stopping rules count only runs against set 2: rank #1 or #2 twice in a row, or the stall guard. The 6-iteration hard cap still counts all runs, so iterations 3–6 remain.
+
+---
+
+## Iteration 3 (reference set 2 baseline)
+
+| | |
+|---|---|
+| Screenshot | `screenshots/iter-3.png` |
+| Our letter | C |
+| Our rank | **5 / 5** (D > B > E > A > C) |
+| Our scores | Composition 3 · Spacing 4 · Typography 4 · Color 3 · Components 4 · Originality 3 |
+| Our total | **21 / 30** |
+| Others | D 26 · B 25 · E 25 · A 23 |
+
+**Top gaps for C (critic, in order of impact)**
+1. Three zones (iso strip, page preview, chat) carry equal weight with no focal point. Make the preview the hero, collapse the module strip into a thin rail, widen the canvas.
+2. The iso tiles (3D white tiles, drop shadows, dotted connectors, cyan glow) read as decoration first and as an AI-product trope; the labels are ~9px grey mono at failing contrast.
+3. The preview opens mid-hero on two buttons with no headline, then a row of grey placeholder logos: key content off-screen, filler on-screen.
+4. Redundant messaging: the floating "Moss · Agent" panel repeats the chat.
+5. Too many type voices; teal used for eyebrows, numerals, @mentions, glow and the status dot.
+
+**Changes made.** Where a critic fix conflicts with PROMPT.md, the brief wins: the iso scene, the cyan glow on modules, the floating agent panel, the logo row and teal eyebrows are all required. Those gaps were handled by reducing the element, not removing it.
+1. **Preview is the focal point** *(gap 1)*: the iso scene is 35% shorter (236 to 156px) and its modules smaller; the preview gets the space. The module row stays, as the brief requires.
+2. **Quieter, legible scene** *(gap 2)*: module shadows lighter (opacity 0.16 to 0.09), labels about 10.5px on screen in `--ink-2` instead of ~7px in `--ink-3`. The glow stays only on the active module.
+3. **Headline first, filler moved** *(gap 3)*: the placeholder logo row moved from the hero to the end of Testimonials (social proof). Features rows are now single lines (number · serif title · description · icon), and the section rhythm is 80px, so three sections fit. **Fixed screenshot state changed**: the canvas now scrolls so the hero eyebrow sits 24px below the pinned scene (it previously pinned Features at 430px). The view shows the headline, Features and the top of Testimonials. This was changed now, at the start of reference set 2.
+4. **Agent panel trimmed** *(gap 4)*: narrower (216px), 2-line clamp, so it reads as a status echo tied to the active module by the leader line rather than a second chat.
+5. **Teal narrowed** *(gap 5)*: the numerals in the Features list are neutral ink now. Teal remains on eyebrows, active states and @mentions, which the brief specifies.
+
+Functional tests after changes: **33/33 pass**.

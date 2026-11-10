@@ -34,7 +34,7 @@
 
   --chat-w: 384px;
   --top-h: 56px;
-  --scene-h: 236px;
+  --scene-h: 156px;
 }
 :root, :root[data-theme="light"] {
   color-scheme: light;
@@ -232,7 +232,7 @@ body:not(.started) .scene::before { display: none; }
 @keyframes glowflash { 0%, 50% { opacity: 1; stroke-width: 6; } }
 .iso .mod.active .glow { opacity: .9; }
 .iso .mod.active polygon[fill="var(--mod-top)"] { fill: var(--surface); }
-.iso .mod-label { font: 500 10px var(--f-mono); letter-spacing: .12em; fill: var(--ink-3); text-transform: uppercase; transition: fill var(--t2); }
+.iso .mod-label { font: 500 14.5px var(--f-mono); letter-spacing: .1em; fill: var(--ink-2); text-transform: uppercase; transition: fill var(--t2); }
 .iso .mod.active .mod-label { fill: var(--ink); }
 .iso .leader { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 4; opacity: .55; }
 .iso .leader-dot { fill: var(--accent-glow); }
@@ -243,7 +243,7 @@ body:not(.started) .scene::before { display: none; }
 .iso .pulse { fill: var(--accent-glow); }
 .iso .pulse-halo { fill: var(--accent-glow); opacity: .25; }
 .scene-panel {
-  position: absolute; right: 28px; top: 26px; width: 232px; padding: var(--s3) var(--s4);
+  position: absolute; right: 32px; top: 28px; width: 216px; padding: 10px var(--s4);
   transform: perspective(1200px) rotateY(-9deg) rotateX(4deg) translate3d(var(--ppx, 0px), var(--ppy, 0px), 0);
   box-shadow: var(--sh1), inset 0 1px 0 var(--glass-edge);
   transform-origin: right center; transition: transform calc(900ms * var(--speed)) var(--ease), opacity var(--t2);
@@ -251,7 +251,7 @@ body:not(.started) .scene::before { display: none; }
 }
 .scene-panel .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .scene-panel .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-glow); box-shadow: 0 0 8px var(--accent-glow); }
-.scene-panel p { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.scene-panel p { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 body:not(.started) .scene-panel { opacity: 0; }
 
 /* Intro */
@@ -335,9 +335,10 @@ body:not(.started) .frame-wrap { display: none; }
 @keyframes flash { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
 
 /* hero */
-.sec-hero { padding: 40px 0 24px; }
-.hero-grid { display: grid; grid-template-columns: 1.12fr .88fr; gap: 56px; align-items: center; }
-.sec-hero h1 { font-size: 68px; line-height: 1.0; margin: 18px 0 20px; text-wrap: balance; }
+.sec-hero { padding: 40px 0 40px; }
+.sec-hero + .sec-pad { padding-top: 24px; }
+.hero-grid { display: grid; grid-template-columns: 1.35fr .9fr; gap: 56px; align-items: center; }
+.sec-hero h1 { font-size: 64px; line-height: 1.0; margin: 18px 0 20px; text-wrap: balance; }
 .sec-hero .sub { font-size: 19px; line-height: 1.55; color: var(--s-ink-2); max-width: 30em; }
 .sec-hero .actions { display: flex; gap: 12px; margin-top: 32px; }
 .sec-hero.centered { text-align: center; padding: 72px 0 64px; }
@@ -361,8 +362,7 @@ body:not(.started) .frame-wrap { display: none; }
 .ph-logo b { display: block; height: 8px; border-radius: 4px; background: var(--s-ink); }
 
 /* section heads */
-.sec-pad { padding: 96px 0; }
-.sec-hero + .sec-pad { padding-top: 72px; }
+.sec-pad { padding: 80px 0; }
 .sec-tint { background: var(--s-tint); }
 .s-head { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: end; margin-bottom: 48px; }
 .s-head h2 { font-size: 46px; line-height: 1.04; margin-top: 14px; text-wrap: balance; }
@@ -371,16 +371,16 @@ body:not(.started) .frame-wrap { display: none; }
 .s-head.center p { margin: 14px auto 0; }
 
 /* features */
-.feat-split { display: grid; grid-template-columns: 5fr 7fr; gap: 72px; align-items: start; }
+.feat-split { display: grid; grid-template-columns: 4fr 8fr; gap: 64px; align-items: start; }
 .feat-split h2 { font-size: 52px; line-height: 1.02; margin-top: 16px; text-wrap: balance; }
 .feat-split .lede { margin-top: 20px; color: var(--s-ink-2); font-size: 18px; line-height: 1.6; max-width: 24em; }
 .feat-list { list-style: none; margin: 0; padding: 0; counter-reset: f; }
-.feat { display: grid; grid-template-columns: 56px 1fr 28px; gap: 0 24px; align-items: baseline; padding: 26px 0; border-top: 1px solid var(--s-line); }
+.feat { display: grid; grid-template-columns: 44px 200px 1fr 24px; gap: 0 20px; align-items: baseline; padding: 22px 0; border-top: 1px solid var(--s-line); }
 .feat:last-child { border-bottom: 1px solid var(--s-line); }
-.feat::before { counter-increment: f; content: counter(f, decimal-leading-zero); font: 500 12px var(--f-mono); letter-spacing: .1em; color: var(--s-accent); }
-.feat h3 { font: 400 26px/1.15 var(--f-display); letter-spacing: -.01em; }
-.feat p { grid-column: 2; margin-top: 8px; color: var(--s-ink-2); font-size: 17px; line-height: 1.55; max-width: 34em; }
-.feat .ic { grid-column: 3; grid-row: 1; color: var(--s-ink-2); align-self: center; }
+.feat::before { counter-increment: f; content: counter(f, decimal-leading-zero); font: 500 13px var(--f-mono); letter-spacing: .08em; color: var(--s-ink-2); }
+.feat h3 { font: 400 24px/1.2 var(--f-display); letter-spacing: -.01em; }
+.feat p { color: var(--s-ink-2); font-size: 16px; line-height: 1.55; }
+.feat .ic { grid-column: 4; grid-row: 1; color: var(--s-ink-2); align-self: center; }
 .feat .ic svg.i { width: 22px; height: 22px; stroke-width: 1.25; }
 
 /* testimonials */
@@ -471,7 +471,9 @@ body:not(.started) .frame-wrap { display: none; }
   .sec-hero h1, .sec-hero.centered h1 { font-size: 42px; }
   .feat-split, .quote-grid, .price-grid { grid-template-columns: 1fr; gap: 28px; }
   .feat-split h2 { font-size: 34px; }
-  .feat { grid-template-columns: 36px 1fr 24px; gap: 0 12px; }
+  .feat { grid-template-columns: 32px 1fr 22px; }
+  .feat p { grid-column: 2; margin-top: 6px; }
+  .feat .ic { grid-column: 3; }
   .feat h3 { font-size: 21px; }
   .s-head h2, .faq-grid h2, .story h2 { font-size: 34px; }
   .cta-band { padding: 40px 24px; }
@@ -652,7 +654,7 @@ body:not(.started) .chat { visibility: hidden; }
     <section class="canvas" aria-label="Canvas">
       <div class="pageview" id="pageView">
         <div class="scene" id="scene">
-          <svg class="iso" id="iso" viewBox="0 0 1200 260" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <svg class="iso" id="iso" viewBox="0 36 1200 214" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
             <defs>
               <pattern id="isoGrid" patternUnits="userSpaceOnUse" width="41.569" height="24">
                 <path d="M0 0L41.569 24M41.569 0L0 24" stroke="var(--grid)" stroke-width=".8" fill="none"/>
@@ -1000,9 +1002,9 @@ const agent = (() => {
   function makeSection(type, c, opts = {}) {
     const id = uid(type.slice(0, 3));
     switch (type) {
-      case 'hero': return { id, type, data: { variant: opts.variant || 'split', eyebrow: opts.eyebrow || c.hero.eyebrow, headline: opts.headline || c.hero.headline, punchy: c.hero.punchy, punchIx: 0, sub: opts.sub || c.hero.sub, subShort: c.hero.subShort, primary: opts.primary || c.hero.primary, secondary: c.hero.secondary, card: c.hero.card, logos: opts.variant === 'centered' ? null : c.hero.logos } };
+      case 'hero': return { id, type, data: { variant: opts.variant || 'split', eyebrow: opts.eyebrow || c.hero.eyebrow, headline: opts.headline || c.hero.headline, punchy: c.hero.punchy, punchIx: 0, sub: opts.sub || c.hero.sub, subShort: c.hero.subShort, primary: opts.primary || c.hero.primary, secondary: c.hero.secondary, card: c.hero.card, logos: null } };
       case 'features': return { id, type, data: clone(c.features) };
-      case 'testimonials': return { id, type, data: clone(c.testimonials) };
+      case 'testimonials': return { id, type, data: Object.assign(clone(c.testimonials), { logos: c.hero.logos }) };
       case 'pricing': return { id, type, data: clone(c.pricing) };
       case 'faq': return { id, type, data: clone(c.faq) };
       case 'cta': return { id, type, data: Object.assign(clone(c.cta), { titleIx: 0, href: '#/home' }) };
@@ -1251,17 +1253,18 @@ const renderer = (() => {
     '<i style="width:18px;height:9px;border-radius:9px 9px 0 0"></i><b style="width:52px"></b>',
     '<i style="width:7px;height:16px;border-radius:2px;box-shadow:10px 0 0 var(--s-ink)"></i><b style="width:44px;margin-left:10px"></b>',
   ];
+  const logoRow = (label) => label ? `<div class="logo-row"><span class="lbl">${esc(label)}</span><div class="logos">${LOGO_SHAPES.map((s) => `<span class="ph-logo" aria-hidden="true">${s}</span>`).join('')}</div></div>` : '';
   const T = {
     hero(d) {
       const actions = `<div class="actions"><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(d.primary)}</a><a class="btn btn-secondary" href="#/home">${esc(d.secondary || 'Learn more')}</a></div>`;
-      const logos = d.logos ? `<div class="logo-row"><span class="lbl">${esc(d.logos)}</span><div class="logos">${LOGO_SHAPES.map((s) => `<span class="ph-logo" aria-hidden="true">${s}</span>`).join('')}</div></div>` : '';
+      const logos = logoRow(d.logos);
       if (d.variant === 'centered') return `<div class="wrap"><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}${logos}</div>`;
       const cd = d.card;
       const card = cd ? `<div class="hero-card glass"><div class="hc-head"><span class="hc-title">${esc(cd.title)}</span><span class="pill">${esc(cd.tag || '')}</span></div><dl>${cd.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><a class="btn btn-primary" href="#/booking">${esc(cd.cta)}</a><div class="note">${esc(cd.note)}</div></div>` : '';
       return `<div class="wrap"><div class="hero-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}</div>${card}</div>${logos}</div>`;
     },
-    features: (d) => `<div class="wrap"><div class="feat-split"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2><p class="lede">${esc(d.lede || '')}</p></div><ol class="feat-list">${d.items.map(([ic, t, p]) => `<li class="feat"><h3>${esc(t)}</h3><span class="ic">${icon(ic)}</span><p>${esc(p)}</p></li>`).join('')}</ol></div></div>`,
-    testimonials: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p></p></div><div class="quote-grid">${d.items.map(([q, n, r]) => `<figure class="quote" style="margin:0"><blockquote>“${esc(q)}”</blockquote><figcaption><span class="av">${esc(n.split(/\s|&/).filter(Boolean).map((w) => w[0]).slice(0, 2).join(''))}</span><span class="who"><b>${esc(n)}</b><span>${esc(r)}</span></span></figcaption></figure>`).join('')}</div></div>`,
+    features: (d) => `<div class="wrap"><div class="feat-split"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2><p class="lede">${esc(d.lede || '')}</p></div><ol class="feat-list">${d.items.map(([ic, t, p]) => `<li class="feat"><h3>${esc(t)}</h3><p>${esc(p)}</p><span class="ic">${icon(ic)}</span></li>`).join('')}</ol></div></div>`,
+    testimonials: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p></p></div><div class="quote-grid">${d.items.map(([q, n, r]) => `<figure class="quote" style="margin:0"><blockquote>“${esc(q)}”</blockquote><figcaption><span class="av">${esc(n.split(/\s|&/).filter(Boolean).map((w) => w[0]).slice(0, 2).join(''))}</span><span class="who"><b>${esc(n)}</b><span>${esc(r)}</span></span></figcaption></figure>`).join('')}</div>${logoRow(d.logos)}</div>`,
     pricing: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p>${esc(d.lede || '')}</p></div><div class="price-grid">${d.plans.map(([n, p, f, feat]) => `<article class="plan ${feat ? 'featured' : ''}"><div class="ph"><span class="pn">${esc(n)}</span>${feat ? '<span class="pill">Most loved</span>' : ''}</div><div class="pr"><b>${esc(p)}</b><span>${esc(d.unit)}</span></div><ul>${f.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><a class="btn ${feat ? 'btn-primary' : 'btn-secondary'}" href="#/booking">${esc(d.cta)}</a></article>`).join('')}</div></div>`,
     faq: (d) => `<div class="wrap"><div class="faq-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><div class="faq-list">${d.items.map(([q, a], i) => `<details ${i === 0 ? 'open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div></div></div>`,
     cta: (d) => `<div class="wrap"><div class="cta-band"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2><p>${esc(d.sub)}</p></div><div><a class="btn btn-primary" href="${esc(d.href || '#/home')}">${esc(d.button)} ${icon('arrow')}</a>${d.href && d.href !== '#/home' ? `<span class="link-hint">→ ${esc(d.href.replace('#', ''))}</span>` : ''}</div></div></div>`,
@@ -1366,7 +1369,7 @@ const isoScene = (() => {
     const m = [C * G * k, S * G * k, -C * G * k, S * G * k, o[0], o[1]].map((n) => n.toFixed(4)).join(' ');
     const lab = L(W, D, 0);
     const meta = SECTION_META[sec.type] || SECTION_META.hero;
-    return `<g class="shadow"><polygon points="${pts(foot)}" fill="rgba(var(--shadow-c), .16)" filter="url(#blurS)"/></g>
+    return `<g class="shadow"><polygon points="${pts(foot)}" fill="rgba(var(--shadow-c), .09)" filter="url(#blurS)"/></g>
       <g class="drop"><g class="float" style="--fd:${(5.2 + (i % 3) * 0.9).toFixed(1)}s;--fdel:${(-i * 0.7).toFixed(1)}s">
         <polygon points="${pts(left)}" fill="var(--mod-l)"/>
         <polygon points="${pts(right)}" fill="var(--mod-r)"/>
@@ -1377,7 +1380,7 @@ const isoScene = (() => {
         <line x1="${lab[0]}" y1="${L(W, D, H)[1]}" x2="${lab[0]}" y2="${lab[1]}" stroke="var(--mod-line)" stroke-width="1"/>
         <g transform="matrix(${m})" stroke="var(--ink-2)" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"><path d="${ICONS[meta.icon]}" vector-effect="non-scaling-stroke"/></g>
       </g></g>
-      <text class="mod-label" x="${lab[0]}" y="${lab[1] + 22}" text-anchor="middle">${String(i + 1).padStart(2, '0')} ${esc(meta.label)}</text>`;
+      <text class="mod-label" x="${lab[0]}" y="${lab[1] + 26}" text-anchor="middle">${String(i + 1).padStart(2, '0')} ${esc(meta.label)}</text>`;
   }
 
   function render({ enter = null, ghosts = false } = {}) {
@@ -1884,10 +1887,10 @@ const app = (() => {
     const fit = () => {
       const w = pv.clientWidth; const mobile = w < 700;
       const fw = mobile ? w - 32 : Math.min(w - 96, 820);
-      const zoom = mobile ? 1 : fw / 1240;
+      const zoom = mobile ? 1 : fw / 1400;
       document.documentElement.style.setProperty('--frame-w', fw + 'px');
       document.documentElement.style.setProperty('--zoom', zoom.toFixed(4));
-      document.documentElement.style.setProperty('--site-w', (mobile ? fw - 2 : 1240) + 'px');
+      document.documentElement.style.setProperty('--site-w', (mobile ? fw - 2 : 1400) + 'px');
       if (document.body.classList.contains('started')) isoScene.render();
     };
     new ResizeObserver(fit).observe(pv); fit();
