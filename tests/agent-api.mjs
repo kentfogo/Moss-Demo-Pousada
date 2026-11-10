@@ -79,7 +79,27 @@ check('the interview prompt asks one question per turn and builds nothing', sys.
 const guided = bm({ message: 'next', state: Object.assign({ plan: { phase: 'building', sections: [{ type: 'hero', done: true }, { type: 'steps', variant: 'list', intent: 'how it works' }] } }, home) });
 check('guided build tells Moss the next planned section', guided[0].content.includes('PHASE: GUIDED BUILD') && guided.at(-1).content.includes('"next":{"type":"steps"'));
 
-// 8. helpers
+// 8. Deepgram: short-lived token and Aura speech, key kept server-side
+const vt = await import('../api/voice-token.js');
+const sp = await import('../api/speak.js');
+const calls = [];
+const fakeFetch = (ok, json, bytes) => async (url, opts) => { calls.push({ url, opts }); return { ok, status: ok ? 200 : 401, json: async () => json, arrayBuffer: async () => new Uint8Array(bytes || [1, 2, 3]).buffer }; };
+const g = await vt.grant({ DEEPGRAM_API_KEY: 'dg-secret' }, fakeFetch(true, { access_token: 'jwt-123', expires_in: 30 }));
+check('voice-token asks Deepgram for a temporary token with the key', calls.at(-1).url === 'https://api.deepgram.com/v1/auth/grant' && calls.at(-1).opts.headers.authorization === 'Token dg-secret');
+check('…and returns only the token and settings, never the key', g.token === 'jwt-123' && g.model === 'nova-3' && g.voice === 'aura-2-thalia-en' && !JSON.stringify(g).includes('dg-secret'));
+try { await vt.grant({}, fakeFetch(true, {})); check('voice-token without a key', false); } catch (e) { check('voice-token without a key → 503', e.status === 503); }
+try { await vt.grant({ DEEPGRAM_API_KEY: 'k' }, fakeFetch(false, {})); check('voice-token upstream error', false); } catch (e) { check('voice-token upstream error → 502', e.status === 502); }
+const audio = await sp.synthesize('Hello there.', { DEEPGRAM_API_KEY: 'dg-secret', DEEPGRAM_VOICE: 'aura-2-apollo-en' }, fakeFetch(true, null, [9, 9]));
+check('speak calls Aura with the chosen voice as MP3', calls.at(-1).url.includes('/v1/speak?model=aura-2-apollo-en&encoding=mp3') && JSON.parse(calls.at(-1).opts.body).text === 'Hello there.' && audio.length === 2);
+const mres = () => { const r = { code: 0, body: null, headers: {} }; r.status = (c) => ((r.code = c), r); r.json = (b) => ((r.body = b), r); r.setHeader = (k, v) => (r.headers[k] = v); r.end = (b) => ((r.body = b), r); return r; };
+let rr = mres(); await sp.default({ method: 'POST', headers: { host: 'a.app' }, body: { text: 'x'.repeat(601) } }, rr);
+check('speak refuses very long text', rr.code === 413);
+rr = mres(); await sp.default({ method: 'POST', headers: { host: 'a.app', origin: 'https://evil.example' }, body: { text: 'hi' } }, rr);
+check('speak refuses other sites', rr.code === 403);
+rr = mres(); await vt.default({ method: 'GET', headers: { host: 'a.app', origin: 'https://evil.example' } }, rr);
+check('voice-token refuses other sites', rr.code === 403);
+
+// 9. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');
 check('compactState keeps flow names only', JSON.stringify(compactState({ flows: [{ name: 'Booking', nodes: [1, 2] }] }).flows) === '["Booking"]');
 

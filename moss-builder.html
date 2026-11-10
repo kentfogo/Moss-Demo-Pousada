@@ -2364,28 +2364,107 @@ const voice = (() => {
     r.lang = lang(); r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
     r.onresult = (e) => {
       if (!live || live.rec !== r) return;
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const x = e.results[i]; const t = x[0].transcript;
-        if (x.isFinal) { if (!isEcho(t)) live.pending += ' ' + t; } else interim += t;
-      }
-      const shownInterim = interim && !isEcho(interim) ? interim : '';
-      live.interim = shownInterim;
-      const heard = `${live.pending} ${shownInterim}`.replace(/\s+/g, ' ').trim();
-      if (heard) lastHeardAt = Date.now();
-      // barge-in: your words stop Moss. While it is talking (speakers can feed its voice back in),
-      // only a stop phrase or 4+ words of your own count; otherwise two words are enough.
-      const w = words(heard);
-      const barge = heard && (mossSpeaking() ? (STOP_WORDS.test(heard.toLowerCase().trim()) || w.length >= 4) : w.length >= 2);
-      if (barge) { queue.length = 0; if (live.h.onSpeech) live.h.onSpeech(heard); }
-      if (live.h.onInterim) live.h.onInterim(heard);
-      clearTimeout(live.timer);
-      if (heard) live.timer = setTimeout(commitLive, UNFINISHED.test(heard.replace(/[.,!?…]+$/, '')) ? SILENCE_LONG : SILENCE);
+      const finals = []; let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) { const x = e.results[i]; if (x.isFinal) finals.push(x[0].transcript); else interim += x[0].transcript; }
+      hear(finals, interim);
     };
     r.onerror = (e) => { if (!live) return; live.h.onError && live.h.onError(e.error || 'error'); if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) stopLive(); };
     r.onend = () => { if (live && live.rec === r) { live.restarts++; if (live.pending || live.interim) { clearTimeout(live.timer); commitLive(); } setTimeout(() => { if (live && live.rec === r) openLive(); }, 150); } };
     try { r.start(); active = true; } catch (e) { /* already started; onend will retry */ }
   }
+  // Shared by both backends: finals are confirmed text, interim is the current unconfirmed phrase.
+  function hear(finals, interim) {
+    if (!live) return;
+    finals.forEach((t) => { if (t && !isEcho(t)) live.pending += ' ' + t; });
+    const shownInterim = interim && !isEcho(interim) ? interim : '';
+    live.interim = shownInterim;
+    const heard = `${live.pending} ${shownInterim}`.replace(/\s+/g, ' ').trim();
+    if (heard) lastHeardAt = Date.now();
+    // barge-in: your words stop Moss. With browser speech on speakers its own voice can leak back in, so while it
+    // is talking only a stop phrase or 4+ of your words count. Deepgram's mic has echo cancellation: 2 words do.
+    const w = words(heard);
+    const strict = mossSpeaking() && !dgLive();
+    const barge = heard && (strict ? (STOP_WORDS.test(heard.toLowerCase().trim()) || w.length >= 4) : w.length >= 2);
+    if (barge) { queue.length = 0; if (live.h.onSpeech) live.h.onSpeech(heard); }
+    if (live.h.onInterim) live.h.onInterim(heard);
+    clearTimeout(live.timer);
+    if (heard) live.timer = setTimeout(commitLive, UNFINISHED.test(heard.replace(/[.,!?…]+$/, '')) ? SILENCE_LONG : SILENCE);
+  }
+
+  /* ---- Deepgram backend: preferred whenever /api/voice-token works (deployed with DEEPGRAM_API_KEY) ----
+     Listening: the mic (with echo cancellation) streams to Deepgram's live transcription over a WebSocket.
+     Speaking: /api/speak returns Aura audio that plays inside the page, so echo cancellation removes it from the mic. */
+  const dg = { ready: false, tts: true, cfg: null, stream: null, gen: 0, tq: [], playing: null, fails: 0 };
+  const dgLive = () => !!(live && live.ws);
+  async function init() {
+    if (!/^https?:$/.test(location.protocol) || new URLSearchParams(location.search).has('browservoice') || !navigator.mediaDevices || !window.MediaRecorder) return false;
+    try {
+      const r = await fetch('/api/voice-token', { cache: 'no-store' });
+      if (!r.ok) return false;
+      const j = await r.json(); if (!j.token) return false;
+      dg.cfg = j; dg.ready = true; return true;
+    } catch (e) { return false; }
+  }
+  async function freshToken() { const r = await fetch('/api/voice-token', { cache: 'no-store' }); if (!r.ok) throw new Error('token ' + r.status); return r.json(); }
+  function closeDg(l) { try { l.mr && l.mr.state !== 'inactive' && l.mr.stop(); } catch (e) {} clearInterval(l.keep); l.mr = null; l.ws = null; }
+  async function openDeepgram() {
+    const l = live; if (!l) return;
+    try {
+      if (!dg.stream) dg.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+      const cfg = await freshToken();
+      if (live !== l) return;
+      const q = new URLSearchParams({ model: cfg.model || 'nova-3', interim_results: 'true', smart_format: 'true', punctuate: 'true', endpointing: '300', utterance_end_ms: '1000', vad_events: 'true', language: lang().toLowerCase().startsWith('en') ? 'en' : 'multi' });
+      const ws = new WebSocket(`${cfg.listenUrl || 'wss://api.deepgram.com/v1/listen'}?${q}`, ['bearer', cfg.token]);
+      l.ws = ws; active = true;
+      ws.onopen = () => {
+        const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find((m) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
+        const mr = new MediaRecorder(dg.stream, mime ? { mimeType: mime } : undefined); l.mr = mr;
+        mr.ondataavailable = (e) => { if (e.data && e.data.size && ws.readyState === 1) ws.send(e.data); };
+        mr.start(250);
+        l.keep = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'KeepAlive' })); }, 8000);
+      };
+      ws.onmessage = (ev) => {
+        if (live !== l) return;
+        let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+        if (m.type === 'Results') {
+          const t = (m.channel && m.channel.alternatives && m.channel.alternatives[0] && m.channel.alternatives[0].transcript) || '';
+          if (m.is_final) hear([t], ''); else hear([], t);
+        } else if (m.type === 'UtteranceEnd') {
+          const heard = `${l.pending} ${l.interim}`.trim();
+          if (heard && !UNFINISHED.test(heard.replace(/[.,!?…]+$/, ''))) { clearTimeout(l.timer); commitLive(); }
+        }
+      };
+      ws.onclose = () => {
+        if (l.ws !== ws) return;
+        closeDg(l);
+        if (live === l) { l.restarts++; if (l.pending || l.interim) { clearTimeout(l.timer); commitLive(); } setTimeout(() => { if (live === l && !l.ws) openDeepgram(); }, 400); }
+      };
+    } catch (e) {
+      if (live !== l) return;
+      const denied = /NotAllowed|Permission|denied/i.test(`${e.name} ${e.message}`);
+      l.h.onError && l.h.onError(denied ? 'not-allowed' : 'deepgram');
+      if (denied) return stopLive();
+      dg.ready = false; // fall back to the browser's recognizer for this session
+      if (SR) openLive(); else stopLive();
+    }
+  }
+  const sentences = (t) => (String(t).match(/[^.!?…]+[.!?…]+["”’)]*\s*|[^.!?…]+$/g) || [t]).map((x) => x.trim()).filter(Boolean);
+  function fetchAudio(text) { return fetch('/api/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) }).then((r) => { if (!r.ok) throw new Error('speak ' + r.status); return r.blob(); }); }
+  function sayDeepgram(t) { sentences(t).forEach((x) => { const audio = fetchAudio(x); audio.catch(() => {}); dg.tq.push({ text: x, audio, gen: dg.gen }); }); pump(); } // prefetch every sentence; skipped ones may fail quietly
+  async function pump() {
+    if (dg.playing || !dg.tq.length) return;
+    const item = dg.tq.shift(); if (item.gen !== dg.gen) return pump();
+    let blob;
+    try { blob = await item.audio; dg.fails = 0; }
+    catch (e) { if (++dg.fails >= 2) dg.tts = false; sayBrowser(item.text); return pump(); }
+    if (item.gen !== dg.gen) return pump();
+    const url = URL.createObjectURL(blob); const a = new Audio(url); dg.playing = a;
+    markSpeaking(item.text);
+    const done = () => { URL.revokeObjectURL(url); if (dg.playing === a) { dg.playing = null; speech.until = Math.min(speech.until, Date.now() + 200); } pump(); };
+    a.onended = done; a.onerror = done;
+    try { await a.play(); } catch (e) { done(); }
+  }
+
   function commitLive() {
     if (!live) return;
     // Chrome doesn't always mark a phrase final: send what was heard either way, so nothing sticks in the box
@@ -2394,11 +2473,11 @@ const voice = (() => {
     else if (live.h.onInterim) live.h.onInterim('');
   }
   function startLive(h = {}) {
-    if (!SR) return false;
+    if (!SR && !dg.ready) return false;
     if (live) return true;
     if (rec && active) { try { rec.abort(); } catch (e) {} }
-    live = { h, pending: '', interim: '', timer: null, rec: null, restarts: 0 };
-    openLive();
+    live = { h, pending: '', interim: '', timer: null, rec: null, ws: null, mr: null, keep: null, restarts: 0 };
+    if (dg.ready) openDeepgram(); else openLive();
     return true;
   }
   function stopLive() {
@@ -2406,6 +2485,9 @@ const voice = (() => {
     const l = live; live = null; active = false;
     clearTimeout(l.timer);
     try { l.rec && l.rec.abort(); } catch (e) {}
+    const ws = l.ws; closeDg(l);
+    try { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'CloseStream' })); ws && ws.close(); } catch (e) {}
+    if (dg.stream) { dg.stream.getTracks().forEach((t) => t.stop()); dg.stream = null; } // release the mic
     l.h.onStop && l.h.onStop();
   }
   function stop() { if (rec && active) { try { rec.stop(); } catch (e) {} } }       // finish and deliver what was heard
@@ -2413,7 +2495,7 @@ const voice = (() => {
   // Moss never starts talking while you are: lines wait for a quiet moment (live mode only).
   function speak(text) {
     const t = forSpeech(text);
-    if (!synth || !t || !sound.isEnabled()) return;
+    if ((!synth && !(dg.ready && dg.tts)) || !t || !sound.isEnabled()) return;
     if (!live) return say(t);
     queue.push(t); flush();
   }
@@ -2424,19 +2506,29 @@ const voice = (() => {
     if (quietFor < QUIET_BEFORE_SPEAKING || (live && live.pending)) { flushTimer = setTimeout(flush, QUIET_BEFORE_SPEAKING - Math.min(quietFor, QUIET_BEFORE_SPEAKING) + 60); return; }
     while (queue.length) say(queue.shift());
   }
-  function say(t) {
+  function markSpeaking(t) {
+    const now = Date.now(); const est = words(t).length * 380 + 700;
+    speech.text = (now < speech.until ? speech.text + ' ' : '') + t;
+    speech.until = Math.max(speech.until, now) + est;
+  }
+  function say(t) { if (dg.ready && dg.tts) sayDeepgram(t); else sayBrowser(t); }
+  function sayBrowser(t) {
+    if (!synth) return;
     const u = new SpeechSynthesisUtterance(t);
     const v = pickVoice(); if (v) u.voice = v;
     u.lang = v ? v.lang : lang(); u.rate = 1.04;
     // remember what Moss is saying, and roughly until when, so the live mic can ignore it
-    const now = Date.now(); const est = words(t).length * 380 + 700;
-    speech.text = (now < speech.until ? speech.text + ' ' : '') + t;
-    speech.until = Math.max(speech.until, now) + est;
-    u.onend = () => { if (!synth.speaking) speech.until = Math.min(speech.until, Date.now()); };
+    markSpeaking(t);
+    u.onend = () => { if (!synth.speaking && !dg.playing) speech.until = Math.min(speech.until, Date.now()); };
     synth.speak(u);
   }
-  function cancelSpeech() { queue.length = 0; clearTimeout(flushTimer); if (synth) synth.cancel(); speech.until = Math.min(speech.until, Date.now()); }
-  return { supported: () => !!SR, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
+  function cancelSpeech() {
+    queue.length = 0; clearTimeout(flushTimer);
+    dg.gen++; dg.tq.length = 0; if (dg.playing) { try { dg.playing.pause(); } catch (e) {} dg.playing = null; }
+    if (synth) synth.cancel();
+    speech.until = Math.min(speech.until, Date.now());
+  }
+  return { init, backend: () => (dg.ready ? 'deepgram' : 'browser'), canPushToTalk: () => !!SR, supported: () => !!SR || dg.ready, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
 })();
 
 const app = (() => {
@@ -2449,7 +2541,7 @@ const app = (() => {
   ];
 
   function setStatus(text, isBusy) { const s = $('#status'); s.classList.toggle('busy', !!isBusy); s.querySelector('span').textContent = text; }
-  function setBusy(v) { busy = v; $$('.send-btn').forEach((b) => (b.disabled = v)); if (!v) { if (typeof isLive !== 'undefined' && isLive) setStatus('Live · say “stop listening”', true); else setStatus('Ready', false); idleWaiters.splice(0).forEach((r) => r()); } }
+  function setBusy(v) { busy = v; $$('.send-btn').forEach((b) => (b.disabled = v)); if (!v) { if (typeof isLive !== 'undefined' && isLive) setStatus(`Live${voice.backend() === 'deepgram' ? ' · Deepgram' : ''} · say “stop listening”`, true); else setStatus('Ready', false); idleWaiters.splice(0).forEach((r) => r()); } }
 
   function formatText(text) {
     const st = pageModel.get();
@@ -2805,7 +2897,7 @@ const app = (() => {
 
   /* ---- live conversation: the mic stays on until the button, Escape or "stop listening" ---- */
   let isLive = false;
-  const liveStatus = () => setStatus('Live · say “stop listening”', true);
+  const liveStatus = () => setStatus(`Live${voice.backend() === 'deepgram' ? ' · Deepgram' : ''} · say “stop listening”`, true);
   function setLive(on) {
     isLive = on;
     $$('.mic-btn').forEach((b) => { b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'Turn the mic off' : 'Talk to Moss'); });
@@ -2849,7 +2941,9 @@ const app = (() => {
     return whenIdle();
   }
   function initVoice() {
-    if (!voice.supported()) { document.body.classList.add('no-voice'); return; }
+    if (!voice.supported()) document.body.classList.add('no-voice');
+    // Deepgram (when deployed with a key) works in every browser with a mic, so it can bring the mic back
+    voice.init().then((ok) => { if (voice.supported()) document.body.classList.remove('no-voice'); document.body.dataset.voice = voice.backend(); if (isLive) liveStatus(); });
     // the mic button toggles the live conversation
     $('#micBtn').addEventListener('click', () => toggleMic($('#chatInput')));
     $('#introMic').addEventListener('click', () => toggleMic($('#introInput')));
@@ -2857,7 +2951,7 @@ const app = (() => {
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && voice.isLive()) { voice.stopLive(); return; }
       if (e.code === 'Escape' && voice.isListening()) { voice.abort(); setMic(false); return; }
-      if (e.code !== 'Space' || e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing(e.target) || voice.isLive()) return;
+      if (e.code !== 'Space' || e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing(e.target) || voice.isLive() || !voice.canPushToTalk()) return;
       e.preventDefault(); startListening(micTarget());
     });
     window.addEventListener('keyup', (e) => { if (e.code === 'Space' && !voice.isLive() && voice.isListening() && !typing(e.target)) { e.preventDefault(); voice.stop(); } });

@@ -17,7 +17,8 @@ The key never reaches the browser. Undo is handled locally. If the endpoint fail
 
 Building is voice-first. Tap the mic (or hold **Space** anywhere outside a text box), describe the business or the change, and pause. What you say appears in the chat box as you speak and sends on its own. Moss reads its reply aloud, with a quick "On it" when a turn is slow. Starting to talk cuts the speech off, and mute silences it. Typed messages get no spoken reply.
 
-- Speech uses the browser's built-in recognition and synthesis (Chrome, Edge and Safari; the mic hides in Firefox). Chrome and Edge send audio to Google's speech service, and Safari uses Apple's. Only the text goes to Moss.
+- **Deepgram (preferred):** when `DEEPGRAM_API_KEY` is set in Vercel, listening uses Deepgram's live transcription (`nova-3`) and Moss speaks with an Aura voice. The mic is opened with echo cancellation and Moss's audio plays inside the page, so laptop speakers work without Moss interrupting itself. `api/voice-token.js` mints a ~30-second token for the browser's live connection (the key never leaves the server); `api/speak.js` returns MP3 for each sentence. Both refuse requests from other sites.
+- **Browser fallback:** without a Deepgram key, speech uses the browser's built-in recognition and synthesis (Chrome, Edge and Safari; the mic hides in Firefox). Chrome and Edge send audio to Google's speech service, and Safari uses Apple's. Only the text goes to Moss. Add `?browservoice` to the URL to force this mode.
 - Spoken page references such as "at home" or "on the booking page" become `@Home` and `@Booking`.
 - Everything sits behind the `voice` module (`start`, `stop`, `speak`, `cancelSpeech`) in `moss-builder.html`, so a hosted or Moss speech service can replace it without touching the rest.
 
@@ -33,6 +34,9 @@ Building is voice-first. Tap the mic (or hold **Space** anywhere outside a text 
    | `MOSS_MODEL` | optional, default `moss/fastlane-1` |
    | `MOSS_BASE_URL` | optional, default `https://inference.moss.dev/v1` |
    | `MOSS_TEMPERATURE` | optional, default `0.4` |
+   | `DEEPGRAM_API_KEY` | Deepgram key for voice (optional; without it the browser's speech is used) |
+   | `DEEPGRAM_VOICE` | optional, default `aura-2-thalia-en` |
+   | `DEEPGRAM_STT_MODEL` | optional, default `nova-3` |
 
    The function calls `POST <base>/chat/completions` with `Authorization: Bearer <project id>:<project key>`.
 
@@ -48,6 +52,7 @@ npm test
 
 - `tests/agent-api.mjs`: the function against a mock OpenAI-compatible server (request shape, JSON mode, retry without JSON mode, error handling).
 - `tests/remote.cjs`: the builder served over http against a mock `/api/agent` returning imperfect model output (cleaning, rendering, flow layout, fallback).
+- `tests/voice-deepgram.cjs`: the Deepgram path with fakes for the mic, the live socket and audio (token use, quick end of turn, Aura playback, barge-in, reconnect, fallbacks).
 - `tests/voice.cjs`: the voice loop with a fake recognizer and synthesizer (speak to build, spoken replies, hold Space, spoken @mentions, barge-in, mute, unsupported browsers).
 - `tests/functional.cjs`: the original end-to-end checks (build, edit, reorder, restyle, delete, undo, pages, @mentions, flow drag, theme, sound, 375px mobile), using the offline agent.
 

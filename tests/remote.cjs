@@ -41,6 +41,7 @@ const REPLIES = {
 };
 
 const server = http.createServer((req, res) => {
+  if (req.url.startsWith('/api/voice-token')) { res.writeHead(503, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ error: 'Deepgram is not configured (set DEEPGRAM_API_KEY)' })); } // like a deploy without a key
   if (req.method === 'POST' && req.url === '/api/agent') {
     let body = '';
     req.on('data', (c) => (body += c));
@@ -70,7 +71,7 @@ const server = http.createServer((req, res) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   // The deliberate 500 below makes the browser log a failed resource; anything else is a real error.
-  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource: .*500/.test(m.text())) errors.push(m.text()); });
+  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource: .*(500|503)/.test(m.text())) errors.push(m.text()); });
   let alerted = false; page.on('dialog', (d) => { alerted = true; d.dismiss(); });
   await page.goto(url);
   const say = async (t) => {
