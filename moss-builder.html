@@ -1,0 +1,1912 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moss Builder</title>
+<script>
+  // theme bootstrap (avoids a flash before the theme module runs)
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem('moss-theme'); } catch (e) {}
+    if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
+<style>
+/* =====================================================================
+   TOKENS: one spacing scale, one radius scale, one shadow scale
+   ===================================================================== */
+:root {
+  --speed: 1;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px; --s9: 96px;
+  --r1: 6px; --r2: 10px; --r3: 16px; --r4: 24px; --rp: 999px;
+
+  --f-display: "Didot", "Bodoni 72", "Bodoni Moda", "Playfair Display", "Iowan Old Style", "Charter", "Bitstream Charter", Georgia, serif;
+  --f-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --ease-io: cubic-bezier(.65, 0, .35, 1);
+  --t1: calc(160ms * var(--speed));
+  --t2: calc(320ms * var(--speed));
+  --t3: calc(640ms * var(--speed));
+
+  --chat-w: 384px;
+  --top-h: 56px;
+  --scene-h: 236px;
+}
+:root, :root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f5f2;
+  --bg-2: #eeeeea;
+  --surface: #ffffff;
+  --surface-2: #f8f8f6;
+  --ink: #1b1c20;
+  --ink-2: #474a53;
+  --ink-3: #686c76;
+  --line: rgba(27, 28, 32, .09);
+  --line-2: rgba(27, 28, 32, .16);
+  --accent: #0d7480;             /* text-safe teal */
+  --accent-glow: #5fdcea;        /* glow only */
+  --accent-soft: rgba(70, 205, 222, .14);
+  --glass: rgba(255, 255, 255, .64);
+  --glass-edge: rgba(255, 255, 255, .95);
+  --btn-bg: #1b1c20; --btn-ink: #ffffff;
+  --grid: rgba(27, 28, 32, .07);
+  --grid-dot: rgba(27, 28, 32, .2);
+  --mod-top: rgba(255, 255, 255, .96);
+  --mod-l: #e9ebee; --mod-r: #dfe2e7;
+  --mod-edge: rgba(255, 255, 255, 1);
+  --mod-line: rgba(27, 28, 32, .12);
+  --shadow-c: 30, 34, 44;
+  --sh1: 0 1px 2px rgba(var(--shadow-c), .06), 0 1px 1px rgba(var(--shadow-c), .04);
+  --sh2: 0 2px 4px rgba(var(--shadow-c), .04), 0 12px 32px -8px rgba(var(--shadow-c), .12);
+  --sh3: 0 4px 8px rgba(var(--shadow-c), .04), 0 32px 80px -24px rgba(var(--shadow-c), .22);
+  --grain-op: .05;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f131a;
+  --bg-2: #141922;
+  --surface: #181e28;
+  --surface-2: #1c232e;
+  --ink: #e8ebf0;
+  --ink-2: #b3b9c5;
+  --ink-3: #8b93a2;
+  --line: rgba(255, 255, 255, .08);
+  --line-2: rgba(255, 255, 255, .15);
+  --accent: #72dfeb;
+  --accent-glow: #45d6e8;
+  --accent-soft: rgba(69, 214, 232, .14);
+  --glass: rgba(30, 38, 50, .58);
+  --glass-edge: rgba(255, 255, 255, .14);
+  --btn-bg: #eef1f5; --btn-ink: #0f131a;
+  --grid: rgba(255, 255, 255, .05);
+  --grid-dot: rgba(255, 255, 255, .17);
+  --mod-top: rgba(46, 56, 72, .88);
+  --mod-l: #222a36; --mod-r: #1a212b;
+  --mod-edge: rgba(255, 255, 255, .16);
+  --mod-line: rgba(255, 255, 255, .1);
+  --shadow-c: 0, 0, 0;
+  --sh1: 0 1px 2px rgba(0, 0, 0, .3);
+  --sh2: 0 2px 4px rgba(0, 0, 0, .2), 0 12px 32px -8px rgba(0, 0, 0, .5);
+  --sh3: 0 4px 8px rgba(0, 0, 0, .2), 0 32px 80px -24px rgba(0, 0, 0, .7);
+  --grain-op: .07;
+}
+
+/* =====================================================================
+   BASE
+   ===================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 var(--f-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  transition: background-color var(--t2) var(--ease), color var(--t2) var(--ease);
+}
+body::after { /* faint grain */
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100;
+  opacity: var(--grain-op);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r1); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.mono { font-family: var(--f-mono); }
+.eyebrow {
+  font: 500 10.5px/1 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--accent);
+}
+svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* Shared components */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  height: 40px; padding: 0 var(--s5); border-radius: var(--rp);
+  font-weight: 500; font-size: 14px; letter-spacing: -.005em; text-decoration: none; white-space: nowrap;
+  border: 1px solid transparent;
+  transition: transform var(--t1) var(--ease), background-color var(--t2) var(--ease), border-color var(--t2) var(--ease), box-shadow var(--t2) var(--ease);
+}
+.btn-primary { background: var(--btn-bg); color: var(--btn-ink); box-shadow: var(--sh1); }
+.btn-primary:hover { box-shadow: var(--sh2); transform: translateY(-1px); }
+.btn-secondary { background: transparent; color: var(--ink); border-color: var(--line-2); }
+.btn-secondary:hover { border-color: var(--ink-3); }
+.btn-sm { height: 32px; padding: 0 var(--s4); font-size: 13px; }
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-edge);
+  backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: var(--sh2), inset 0 1px 0 var(--glass-edge), inset 0 0 24px -12px var(--accent-glow);
+  border-radius: var(--r3);
+  position: relative; overflow: hidden;
+}
+.glass::after { /* hover sheen on glass edges */
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.35) 50%, transparent 65%);
+  background-size: 250% 100%; background-position: 130% 0; opacity: 0;
+  transition: background-position calc(900ms * var(--speed)) var(--ease), opacity var(--t2);
+}
+.glass:hover::after { background-position: -30% 0; opacity: .7; }
+:root[data-theme="dark"] .glass::after { background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.08) 50%, transparent 65%); background-size: 250% 100%; background-position: 130% 0; }
+:root[data-theme="dark"] .glass:hover::after { background-position: -30% 0; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 10px; border-radius: var(--rp);
+  font: 500 10.5px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase;
+  background: var(--accent-soft); color: var(--accent);
+}
+.pill-muted { background: transparent; color: var(--ink-3); border: 1px solid var(--line-2); }
+.icon-btn {
+  width: 34px; height: 34px; display: inline-grid; place-items: center; border-radius: var(--rp);
+  background: transparent; border: 1px solid var(--line); color: var(--ink-2);
+  transition: background-color var(--t1), color var(--t1), border-color var(--t1);
+}
+.icon-btn:hover { color: var(--ink); border-color: var(--line-2); background: var(--surface); }
+.icon-btn[aria-pressed="true"] { color: var(--ink); }
+
+/* =====================================================================
+   APP SHELL
+   ===================================================================== */
+#app { height: 100%; display: grid; grid-template-rows: var(--top-h) 1fr; }
+.topbar {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--s4);
+  padding: 0 var(--s5); border-bottom: 1px solid var(--line); position: relative; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -.01em; }
+.brand-mark { width: 22px; height: 22px; }
+.brand small { font: 500 10px/1 var(--f-mono); color: var(--ink-3); letter-spacing: .12em; text-transform: uppercase; margin-left: 2px; }
+.tabs { display: flex; gap: 2px; align-items: center; overflow-x: auto; scrollbar-width: none; }
+.tab {
+  position: relative; height: 32px; padding: 0 var(--s3); border: 0; background: transparent; color: var(--ink-3);
+  border-radius: var(--r1); font-size: 13px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+  transition: color var(--t1);
+}
+.tab:hover { color: var(--ink); }
+.tab[aria-current="page"] { color: var(--ink); }
+.tab[aria-current="page"]::after { content: ""; position: absolute; left: var(--s3); right: var(--s3); bottom: -12px; height: 2px; background: var(--accent-glow); border-radius: 2px; box-shadow: 0 0 10px var(--accent-glow); }
+.tab .mono { font-size: 10px; color: var(--ink-3); }
+.tab.flash { animation: tabflash calc(1600ms * var(--speed)) var(--ease); }
+@keyframes tabflash { 0%, 60% { color: var(--accent); background: var(--accent-soft); } 100% { background: transparent; } }
+.tab.enter { animation: tabin var(--t3) var(--ease); }
+@keyframes tabin { from { opacity: 0; transform: translateY(-4px); } }
+.top-right { display: flex; justify-content: flex-end; align-items: center; gap: var(--s2); }
+.seg { display: inline-flex; padding: 3px; border-radius: var(--rp); background: var(--bg-2); border: 1px solid var(--line); }
+.seg button { height: 28px; padding: 0 var(--s3); border: 0; border-radius: var(--rp); background: transparent; color: var(--ink-3); font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; transition: background-color var(--t1), color var(--t1), box-shadow var(--t1); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--sh1); }
+.seg button:disabled { opacity: .45; cursor: default; }
+
+main.workspace { position: relative; display: grid; grid-template-columns: 1fr 0; min-height: 0; transition: grid-template-columns var(--t3) var(--ease); }
+body.started main.workspace { grid-template-columns: 1fr var(--chat-w); }
+.canvas { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+
+/* =====================================================================
+   PAGE VIEW: iso scene + framed site
+   ===================================================================== */
+.pageview { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth; transition: opacity var(--t2) var(--ease), transform var(--t2) var(--ease); }
+.pageview.hidden, .flowview.hidden { opacity: 0; pointer-events: none; transform: scale(.985); }
+.scene { position: sticky; top: 0; z-index: 5; height: var(--scene-h); }
+.scene::before { content: ""; position: absolute; inset: 0; background: linear-gradient(var(--bg) 90%, color-mix(in srgb, var(--bg) 0%, transparent)); pointer-events: none; }
+body:not(.started) .scene { position: relative; height: 340px; margin-top: 4vh; }
+body:not(.started) .scene::before { display: none; }
+.scene svg.iso { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.iso .layer-grid, .iso .layer-links, .iso .layer-mods { transition: transform calc(900ms * var(--speed)) var(--ease); }
+.iso .mod { transition: transform var(--t3) var(--ease), opacity var(--t2); }
+.iso .mod .drop { transform-box: fill-box; }
+.iso .mod.enter .drop { animation: drop calc(760ms * var(--speed)) var(--ease) both; }
+@keyframes drop { 0% { transform: translateY(-46px); opacity: 0; } 55% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+.iso .mod.enter .shadow { animation: shadowin calc(760ms * var(--speed)) var(--ease) both; }
+@keyframes shadowin { from { opacity: 0; } }
+.iso .mod .float { animation: float var(--fd, 6s) ease-in-out var(--fdel, 0s) infinite alternate; }
+@keyframes float { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+.iso .mod.leaving { opacity: 0; }
+.iso .mod .glow { opacity: .5; transition: opacity var(--t2); }
+.iso .mod.flash .glow { animation: glowflash calc(1600ms * var(--speed)) var(--ease); }
+@keyframes glowflash { 0%, 50% { opacity: 1; stroke-width: 6; } }
+.iso .mod.active .glow { opacity: .95; }
+.iso .mod-label { font: 500 9px var(--f-mono); letter-spacing: .14em; fill: var(--ink-3); text-transform: uppercase; }
+.iso .ghost polygon { fill: none; stroke: var(--line-2); stroke-dasharray: 3 4; }
+.iso .link-path { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 1 5; stroke-linecap: round; opacity: .7; }
+.iso .link-reveal { fill: none; stroke: #fff; stroke-width: 8; stroke-dasharray: 1 1; stroke-dashoffset: 1; }
+.iso .link-reveal.go { transition: stroke-dashoffset calc(700ms * var(--speed)) var(--ease-io); stroke-dashoffset: 0; }
+.iso .pulse { fill: var(--accent-glow); }
+.iso .pulse-halo { fill: var(--accent-glow); opacity: .25; }
+.scene-panel {
+  position: absolute; right: 28px; top: 26px; width: 232px; padding: var(--s3) var(--s4);
+  transform: perspective(900px) rotateY(-16deg) rotateX(7deg) rotateZ(-1deg) translate3d(var(--ppx, 0px), var(--ppy, 0px), 0);
+  transform-origin: right center; transition: transform calc(900ms * var(--speed)) var(--ease), opacity var(--t2);
+  border-radius: var(--r2);
+}
+.scene-panel .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.scene-panel .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-glow); box-shadow: 0 0 8px var(--accent-glow); }
+.scene-panel p { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+body:not(.started) .scene-panel { opacity: 0; }
+
+/* Intro */
+.intro { position: relative; z-index: 6; max-width: 620px; margin: -56px auto 0; padding: 0 var(--s5) var(--s8); text-align: center; transition: opacity var(--t3) var(--ease), transform var(--t3) var(--ease); }
+body.started .intro { display: none; }
+.intro h1 { font: 400 52px/1.02 var(--f-display); letter-spacing: -.02em; margin: var(--s4) 0 var(--s3); }
+.intro h1 em { font-style: italic; color: var(--ink-2); }
+.intro p.lede { margin: 0 auto var(--s6); color: var(--ink-3); max-width: 440px; font-size: 15px; }
+.prompt-box { display: flex; align-items: flex-end; gap: var(--s2); padding: var(--s2) var(--s2) var(--s2) var(--s5); border-radius: var(--r4); text-align: left; }
+.prompt-box textarea { flex: 1; border: 0; background: transparent; resize: none; outline: none; font-size: 16px; line-height: 1.5; padding: 10px 0; min-height: 46px; max-height: 160px; }
+.prompt-box textarea::placeholder, .composer textarea::placeholder { color: var(--ink-3); }
+.send-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--btn-bg); color: var(--btn-ink); display: grid; place-items: center; flex: none; transition: transform var(--t1), opacity var(--t1); }
+.send-btn:hover { transform: translateY(-1px); }
+.send-btn:disabled { opacity: .35; transform: none; cursor: default; }
+.examples { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2); margin-top: var(--s5); }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 14px; border-radius: var(--rp);
+  border: 1px solid var(--line-2); background: var(--surface); color: var(--ink-2); font-size: 13px; text-align: left;
+  transition: border-color var(--t1), color var(--t1), transform var(--t1), box-shadow var(--t1);
+}
+.chip:hover { color: var(--ink); border-color: var(--ink-3); box-shadow: var(--sh1); }
+.chip .mono { font-size: 10px; color: var(--accent); letter-spacing: .1em; }
+
+/* Frame */
+.frame-wrap { position: relative; padding: 0 var(--s6) 120px; margin-top: -8px; }
+body:not(.started) .frame-wrap { display: none; }
+.frame { position: relative; margin: 0 auto; width: var(--frame-w, 820px); border-radius: var(--r3); background: var(--surface); box-shadow: var(--sh3); border: 1px solid var(--line); overflow: hidden; }
+.frame-bar { display: flex; align-items: center; gap: var(--s3); height: 36px; padding: 0 var(--s4); border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.frame-bar .dots { display: flex; gap: 6px; }
+.frame-bar .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); }
+.frame-bar .url { flex: 1; text-align: center; font: 11px var(--f-mono); color: var(--ink-3); letter-spacing: .02em; }
+.frame-bar .url b { color: var(--ink-2); font-weight: 500; }
+.frame-bar .count { font: 10px var(--f-mono); color: var(--ink-3); letter-spacing: .1em; }
+.frame-empty { padding: 72px var(--s5); text-align: center; color: var(--ink-3); font: 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; }
+
+/* =====================================================================
+   THE BUILT SITE (scoped, palette-driven)
+   ===================================================================== */
+.site {
+  --s-bg: #fbfbf9; --s-tint: #f2f5f5; --s-accent: #0d7480; --s-glow: #5fdcea; --s-ink: #1b1c20; --s-ink-2: #4a4d56; --s-line: rgba(27,28,32,.09); --s-card: #ffffff; --s-dark: #17181c;
+  width: var(--site-w, 1200px); zoom: var(--zoom, .68);
+  background: var(--s-bg); color: var(--s-ink); container-type: inline-size;
+  transition: background-color var(--t3) var(--ease), color var(--t3) var(--ease);
+}
+.site[data-palette="warm"] { --s-bg: #fcf8f3; --s-tint: #f6ede3; --s-accent: #a84b22; --s-glow: #f2a66f; --s-card: #fffdfa; --s-dark: #2a1d16; }
+.site[data-palette="sage"] { --s-bg: #fafbf7; --s-tint: #edf2ea; --s-accent: #3b7049; --s-glow: #98d6a2; --s-card: #ffffff; --s-dark: #18211b; }
+.site[data-palette="ink"]  { --s-bg: #ffffff; --s-tint: #f2f2f1; --s-accent: #2b2d33; --s-glow: #c3c7cf; --s-card: #ffffff; --s-dark: #111214; }
+:root[data-theme="dark"] .site { --s-bg: #121820; --s-tint: #161d27; --s-accent: #72dfeb; --s-glow: #45d6e8; --s-ink: #e8ebf0; --s-ink-2: #aab1bd; --s-line: rgba(255,255,255,.08); --s-card: #19202b; --s-dark: #0b0e13; }
+:root[data-theme="dark"] .site[data-palette="warm"] { --s-bg: #19140f; --s-tint: #211a14; --s-accent: #f0a46f; --s-glow: #e98e52; --s-card: #241c16; --s-dark: #0f0b08; }
+:root[data-theme="dark"] .site[data-palette="sage"] { --s-bg: #111813; --s-tint: #16201a; --s-accent: #9bd5a5; --s-glow: #6fc480; --s-card: #18231c; --s-dark: #0a0f0b; }
+:root[data-theme="dark"] .site[data-palette="ink"]  { --s-bg: #131417; --s-tint: #1a1b1f; --s-accent: #e6e7ea; --s-glow: #9ea3ad; --s-card: #1c1d22; --s-dark: #08090a; }
+.site .btn-primary { background: var(--s-ink); color: var(--s-bg); }
+.site .btn-secondary { color: var(--s-ink); border-color: color-mix(in srgb, var(--s-ink) 22%, transparent); }
+.site .eyebrow { color: var(--s-accent); }
+.site h1, .site h2, .site h3 { font-family: var(--f-display); font-weight: 400; letter-spacing: -.02em; margin: 0; }
+.site p { margin: 0; }
+.site .wrap { max-width: 1080px; margin: 0 auto; padding: 0 56px; }
+.site .glass { background: color-mix(in srgb, var(--s-card) 70%, transparent); box-shadow: var(--sh2), inset 0 1px 0 var(--glass-edge), inset 0 0 28px -14px var(--s-glow); }
+.s-top { position: relative; }
+.s-announce { display: flex; justify-content: center; align-items: center; gap: 12px; height: 38px; background: var(--s-dark); color: #e9ebef; font-size: 13px; }
+.s-announce .pill { background: rgba(255,255,255,.1); color: var(--s-glow); height: 20px; font-size: 10px; }
+.s-announce .arr { color: rgba(255,255,255,.5); }
+.s-nav { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+.s-brand { display: flex; align-items: center; gap: 10px; font: 400 22px/1 var(--f-display); letter-spacing: -.01em; color: var(--s-ink); text-decoration: none; }
+.s-brand i { width: 18px; height: 18px; border-radius: 5px; background: var(--s-ink); box-shadow: inset 0 0 0 4px var(--s-bg), inset 0 0 0 5px var(--s-ink); display: inline-block; }
+.s-links { display: flex; gap: 28px; }
+.s-links a { color: var(--s-ink-2); text-decoration: none; font-size: 14px; transition: color var(--t1); }
+.s-links a:hover, .s-links a[aria-current="page"] { color: var(--s-ink); }
+
+.sec { position: relative; }
+.sec.unfold { animation: unfold calc(820ms * var(--speed)) var(--ease) both; }
+@keyframes unfold { from { opacity: 0; clip-path: inset(0 0 100% 0); transform: translateY(14px); } to { opacity: 1; clip-path: inset(0 0 0 0); transform: none; } }
+.sec.refresh { animation: refresh calc(900ms * var(--speed)) var(--ease); }
+@keyframes refresh { from { opacity: .35; filter: blur(2px); } }
+.sec.leaving { transition: opacity var(--t2) var(--ease), transform var(--t2) var(--ease); opacity: 0; transform: translateY(-8px); }
+.sec.flash::after, .pcard.flash::after, .fnode.flash::after {
+  content: ""; position: absolute; inset: 6px; border-radius: var(--r3); pointer-events: none;
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 0 32px 2px var(--accent-soft);
+  animation: flash calc(1700ms * var(--speed)) var(--ease) forwards;
+}
+@keyframes flash { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
+
+/* hero */
+.sec-hero { padding: 40px 0 56px; }
+.hero-grid { display: grid; grid-template-columns: 1.12fr .88fr; gap: 56px; align-items: center; }
+.sec-hero h1 { font-size: 68px; line-height: 1.0; margin: 18px 0 20px; text-wrap: balance; }
+.sec-hero .sub { font-size: 18px; line-height: 1.55; color: var(--s-ink-2); max-width: 30em; }
+.sec-hero .actions { display: flex; gap: 12px; margin-top: 32px; }
+.sec-hero.centered { text-align: center; padding: 72px 0 64px; }
+.sec-hero.centered .sub { margin: 0 auto; }
+.sec-hero.centered .actions { justify-content: center; }
+.sec-hero.centered h1 { font-size: 64px; max-width: 13em; margin-left: auto; margin-right: auto; }
+.hero-card { padding: 24px; }
+.hero-card .hc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.hero-card .hc-title { font: 400 22px var(--f-display); }
+.hero-card dl { margin: 0; display: grid; gap: 0; }
+.hero-card dl > div { display: flex; justify-content: space-between; padding: 12px 0; border-top: 1px solid var(--s-line); font-size: 14px; }
+.hero-card dt { color: var(--s-ink-2); }
+.hero-card dd { margin: 0; font-weight: 500; }
+.hero-card .btn { width: 100%; margin-top: 16px; }
+.hero-card .note { margin-top: 12px; text-align: center; font: 11px var(--f-mono); color: var(--s-ink-2); letter-spacing: .02em; }
+.logo-row { display: flex; align-items: center; gap: 40px; margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--s-line); }
+.logo-row .lbl { font: 500 10.5px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--s-ink-2); white-space: nowrap; }
+.logo-row .logos { display: flex; flex: 1; justify-content: space-between; align-items: center; opacity: .42; }
+.ph-logo { display: flex; align-items: center; gap: 7px; }
+.ph-logo i { display: block; background: var(--s-ink); }
+.ph-logo b { display: block; height: 8px; border-radius: 4px; background: var(--s-ink); }
+
+/* section heads */
+.sec-pad { padding: 88px 0; }
+.sec-tint { background: var(--s-tint); }
+.s-head { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: end; margin-bottom: 48px; }
+.s-head h2 { font-size: 46px; line-height: 1.04; margin-top: 14px; text-wrap: balance; }
+.s-head p { color: var(--s-ink-2); font-size: 16px; line-height: 1.6; max-width: 30em; }
+.s-head.center { display: block; text-align: center; }
+.s-head.center p { margin: 14px auto 0; }
+
+/* features */
+.feat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.feat { padding: 24px; border-radius: var(--r3); background: var(--s-card); border: 1px solid var(--s-line); }
+.feat .ic { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; color: var(--s-ink); background: var(--s-tint); box-shadow: inset 0 0 0 1px var(--s-line), inset 0 0 18px -6px var(--s-glow); margin-bottom: 32px; }
+.feat .ic svg.i { width: 19px; height: 19px; }
+.feat h3 { font: 600 15px/1.3 var(--f-sans); letter-spacing: -.01em; margin-bottom: 8px; }
+.feat p { color: var(--s-ink-2); font-size: 14px; line-height: 1.55; }
+
+/* testimonials */
+.quote-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 16px; }
+.quote { padding: 28px; border-radius: var(--r3); background: var(--s-card); border: 1px solid var(--s-line); display: flex; flex-direction: column; justify-content: space-between; gap: 32px; }
+.quote blockquote { margin: 0; font: 400 21px/1.35 var(--f-display); letter-spacing: -.01em; }
+.quote:first-child blockquote { font-size: 27px; }
+.quote figcaption { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.quote .av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--s-tint); font: 500 11px var(--f-mono); color: var(--s-ink-2); box-shadow: inset 0 0 0 1px var(--s-line); }
+.quote .who b { display: block; font-weight: 600; }
+.quote .who span { color: var(--s-ink-2); }
+
+/* pricing */
+.price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: stretch; }
+.plan { padding: 28px; border-radius: var(--r3); background: var(--s-card); border: 1px solid var(--s-line); display: flex; flex-direction: column; }
+.plan.featured { border-color: transparent; box-shadow: 0 0 0 1px color-mix(in srgb, var(--s-glow) 60%, transparent), 0 24px 60px -24px color-mix(in srgb, var(--s-glow) 55%, transparent); }
+.plan .ph { display: flex; justify-content: space-between; align-items: center; min-height: 24px; }
+.plan .pn { font-weight: 600; font-size: 15px; }
+.plan .pr { margin: 22px 0 20px; display: flex; align-items: baseline; gap: 6px; }
+.plan .pr b { font: 400 46px/1 var(--f-display); letter-spacing: -.02em; }
+.plan .pr span { color: var(--s-ink-2); font-size: 14px; }
+.plan ul { list-style: none; margin: 0 0 28px; padding: 18px 0 0; border-top: 1px solid var(--s-line); display: grid; gap: 10px; font-size: 14px; color: var(--s-ink-2); }
+.plan li { display: flex; gap: 10px; align-items: center; }
+.plan li svg.i { width: 14px; height: 14px; color: var(--s-accent); }
+.plan .btn { margin-top: auto; }
+
+/* faq */
+.faq-grid { display: grid; grid-template-columns: .8fr 1.2fr; gap: 56px; }
+.faq-grid h2 { font-size: 46px; line-height: 1.04; margin-top: 14px; }
+.faq-list details { border-top: 1px solid var(--s-line); padding: 20px 0; }
+.faq-list details:last-child { border-bottom: 1px solid var(--s-line); }
+.faq-list summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; font-weight: 500; font-size: 16px; }
+.faq-list summary::-webkit-details-marker { display: none; }
+.faq-list summary::after { content: "+"; font: 300 20px/1 var(--f-sans); color: var(--s-ink-2); transition: transform var(--t2) var(--ease); }
+.faq-list details[open] summary::after { transform: rotate(45deg); }
+.faq-list details p { margin-top: 12px; color: var(--s-ink-2); line-height: 1.6; max-width: 36em; }
+
+/* cta */
+.sec-cta { padding: 24px 0 88px; }
+.cta-band { position: relative; overflow: hidden; border-radius: var(--r4); background: var(--s-dark); color: #f2f3f5; padding: 72px 64px; display: grid; grid-template-columns: 1.3fr auto; gap: 40px; align-items: end; }
+.cta-band::before { content: ""; position: absolute; inset: 0; opacity: .5; background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,.18) 1px, transparent 1.4px); background-size: 20.8px 12px; mask-image: radial-gradient(ellipse at 85% 0%, #000, transparent 60%); -webkit-mask-image: radial-gradient(ellipse at 85% 0%, #000, transparent 60%); }
+.cta-band::after { content: ""; position: absolute; width: 420px; height: 420px; right: -120px; top: -220px; border-radius: 50%; background: var(--s-glow); filter: blur(120px); opacity: .28; }
+.cta-band > * { position: relative; z-index: 1; }
+.cta-band .eyebrow { color: var(--s-glow); }
+.cta-band h2 { font-size: 52px; line-height: 1.02; margin-top: 14px; }
+.cta-band p { margin-top: 14px; color: rgba(242,243,245,.7); font-size: 16px; }
+.cta-band .btn-primary { background: #f5f6f8; color: #141519; }
+.cta-band .link-hint { display: block; margin-top: 10px; font: 10.5px var(--f-mono); color: rgba(242,243,245,.55); letter-spacing: .08em; text-align: right; }
+
+/* footer */
+.sec-footer { padding: 56px 0 40px; border-top: 1px solid var(--s-line); }
+.foot-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 40px; }
+.foot-grid p { color: var(--s-ink-2); font-size: 14px; margin-top: 14px; max-width: 22em; line-height: 1.55; }
+.foot-grid h4 { margin: 0 0 14px; font: 500 10.5px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--s-ink-2); }
+.foot-grid ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 14px; }
+.foot-base { display: flex; justify-content: space-between; margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--s-line); font: 11px var(--f-mono); color: var(--s-ink-2); letter-spacing: .02em; }
+
+/* text / stats / contact / booking */
+.story { display: grid; grid-template-columns: .9fr 1.1fr; gap: 56px; }
+.story h2 { font-size: 46px; line-height: 1.04; margin-top: 14px; }
+.story .body p { font-size: 17px; line-height: 1.7; color: var(--s-ink-2); }
+.story .body p + p { margin-top: 18px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--s-line); border-bottom: 1px solid var(--s-line); }
+.stat { padding: 36px 32px; }
+.stat + .stat { border-left: 1px solid var(--s-line); }
+.stat b { display: block; font: 400 56px/1 var(--f-display); letter-spacing: -.02em; }
+.stat span { display: block; margin-top: 12px; font: 500 10.5px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--s-ink-2); }
+.form-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 24px; align-items: start; }
+.form-card { padding: 32px; border-radius: var(--r3); background: var(--s-card); border: 1px solid var(--s-line); display: grid; gap: 16px; }
+.field { display: grid; gap: 6px; }
+.field label { font: 500 10.5px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--s-ink-2); }
+.field .in { height: 44px; border-radius: var(--r2); border: 1px solid var(--s-line); background: var(--s-bg); padding: 0 14px; display: flex; align-items: center; color: var(--s-ink-2); font-size: 14px; }
+.field .in.tall { height: 110px; align-items: flex-start; padding-top: 12px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.details-card { padding: 28px; }
+.details-card dl { margin: 16px 0 0; display: grid; gap: 14px; }
+.details-card dt { font: 500 10.5px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--s-ink-2); }
+.details-card dd { margin: 4px 0 0; font-size: 15px; }
+.room-opts { display: grid; gap: 8px; }
+.room-opt { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-radius: var(--r2); border: 1px solid var(--s-line); font-size: 14px; }
+.room-opt.on { border-color: transparent; box-shadow: 0 0 0 1.5px var(--s-accent); }
+.room-opt span { color: var(--s-ink-2); font-family: var(--f-mono); font-size: 12px; }
+
+@container (max-width: 760px) {
+  .site .wrap { padding: 0 20px; }
+  .s-links { display: none; }
+  .hero-grid, .s-head, .faq-grid, .story, .form-grid, .cta-band { grid-template-columns: 1fr; gap: 28px; }
+  .sec-hero h1, .sec-hero.centered h1 { font-size: 42px; }
+  .feat-grid, .quote-grid, .price-grid { grid-template-columns: 1fr; }
+  .s-head h2, .faq-grid h2, .story h2 { font-size: 34px; }
+  .cta-band { padding: 40px 24px; }
+  .cta-band h2 { font-size: 36px; }
+  .foot-grid { grid-template-columns: 1fr 1fr; }
+  .stats { grid-template-columns: 1fr; }
+  .stat + .stat { border-left: 0; border-top: 1px solid var(--s-line); }
+  .logo-row { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .logo-row .logos { width: 100%; gap: 16px; flex-wrap: wrap; }
+  .sec-pad { padding: 56px 0; }
+  .s-announce { font-size: 12px; }
+  .row2 { grid-template-columns: 1fr; }
+}
+
+/* =====================================================================
+   FLOW VIEW
+   ===================================================================== */
+.flowview { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; transition: opacity var(--t2) var(--ease), transform var(--t2) var(--ease); }
+.flowview.panning { cursor: grabbing; }
+.flow-grid { position: absolute; inset: 0; background: var(--grid-dot); pointer-events: none;
+  -webkit-mask-image: var(--grid-mask); mask-image: var(--grid-mask);
+  -webkit-mask-size: var(--gw) var(--gh); mask-size: var(--gw) var(--gh);
+  -webkit-mask-position: var(--gx) var(--gy); mask-position: var(--gx) var(--gy); opacity: .8; }
+.world { position: absolute; left: 0; top: 0; width: 1px; height: 1px; transform-origin: 0 0; }
+.world svg.edges { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; }
+.edge { fill: none; stroke: var(--ink-3); stroke-width: 1.25; }
+.edge.nav { stroke-dasharray: 2 5; stroke-linecap: round; opacity: .7; }
+.edge.link { stroke: var(--accent); stroke-width: 1.5; }
+.edge.drawing { stroke-dasharray: 1 1; stroke-dashoffset: 1; }
+.edge.drawing.go { transition: stroke-dashoffset calc(620ms * var(--speed)) var(--ease-io); stroke-dashoffset: 0; }
+.edge-label { font: 500 10px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; fill: var(--ink-2); paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+#arrow path { fill: var(--ink-3); }
+#arrowA path { fill: var(--accent); }
+.fpulse { fill: var(--accent-glow); }
+.flow-title { position: absolute; font: 500 10.5px var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+.flow-title span { color: var(--ink-3); margin-left: 10px; }
+.pcard, .fnode { position: absolute; user-select: none; cursor: grab; transition: box-shadow var(--t2), opacity var(--t2), transform var(--t2) var(--ease); }
+.pcard:active, .fnode:active { cursor: grabbing; }
+.pcard { width: 220px; padding: 14px 16px 16px; }
+.pcard.current { box-shadow: var(--sh2), 0 0 0 1.5px var(--accent-glow), 0 0 30px -6px var(--accent-glow); }
+.pcard .pc-top { display: flex; justify-content: space-between; align-items: center; color: var(--ink-3); font: 10.5px var(--f-mono); letter-spacing: .06em; }
+.pcard h3 { margin: 10px 0 12px; font: 400 24px/1 var(--f-display); letter-spacing: -.01em; }
+.pcard .secs { display: flex; flex-wrap: wrap; gap: 4px; }
+.pcard .secs span { font: 10px var(--f-mono); letter-spacing: .04em; padding: 3px 7px; border-radius: var(--r1); background: var(--bg-2); color: var(--ink-2); border: 1px solid var(--line); }
+.fnode { display: flex; align-items: center; gap: 10px; }
+.fnode.step, .fnode.start, .fnode.end { width: 168px; height: 52px; padding: 0 14px; border-radius: var(--r2); font-size: 13px; font-weight: 500; }
+.fnode.start, .fnode.end { height: 44px; border-radius: var(--rp); }
+.fnode .ix { font: 10px var(--f-mono); color: var(--ink-3); }
+.fnode.start .ix, .fnode.end .ix { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-glow); box-shadow: 0 0 8px var(--accent-glow); font-size: 0; flex: none; }
+.fnode.end .ix { background: var(--ink); box-shadow: none; }
+.fnode.decision { width: 120px; height: 120px; justify-content: center; text-align: center; background: none; border: 0; box-shadow: none; overflow: visible; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.fnode.decision::before { content: ""; position: absolute; inset: 18px; transform: rotate(45deg); border-radius: 10px; background: var(--glass); border: 1px solid var(--glass-edge); box-shadow: var(--sh2), inset 0 0 22px -10px var(--accent-glow); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.fnode.decision::after { display: none; }
+.fnode.decision span { position: relative; font-size: 12.5px; font-weight: 500; max-width: 72px; line-height: 1.25; }
+.fnode.enter, .pcard.enter { animation: nodein calc(560ms * var(--speed)) var(--ease) both; }
+@keyframes nodein { from { opacity: 0; transform: translateY(-10px) scale(.97); } }
+.fnode.dragging, .pcard.dragging { box-shadow: var(--sh3); z-index: 3; }
+.flow-hud { position: absolute; left: var(--s5); top: var(--s5); display: flex; gap: var(--s3); align-items: center; z-index: 2; pointer-events: none; }
+.flow-hud .hint { font: 10.5px var(--f-mono); color: var(--ink-3); letter-spacing: .08em; }
+.flow-tools { position: absolute; left: var(--s5); bottom: var(--s5); display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: var(--rp); z-index: 2; cursor: default; }
+.flow-tools button { width: 30px; height: 30px; border-radius: 50%; border: 0; background: transparent; color: var(--ink-2); display: grid; place-items: center; }
+.flow-tools button:hover { background: var(--bg-2); color: var(--ink); }
+.flow-tools .z { font: 11px var(--f-mono); color: var(--ink-3); width: 48px; text-align: center; }
+.flow-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-3); font: 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; pointer-events: none; }
+
+/* =====================================================================
+   CHAT PANEL
+   ===================================================================== */
+.chat { position: relative; min-width: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 72%, var(--bg)); overflow: hidden; }
+body:not(.started) .chat { visibility: hidden; }
+.chat-head { display: flex; align-items: center; justify-content: space-between; height: 56px; padding: 0 var(--s5); border-bottom: 1px solid var(--line); flex: none; }
+.chat-head .who { display: flex; align-items: center; gap: 10px; }
+.agent-mark { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--btn-bg); color: var(--btn-ink); flex: none; }
+.agent-mark svg { width: 15px; height: 15px; }
+.chat-head .name { font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
+.status { display: inline-flex; align-items: center; gap: 6px; font: 10.5px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.status i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); opacity: .6; }
+.status.busy { color: var(--accent); }
+.status.busy i { background: var(--accent-glow); opacity: 1; box-shadow: 0 0 8px var(--accent-glow); animation: breathe calc(1400ms * var(--speed)) ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .35; } }
+.sheet-handle { display: none; }
+.messages { flex: 1; overflow-y: auto; padding: var(--s5); display: flex; flex-direction: column; gap: var(--s5); scroll-behavior: smooth; }
+.msg { font-size: 14px; line-height: 1.55; max-width: 100%; animation: msgin var(--t2) var(--ease) both; }
+@keyframes msgin { from { opacity: 0; transform: translateY(6px); } }
+.msg.user { align-self: flex-end; max-width: 86%; padding: 10px 14px; border-radius: 14px 14px 4px 14px; background: var(--btn-bg); color: var(--btn-ink); }
+.msg.user .mention { background: rgba(255,255,255,.14); color: inherit; }
+:root[data-theme="dark"] .msg.user .mention { background: rgba(0,0,0,.08); }
+.msg.agent { display: grid; grid-template-columns: 26px 1fr; gap: 12px; }
+.msg.agent .body { min-width: 0; color: var(--ink); padding-top: 3px; }
+.msg.agent .text { white-space: pre-wrap; }
+.mention { display: inline-block; padding: 0 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+.log { list-style: none; margin: 12px 0 0; padding: 10px 12px; border-radius: var(--r2); border: 1px solid var(--line); background: var(--surface); display: grid; gap: 6px; font: 11.5px/1.4 var(--f-mono); color: var(--ink-2); }
+.log:empty { display: none; }
+.log li { display: flex; align-items: center; gap: 8px; animation: msgin var(--t2) var(--ease) both; }
+.log li .st { width: 14px; height: 14px; display: grid; place-items: center; flex: none; }
+.log li .st i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-glow); box-shadow: 0 0 6px var(--accent-glow); animation: breathe calc(1000ms * var(--speed)) infinite; }
+.log li.done .st { color: var(--accent); }
+.log li .k { color: var(--ink-3); }
+.typing { display: inline-flex; gap: 4px; padding-top: 8px; }
+.typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-3); animation: typing calc(1100ms * var(--speed)) infinite; }
+.typing i:nth-child(2) { animation-delay: calc(150ms * var(--speed)); }
+.typing i:nth-child(3) { animation-delay: calc(300ms * var(--speed)); }
+@keyframes typing { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+.suggest { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); display: flex; gap: 6px; padding: 0 var(--s5) var(--s3); overflow-x: auto; scrollbar-width: none; flex: none; }
+.suggest .chip { min-height: 30px; padding: 4px 12px; font-size: 12.5px; white-space: nowrap; background: transparent; }
+.composer-wrap { position: relative; padding: 0 var(--s4) var(--s4); flex: none; }
+.composer { display: flex; align-items: flex-end; gap: var(--s2); padding: 6px 6px 6px var(--s4); border-radius: var(--r3); background: var(--surface); border: 1px solid var(--line-2); transition: border-color var(--t1), box-shadow var(--t1); }
+.composer:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.composer textarea { flex: 1; border: 0; background: transparent; resize: none; outline: none; font-size: 14px; line-height: 1.5; padding: 8px 0; min-height: 38px; max-height: 140px; }
+.composer .send-btn { width: 34px; height: 34px; }
+.chat-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding: 0 4px; font: 10px var(--f-mono); color: var(--ink-3); letter-spacing: .06em; }
+.powered { display: inline-flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: .14em; }
+.powered svg { width: 11px; height: 11px; color: var(--accent); }
+.mention-menu { position: absolute; left: var(--s4); right: var(--s4); bottom: calc(100% - 8px); padding: 6px; border-radius: var(--r2); z-index: 30; max-height: 260px; overflow-y: auto; }
+.mention-menu[hidden] { display: none; }
+.mention-menu .mm-h { padding: 6px 10px 4px; font: 500 10px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.mention-menu [role="option"] { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r1); font-size: 13px; cursor: pointer; }
+.mention-menu [role="option"] .k { margin-left: auto; font: 10px var(--f-mono); color: var(--ink-3); }
+.mention-menu [role="option"][aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+.mention-menu [role="option"] svg.i { color: var(--ink-3); }
+
+/* =====================================================================
+   RESPONSIVE
+   ===================================================================== */
+@media (max-width: 1100px) { :root { --chat-w: 340px; } .scene-panel { display: none; } }
+@media (max-width: 760px) {
+  :root { --top-h: 52px; --scene-h: 150px; }
+  .topbar { grid-template-columns: auto 1fr auto; padding: 0 var(--s3); gap: var(--s2); }
+  .brand span.t, .brand small { display: none; }
+  .tabs { justify-content: flex-start; }
+  .seg button span { display: none; }
+  .seg button { padding: 0 9px; }
+  .icon-btn { width: 32px; height: 32px; }
+  body.started main.workspace { grid-template-columns: 1fr; }
+  .chat {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 48vh; z-index: 40;
+    border-left: 0; border-top: 1px solid var(--line-2); border-radius: 18px 18px 0 0; box-shadow: var(--sh3);
+    background: var(--surface); transition: height var(--t3) var(--ease);
+  }
+  .chat.collapsed { height: 132px; }
+  .sheet-handle { display: block; position: absolute; left: 50%; top: 6px; width: 40px; height: 16px; transform: translateX(-50%); border: 0; background: transparent; padding: 0; }
+  .sheet-handle::before { content: ""; display: block; width: 36px; height: 4px; margin: 6px auto 0; border-radius: 2px; background: var(--line-2); }
+  .chat-head { height: 48px; padding-top: 6px; }
+  .pageview { padding-bottom: 48vh; }
+  .frame-wrap { padding: 0 var(--s4) var(--s6); }
+  .intro { margin-top: -40px; }
+  .intro h1 { font-size: 38px; }
+  body:not(.started) .scene { height: 220px; margin-top: 0; }
+  .flowview { bottom: 48vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --speed: .001 !important; }
+  .iso .mod .float, .status.busy i, .typing i { animation: none !important; }
+  .pageview { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l8.5 4.9v9.2L12 21.5l-8.5-4.9V7.4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M3.5 7.4L12 12.3l8.5-4.9M12 12.3v9.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="12" cy="12.3" r="1.6" fill="var(--accent-glow)"/></svg>
+      <span class="t">Moss Builder</span>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Pages"></nav>
+    <div class="top-right">
+      <div class="seg" role="group" aria-label="View">
+        <button id="viewPage" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v16H5z M5 9h14"/></svg><span>Page</span></button>
+        <button id="viewFlow" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M4 4h6v6H4z M14 14h6v6h-6z M7 10v4a3 3 0 0 0 3 3h4"/></svg><span>Flow</span></button>
+      </div>
+      <button class="icon-btn" id="soundBtn" aria-pressed="true" aria-label="Sound on" title="Sound"></button>
+      <button class="icon-btn" id="themeBtn" aria-label="Switch to dark mode" title="Theme"></button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="canvas" aria-label="Canvas">
+      <div class="pageview" id="pageView">
+        <div class="scene" id="scene">
+          <svg class="iso" id="iso" viewBox="0 0 1200 260" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <defs>
+              <pattern id="isoGrid" patternUnits="userSpaceOnUse" width="41.569" height="24">
+                <path d="M0 0L41.569 24M41.569 0L0 24" stroke="var(--grid)" stroke-width=".8" fill="none"/>
+                <circle cx="0" cy="0" r="1.1" fill="var(--grid-dot)"/><circle cx="41.569" cy="0" r="1.1" fill="var(--grid-dot)"/>
+                <circle cx="0" cy="24" r="1.1" fill="var(--grid-dot)"/><circle cx="41.569" cy="24" r="1.1" fill="var(--grid-dot)"/>
+                <circle cx="20.785" cy="12" r="1.1" fill="var(--grid-dot)"/>
+              </pattern>
+              <radialGradient id="fadeG" cx="50%" cy="50%" r="55%"><stop offset="0" stop-color="#fff"/><stop offset=".7" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+              <mask id="fadeMask"><rect x="-200" y="-100" width="1600" height="460" fill="url(#fadeG)"/></mask>
+              <filter id="blurS" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7"/></filter>
+              <filter id="blurG" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.6"/></filter>
+            </defs>
+            <g class="layer-grid"><rect x="-200" y="-100" width="1600" height="460" fill="url(#isoGrid)" mask="url(#fadeMask)"/></g>
+            <g class="layer-links" id="isoLinks"></g>
+            <g class="layer-mods" id="isoMods"></g>
+          </svg>
+          <div class="scene-panel glass" id="scenePanel" aria-hidden="true">
+            <div class="row"><span class="eyebrow">Moss · agent</span><span class="dot"></span></div>
+            <p id="scenePanelText">Ready when you are.</p>
+          </div>
+        </div>
+
+        <div class="intro" id="intro">
+          <span class="eyebrow">Moss Builder</span>
+          <h1>Talk it through.<br><em>Watch it get built.</em></h1>
+          <p class="lede">Describe your business in a sentence. Moss lays out the page module by module, and you shape it in plain words.</p>
+          <form class="prompt-box glass" id="introForm">
+            <label for="introInput" class="sr-only">Describe your business</label>
+            <textarea id="introInput" rows="1" placeholder="Describe your business…"></textarea>
+            <button class="send-btn" type="submit" aria-label="Build"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          </form>
+          <div class="examples" id="examples"></div>
+        </div>
+
+        <div class="frame-wrap">
+          <div class="frame" id="frame">
+            <div class="frame-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url" id="frameUrl"></span><span class="count" id="frameCount"></span></div>
+            <div class="site" id="site" data-palette="ice">
+              <div class="s-top" id="siteTop"></div>
+              <div id="siteSections"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flowview hidden" id="flowView" aria-label="Flow canvas">
+        <div class="flow-grid" id="flowGrid"></div>
+        <div class="world" id="world">
+          <svg class="edges" id="edges">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z"/></marker>
+              <marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z"/></marker>
+            </defs>
+            <g id="edgeLayer"></g>
+          </svg>
+          <div id="nodeLayer"></div>
+        </div>
+        <div class="flow-hud"><span class="eyebrow">Flow</span><span class="hint">Drag to pan · scroll to zoom · drag cards to arrange</span></div>
+        <div class="flow-tools glass" id="flowTools">
+          <button id="zoomOut" aria-label="Zoom out"><svg class="i" viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+          <span class="z" id="zoomLabel">100%</span>
+          <button id="zoomIn" aria-label="Zoom in"><svg class="i" viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
+          <button id="zoomFit" aria-label="Fit to screen"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="chat" id="chat" aria-label="Chat with Moss">
+      <button class="sheet-handle" id="sheetHandle" aria-label="Expand or collapse chat" aria-expanded="true"></button>
+      <div class="chat-head">
+        <div class="who">
+          <span class="agent-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3l7.5 4.3v9.4L12 21l-7.5-4.3V7.3z M4.5 7.3L12 11.6l7.5-4.3M12 11.6V21"/></svg></span>
+          <div><div class="name">Moss</div></div>
+        </div>
+        <span class="status" id="status" role="status"><i></i><span>Ready</span></span>
+      </div>
+      <div class="messages" id="messages" aria-live="polite" aria-label="Conversation"></div>
+      <div class="suggest" id="suggest" aria-label="Suggestions"></div>
+      <div class="composer-wrap">
+        <div class="mention-menu glass" id="mentionMenu" role="listbox" aria-label="Mention a page or section" hidden></div>
+        <form class="composer" id="composer">
+          <label for="chatInput" class="sr-only">Message Moss</label>
+          <textarea id="chatInput" rows="1" placeholder="Ask for a change · @ to reference" aria-autocomplete="list" aria-controls="mentionMenu"></textarea>
+          <button class="send-btn" type="submit" aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+        </form>
+        <div class="chat-foot">
+          <span class="powered"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l7.5 4.3v9.4L12 21l-7.5-4.3V7.3z"/></svg>Powered by Moss</span>
+          <span>⏎ send · ⇧⏎ newline</span>
+        </div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   UTILITIES
+   ===================================================================== */
+const SPEED = (() => { const n = parseFloat(new URLSearchParams(location.search).get('speed')); return isFinite(n) && n >= 0 ? n : 1; })();
+document.documentElement.style.setProperty('--speed', String(SPEED || 0.001));
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const wait = (ms) => new Promise((r) => setTimeout(r, reducedMotion.matches ? Math.min(ms * SPEED, 40) : ms * SPEED));
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let _uid = 0;
+const uid = (p = 'x') => `${p}${Date.now().toString(36).slice(-4)}${(++_uid).toString(36)}`;
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const ICONS = {
+  layout: 'M4 5h16v14H4z M4 9.5h16', grid: 'M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z',
+  quote: 'M6 17c0-5 1.5-8 5-10 M6 17h4v-4H6 M14 17c0-5 1.5-8 5-10 M14 17h4v-4h-4', tag: 'M3.5 12V3.5H12l8.5 8.5-8.5 8.5z M8 8h.01',
+  help: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.5 M12 16.8h.01', arrow: 'M4 12h15 M13 6l6 6-6 6',
+  lines: 'M4 7h16 M4 12h10 M4 17h13', text: 'M5 6h14 M5 10h14 M5 14h14 M5 18h8', bars: 'M6 20V11 M12 20V5 M18 20v-6',
+  mail: 'M3.5 6h17v12h-17z M3.5 7l8.5 6 8.5-6', calendar: 'M4 6h16v14H4z M4 10.5h16 M8.5 3.5v4 M15.5 3.5v4',
+  leaf: 'M5 19C5 10 10 5 20 4c-1 10-6 15-15 15z M5 19l8-8', bed: 'M3 18V7 M3 14h18v4 M21 14v-2.5a3 3 0 0 0-3-3h-7V14 M7 11.5h.01',
+  wave: 'M3 10c3 0 3-2 6-2s3 2 6 2 3-2 6-2 M3 16c3 0 3-2 6-2s3 2 6 2 3-2 6-2', compass: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M15.5 8.5l-2 5-5 2 2-5z',
+  cup: 'M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z M16 10h1.5a2 2 0 0 1 0 4H16 M9 3.5v2.5 M12 3.5v2.5', box: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9',
+  chart: 'M4 20h16 M6.5 15.5l4-5 3 3 5-7', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z M9 12l2 2 4-4', bolt: 'M13 3L5 14h6l-1 7 8-11h-6z',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7.5V12l3 2', check: 'M5 12.5l4.5 4.5L19 7', page: 'M6 3h9l4 4v14H6z M15 3v4h4',
+  sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M12 2.5v2 M12 19.5v2 M4.5 4.5l1.4 1.4 M18.1 18.1l1.4 1.4 M2.5 12h2 M19.5 12h2 M4.5 19.5l1.4-1.4 M18.1 5.9l1.4-1.4',
+  moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
+  soundOn: 'M4 9.5h3.5L12 5.5v13l-4.5-4H4z M15.5 9a4 4 0 0 1 0 6 M18 6.5a7.5 7.5 0 0 1 0 11',
+  soundOff: 'M4 9.5h3.5L12 5.5v13l-4.5-4H4z M16 9.5l5 5 M21 9.5l-5 5', pin: 'M12 21s-6.5-5.5-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.5 12 21 12 21z M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  stack: 'M12 3l9 5-9 5-9-5z M3 13l9 5 9-5', link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1 M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
+};
+const icon = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] || ICONS.layout}"/></svg>`;
+
+const SECTION_META = {
+  hero: { label: 'Hero', icon: 'layout' }, features: { label: 'Features', icon: 'grid' }, testimonials: { label: 'Testimonials', icon: 'quote' },
+  pricing: { label: 'Pricing', icon: 'tag' }, faq: { label: 'FAQ', icon: 'help' }, cta: { label: 'CTA', icon: 'arrow' }, footer: { label: 'Footer', icon: 'lines' },
+  text: { label: 'Story', icon: 'text' }, stats: { label: 'Stats', icon: 'bars' }, contact: { label: 'Contact', icon: 'mail' }, booking: { label: 'Booking', icon: 'calendar' },
+};
+const CANON = ['hero', 'text', 'stats', 'features', 'testimonials', 'pricing', 'booking', 'contact', 'faq', 'cta', 'footer'];
+
+/* =====================================================================
+   THEME
+   ===================================================================== */
+const theme = (() => {
+  const KEY = 'moss-theme';
+  let stored = null;
+  try { stored = localStorage.getItem(KEY); } catch (e) {}
+  const mq = matchMedia('(prefers-color-scheme: dark)');
+  const btn = () => $('#themeBtn');
+  function apply(t) {
+    document.documentElement.dataset.theme = t;
+    const b = btn();
+    if (b) { b.innerHTML = icon(t === 'dark' ? 'sun' : 'moon'); b.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'); }
+  }
+  return {
+    init() { apply(stored || (mq.matches ? 'dark' : 'light')); mq.addEventListener('change', (e) => { if (!stored) apply(e.matches ? 'dark' : 'light'); }); btn().addEventListener('click', () => this.toggle()); },
+    current: () => document.documentElement.dataset.theme,
+    toggle() { const t = this.current() === 'dark' ? 'light' : 'dark'; stored = t; try { localStorage.setItem(KEY, t); } catch (e) {} apply(t); sound.play('click'); },
+  };
+})();
+
+/* =====================================================================
+   SOUND: Web Audio, synthesized, off until first interaction
+   ===================================================================== */
+const sound = (() => {
+  let ctx = null, master = null, enabled = true;
+  const MOTION_LINKED = new Set(['tick', 'rise', 'click']);
+  function unlock() {
+    if (ctx) return;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain(); master.gain.value = 0.055; master.connect(ctx.destination);
+    } catch (e) { ctx = null; }
+  }
+  function tone({ freq, to, type = 'sine', dur = 0.2, gain = 1, attack = 0.004, delay = 0 }) {
+    const t = ctx.currentTime + delay;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.05);
+  }
+  const SOUNDS = {
+    tick: () => { tone({ freq: 2400, type: 'triangle', dur: 0.09, gain: 0.5 }); tone({ freq: 3600, dur: 0.06, gain: 0.22, delay: 0.004 }); },
+    rise: () => tone({ freq: 420, to: 780, dur: 0.5, gain: 0.32, attack: 0.09 }),
+    click: () => tone({ freq: 1150, to: 720, type: 'triangle', dur: 0.05, gain: 0.4 }),
+    chime: () => [392, 587.3, 784].forEach((f, i) => tone({ freq: f, dur: 1.3, gain: 0.26, attack: 0.01, delay: i * 0.05 })),
+  };
+  return {
+    unlock,
+    play(name) {
+      if (!enabled || !ctx || !SOUNDS[name]) return;
+      if (reducedMotion.matches && MOTION_LINKED.has(name)) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      try { SOUNDS[name](); } catch (e) {}
+    },
+    setEnabled(v) { enabled = !!v; },
+    isEnabled: () => enabled,
+    isUnlocked: () => !!ctx,
+  };
+})();
+
+/* =====================================================================
+   PAGE MODEL: JSON state for pages / sections / links / flows + undo
+   ===================================================================== */
+const pageModel = (() => {
+  const fresh = () => ({ business: null, palette: 'ice', pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
+  let state = fresh();
+  const history = [];
+  return {
+    get: () => state,
+    page: (id) => state.pages.find((p) => p.id === id),
+    current: () => state.pages.find((p) => p.id === state.currentPage),
+    snapshot() { history.push(JSON.stringify(state)); if (history.length > 60) history.shift(); },
+    canUndo: () => history.length > 0,
+    undo() { if (!history.length) return false; const keepPos = state.pagePos; state = JSON.parse(history.pop()); state.pagePos = Object.assign({}, state.pagePos, keepPos); return true; },
+    section(pageId, secId) { const p = this.page(pageId); return p && p.sections.find((s) => s.id === secId); },
+    findByType(pageId, type) { const p = this.page(pageId); return p && p.sections.find((s) => s.type === type); },
+  };
+})();
+
+/* =====================================================================
+   AGENT: intent matching + scripted copy. Swap respond() for a real Moss agent.
+   respond(message, state) -> Promise<{ reply, ops[], after?, suggestions? }>
+   ===================================================================== */
+const agent = (() => {
+  const SECTION_ALIASES = {
+    hero: ['hero', 'header', 'headline', 'banner'], features: ['features', 'feature', 'benefits', 'amenities', 'highlights'],
+    testimonials: ['testimonials', 'testimonial', 'reviews', 'quotes', 'social proof'], pricing: ['pricing', 'prices', 'plans', 'rates'],
+    faq: ['faq', 'faqs', 'questions', 'q&a'], cta: ['cta', 'call to action', 'call-to-action'], footer: ['footer'],
+    text: ['story', 'about text'], stats: ['stats', 'numbers'], contact: ['contact form'], booking: ['booking form', 'booking widget'],
+  };
+  const PAGE_TYPES = ['about', 'pricing', 'contact', 'booking'];
+
+  const KINDS = [
+    { kind: 'pousada', re: /pousada|hotel|\binn\b|guest ?house|b&b|bed and breakfast|hostel|resort|villa|lodge|retreat|rooms\b/ },
+    { kind: 'coffee', re: /coffee|caf[eé]|roaster|bakery|espresso|\btea\b/ },
+    { kind: 'saas', re: /\bapp\b|software|saas|platform|\btool\b|startup|\bapi\b|dashboard|\bai\b|bookkeeping/ },
+  ];
+  const detectKind = (low) => (KINDS.find((k) => k.re.test(low)) || { kind: 'generic' }).kind;
+  function extractName(text) {
+    const q = text.match(/["“]([^"”]{2,40})["”]/); if (q) return q[1].trim();
+    const c = text.match(/\b(?:called|named)\s+([A-Z][\w'’&-]*(?:\s+[A-Z][\w'’&-]*){0,3})/); if (c) return c[1].trim();
+    return null;
+  }
+  function extractPlace(text) {
+    const m = text.match(/\b(?:in|near|on)\s+(?:the\s+)?([A-Z][\wÀ-ÿ'-]+(?:\s+[A-Z][\wÀ-ÿ'-]+)?)/); return m ? m[1] : null;
+  }
+
+  /* ---- copy library ---- */
+  function copyFor(kind, name, place) {
+    const P = {
+      pousada: () => {
+        const n = name || 'Pousada Maré', pl = place || 'Trancoso';
+        return {
+          name: n, kindLabel: 'boutique pousada', flow: 'booking', primary: 'Check availability',
+          announce: { tag: 'New', text: 'Garden suites open for the dry season' },
+          hero: { eyebrow: `Boutique pousada · ${pl}`, headline: 'Nine rooms, a garden, and the slow tide of ' + pl + '.', punchy: ['Slow down. You’re here.', 'Salt air. Nine rooms. No rush.', 'Sea, shade, silence.'],
+            sub: `A nine-room guesthouse a short walk from the beach, with a breakfast garden, hammocks in the shade and hosts who remember how you take your coffee.`, subShort: 'Nine rooms, a breakfast garden, five minutes to the sand.',
+            primary: 'Check availability', secondary: 'See the rooms',
+            card: { title: 'Your stay', tag: '3 nights', rows: [['Check-in', 'Fri 14 Mar'], ['Check-out', 'Mon 17 Mar'], ['Guests', '2 adults']], cta: 'Check availability', note: 'From R$ 640 / night · breakfast included' },
+            logos: 'As featured in' },
+          features: { eyebrow: 'The stay', title: 'Everything slow, nothing missing.', lede: 'Small enough to know every guest. Considered enough that you never have to ask twice.',
+            items: [['leaf', 'Garden breakfast', 'Tropical fruit, warm tapioca and coffee from the hills, served until eleven.'], ['bed', 'Rooms that breathe', 'Linen, terracotta floors, cross-ventilation and a hammock on every veranda.'], ['wave', 'Five minutes to the sand', 'A shaded path to the beach. We pack the cooler and the umbrellas.'], ['compass', 'Hosts who know', 'Boat trips, quiet coves and where to eat tonight, arranged for you.']] },
+          testimonials: { eyebrow: 'Guests', title: 'Written in the guestbook.', items: [['We stayed four nights and left with the pace of the place still in us.', 'Clara M.', 'São Paulo'], ['The breakfast alone is worth the trip. The hammock is the reason to stay.', 'Tom & Inês', 'Lisbon'], ['Quiet, beautiful, and run by people who clearly love it.', 'Rafael A.', 'Rio de Janeiro']] },
+          pricing: { eyebrow: 'Rooms', title: 'Three ways to stay.', lede: 'Every rate includes breakfast, beach kit and late checkout when we can.', unit: '/ night', cta: 'Reserve',
+            plans: [['Garden Room', 'R$ 640', ['Queen bed, linen sheets', 'Veranda onto the garden', 'Breakfast included'], false], ['Sea Room', 'R$ 820', ['King bed', 'Partial sea view', 'Outdoor rain shower'], true], ['Casa Suite', 'R$ 1,180', ['Separate living room', 'Private plunge pool', 'Sleeps four'], false]] },
+          faq: { eyebrow: 'Good to know', title: 'Before you pack.', items: [['Is breakfast included?', 'Always. It’s served in the garden from 7:30 to 11:00, with vegan and gluten-free options.'], ['How far is the beach?', 'Five minutes on foot along a shaded path. Chairs, umbrellas and towels are on us.'], ['Do you welcome children?', 'Yes. The Casa Suite sleeps four, and we can add a cot to any room.'], ['What is the cancellation policy?', 'Free cancellation up to 14 days before arrival. After that, the first night is non-refundable.']] },
+          cta: { eyebrow: 'Book direct', title: 'Your hammock is waiting.', titles: ['Your hammock is waiting.', 'Come for three nights. Stay for seven.', 'The tide is in. So are we.'], sub: 'Book direct for our best rate and a welcome caipirinha on arrival.', button: 'Check availability' },
+          footer: { blurb: `A nine-room pousada in ${pl}. Slow mornings, salt air.`, cols: [['Stay', ['Rooms', 'Breakfast', 'Experiences']], ['Visit', ['Getting here', 'Contact', 'Journal']], ['Follow', ['Instagram', 'Newsletter']]], base: `© 2026 ${n} · ${pl}, Bahia` },
+          about: { eyebrow: 'About', headline: 'A small place, run by people who live here.', sub: `We opened ${n} in 2016 to share the ${pl} we love: unhurried, generous and close to the water.`,
+            story: ['It started with a crumbling fisherman’s house and a garden nobody had tended in years. We rebuilt it with local hands, local wood and an obstinate refusal to rush.', 'Today there are nine rooms, a kitchen that feeds the whole village on Sundays, and a team of twelve who make every stay feel like a return.'],
+            stats: [['9', 'Rooms'], ['2016', 'Since'], ['4.9', 'Guest rating']] },
+          contact: { eyebrow: 'Contact', headline: 'Say hello.', sub: 'We answer every message ourselves, usually within a few hours.', details: [['Address', `Rua do Mangue 41, ${pl}, Bahia`], ['WhatsApp', '+55 73 9 8801 2210'], ['Email', 'ola@pousadamare.com']] },
+          booking: { eyebrow: 'Book', headline: 'Choose your dates.', sub: 'Best rate guaranteed when you book direct.', rooms: [['Garden Room', 'R$ 640'], ['Sea Room', 'R$ 820'], ['Casa Suite', 'R$ 1,180']] },
+        };
+      },
+      coffee: () => {
+        const n = name || 'Lume Coffee', pl = place || 'Lisbon';
+        return {
+          name: n, kindLabel: 'specialty coffee roaster', flow: 'checkout', primary: 'Start a subscription',
+          announce: { tag: 'New', text: 'Huila, Colombia lands this Tuesday' },
+          hero: { eyebrow: `Specialty roaster · ${pl}`, headline: 'Roasted on Tuesday. At your door by Friday.', punchy: ['Fresh. Every week.', 'Better mornings, by post.', 'Roasted Tuesday. Yours Friday.'],
+            sub: `Small-batch single origins roasted in our ${pl} roastery and shipped within 48 hours. Pause, swap or skip whenever you like.`, subShort: 'Single origins, roasted weekly, shipped in 48 hours.',
+            primary: 'Start a subscription', secondary: 'Browse roasts',
+            card: { title: 'This week’s roast', tag: 'Lot 214', rows: [['Origin', 'Huila, Colombia'], ['Notes', 'Panela · plum · cacao'], ['Roast', 'Light-medium']], cta: 'Add to subscription', note: 'From €14 / bag · free shipping' }, logos: 'Poured at' },
+          features: { eyebrow: `Why ${n.split(' ')[0]}`, title: 'Freshness you can taste.', lede: 'We roast less, more often, so every bag arrives at its peak.',
+            items: [['cup', 'Roasted to order', 'Nothing sits on a shelf. Your coffee is roasted the week it ships.'], ['box', 'Plastic-free shipping', 'Compostable bags in a letterbox-sized box.'], ['leaf', 'Paid above fair trade', 'We buy direct and publish every price we pay.'], ['clock', 'Skip or pause anytime', 'Change your roast, size or timing in two taps.']] },
+          testimonials: { eyebrow: 'Subscribers', title: 'Mornings, improved.', items: [['I didn’t know coffee could taste like plums. Now I can’t go back.', 'Joana P.', 'Porto'], ['Arrives like clockwork. The tasting cards are a lovely touch.', 'Mark D.', 'London'], ['Our office switched and nobody misses the pods.', 'Ana R.', 'Lisbon']] },
+          pricing: { eyebrow: 'Subscriptions', title: 'Pick your pace.', lede: 'Free shipping on every plan. Cancel in one click.', unit: '/ month', cta: 'Subscribe',
+            plans: [['Explorer', '€14', ['1 bag every two weeks', 'Rotating origins', 'Free shipping'], false], ['Daily Ritual', '€26', ['2 bags a month', 'Choose your roast', 'Tasting notes card'], true], ['Office', '€68', ['6 bags a month', 'Grinder setup', 'Priority roast'], false]] },
+          faq: { eyebrow: 'FAQ', title: 'Questions, answered.', items: [['Whole bean or ground?', 'Either. Tell us your brew method and we grind for it.'], ['Can I pause?', 'Pause, skip or cancel any time from your account.'], ['Where do you ship?', 'Across the EU and UK, usually in two to four days.'], ['Is it sustainable?', 'Direct trade, compostable bags and carbon-neutral shipping.']] },
+          cta: { eyebrow: 'Ready?', title: 'Your next bag is roasting.', titles: ['Your next bag is roasting.', 'Better coffee starts Friday.', 'Skip the shelf. Get the roast.'], sub: 'First bag half price for new subscribers.', button: 'Start a subscription' },
+          footer: { blurb: `Small-batch roasters in ${pl}.`, cols: [['Shop', ['Subscriptions', 'Single origins', 'Gear']], ['Company', ['About', 'Wholesale', 'Contact']], ['Follow', ['Instagram', 'Newsletter']]], base: `© 2026 ${n} · ${pl}` },
+          about: { eyebrow: 'About', headline: 'Two roasters, one very small machine.', sub: `We started ${n} in a ${pl} garage with a 5kg roaster and a stubborn idea about freshness.`,
+            story: ['We still roast every batch by hand, and we still taste every one before it ships.', 'Our farmers are partners, not suppliers. We visit, we pay more, and we tell you exactly how much.'], stats: [['38', 'Farms'], ['2019', 'Since'], ['48h', 'Roast to door']] },
+          contact: { eyebrow: 'Contact', headline: 'Talk coffee with us.', sub: 'Wholesale, subscriptions or brewing help.', details: [['Roastery', `Rua das Flores 12, ${pl}`], ['Phone', '+351 21 000 1234'], ['Email', 'hello@lumecoffee.co']] },
+          booking: { eyebrow: 'Visit', headline: 'Book a cupping.', sub: 'Saturday mornings at the roastery, six seats.', rooms: [['Intro cupping', '€18'], ['Espresso class', '€45'], ['Private tasting', '€120']] },
+        };
+      },
+      saas: () => {
+        const n = name || 'Ledgerly';
+        return {
+          name: n, kindLabel: 'bookkeeping app', flow: 'signup', primary: 'Start free trial',
+          announce: { tag: 'New', text: 'Quarterly tax drafts are live' },
+          hero: { eyebrow: 'Bookkeeping for freelancers', headline: 'Bookkeeping that quietly does itself.', punchy: ['Books done. Back to work.', 'Zero-effort books.', 'Your books, closed.'],
+            sub: `${n} connects to your bank, categorises every transaction and drafts your quarterly taxes, so you can stay in the work you’re paid for.`, subShort: 'Connect your bank. We handle the rest.',
+            primary: 'Start free trial', secondary: 'Book a demo',
+            card: { title: 'This quarter', tag: 'Synced', rows: [['Income', '€38,420'], ['Expenses', '€6,112'], ['Tax set aside', '€9,640']], cta: 'Review & file', note: 'Synced 2 minutes ago' }, logos: 'Trusted by teams at' },
+          features: { eyebrow: 'What it does', title: 'Less admin, fewer surprises.', lede: 'Everything a freelancer needs from an accountant, minus the shoebox.',
+            items: [['bolt', 'Auto-categorise', 'Every transaction sorted the moment it clears.'], ['chart', 'Live cash view', 'Know what’s yours and what’s the taxman’s.'], ['shield', 'Bank-grade security', 'Read-only access, encrypted end to end.'], ['clock', 'Quarterly drafts', 'Tax returns drafted before the deadline.']] },
+          testimonials: { eyebrow: 'Customers', title: 'Fewer spreadsheets, more weekends.', items: [['I closed my year in twenty minutes. Twenty.', 'Priya S.', 'Brand designer'], ['Finally, books I don’t dread opening.', 'Leo M.', 'Developer'], ['My accountant asked what changed.', 'Sara K.', 'Illustrator']] },
+          pricing: { eyebrow: 'Pricing', title: 'Simple, monthly.', lede: 'Fourteen days free. No card needed.', unit: '/ month', cta: 'Start trial',
+            plans: [['Solo', '€9', ['1 bank account', 'Auto-categorise', 'CSV export'], false], ['Studio', '€19', ['Unlimited accounts', 'Tax drafts', 'Invoice matching'], true], ['Team', '€49', ['5 seats', 'Accountant access', 'Priority support'], false]] },
+          faq: { eyebrow: 'FAQ', title: 'The fine print.', items: [['Which banks do you support?', 'Over 2,400 banks across Europe via open banking.'], ['Is my data safe?', 'Read-only access, SOC 2 controls and EU hosting.'], ['Can my accountant log in?', 'Yes, on Studio and Team plans.'], ['Can I cancel anytime?', 'Yes. Export everything and leave in one click.']] },
+          cta: { eyebrow: 'Get started', title: 'Close your books before lunch.', titles: ['Close your books before lunch.', 'Your weekends called.', 'Less admin starts today.'], sub: 'Fourteen days free. No card required.', button: 'Start free trial' },
+          footer: { blurb: 'Bookkeeping for people who’d rather be working.', cols: [['Product', ['Features', 'Pricing', 'Security']], ['Company', ['About', 'Careers', 'Contact']], ['Resources', ['Guides', 'Changelog']]], base: `© 2026 ${n}` },
+          about: { eyebrow: 'About', headline: 'Built by freelancers who hated tax season.', sub: `${n} started as a script to sort our own receipts.`, story: ['We were designers and developers, not accountants. Every quarter cost us a week.', 'So we built the tool we wanted, then shared it. Twelve thousand freelancers later, it still does one thing well.'], stats: [['12k', 'Freelancers'], ['2,400', 'Banks'], ['20 min', 'Avg. year-end']] },
+          contact: { eyebrow: 'Contact', headline: 'Talk to a human.', sub: 'Support replies within four business hours.', details: [['Support', 'help@ledgerly.app'], ['Sales', 'sales@ledgerly.app'], ['Office', 'Amsterdam, NL']] },
+          booking: { eyebrow: 'Demo', headline: 'Book a demo.', sub: 'Twenty minutes, your real numbers.', rooms: [['Quick tour', '15 min'], ['Full walkthrough', '30 min'], ['Team onboarding', '45 min']] },
+        };
+      },
+      generic: () => {
+        const n = name || (place ? `Studio ${place}` : 'Atelier North');
+        return {
+          name: n, kindLabel: 'business', flow: 'contact', primary: 'Get in touch',
+          announce: { tag: 'New', text: 'Now taking projects for spring' },
+          hero: { eyebrow: place ? `Independent studio · ${place}` : 'Independent studio', headline: 'Careful work, done properly.', punchy: ['Done properly.', 'Made with care.', 'Less, but better.'],
+            sub: `${n} is a small team doing one thing well: thoughtful work, delivered on time, with nothing lost in translation.`, subShort: 'Thoughtful work, on time.', primary: 'Get in touch', secondary: 'See our work',
+            card: { title: 'Next availability', tag: 'Open', rows: [['Start', 'April'], ['Team', '3 people'], ['Response', 'Same day']], cta: 'Get in touch', note: 'Free 20-minute intro call' }, logos: 'Trusted by' },
+          features: { eyebrow: 'What we do', title: 'Fewer things, done better.', lede: 'A short list, held to a high standard.', items: [['compass', 'Clear scope', 'We agree what done looks like before we start.'], ['clock', 'On time', 'Weekly check-ins and a date we keep.'], ['shield', 'Quality first', 'Reviewed twice, shipped once.'], ['leaf', 'Built to last', 'Work that ages well.']] },
+          testimonials: { eyebrow: 'Clients', title: 'Kind words.', items: [['Calm, clear and genuinely excellent to work with.', 'Marta L.', 'Founder'], ['They did exactly what they said they would.', 'James O.', 'Director'], ['We came back three times. That says it.', 'Nadia F.', 'Owner']] },
+          pricing: { eyebrow: 'Pricing', title: 'Straightforward rates.', lede: 'Fixed prices, agreed upfront.', unit: '/ project', cta: 'Enquire', plans: [['Starter', '€900', ['Single deliverable', 'One revision round', 'Two weeks'], false], ['Studio', '€2,400', ['Full project', 'Three revision rounds', 'Four weeks'], true], ['Partner', '€4,800', ['Ongoing support', 'Priority scheduling', 'Quarterly review'], false]] },
+          faq: { eyebrow: 'FAQ', title: 'Common questions.', items: [['How do we start?', 'A free 20-minute call to understand what you need.'], ['How long does it take?', 'Most projects take two to six weeks.'], ['Do you work remotely?', 'Yes, with clients everywhere.'], ['How do payments work?', 'Half upfront, half on delivery.']] },
+          cta: { eyebrow: 'Next step', title: 'Let’s make something good.', titles: ['Let’s make something good.', 'Start with a conversation.', 'Your project, done properly.'], sub: 'Tell us what you’re working on.', button: 'Get in touch' },
+          footer: { blurb: 'Careful work, done properly.', cols: [['Studio', ['Work', 'About', 'Journal']], ['Contact', ['Email', 'Visit']], ['Follow', ['Instagram', 'Newsletter']]], base: `© 2026 ${n}` },
+          about: { eyebrow: 'About', headline: 'Small on purpose.', sub: `${n} is three people who like doing things properly.`, story: ['We keep the team small so the people you meet are the people who do the work.', 'Every project gets our full attention, which is why we take on only a few at a time.'], stats: [['3', 'People'], ['2018', 'Since'], ['140', 'Projects']] },
+          contact: { eyebrow: 'Contact', headline: 'Say hello.', sub: 'We reply the same day.', details: [['Email', 'hello@studio.example'], ['Phone', '+00 000 000 000'], ['Hours', 'Mon–Fri, 9–6']] },
+          booking: { eyebrow: 'Book', headline: 'Book an intro call.', sub: 'Twenty minutes, no pressure.', rooms: [['Intro call', '20 min'], ['Workshop', '2 hours'], ['Site visit', 'Half day']] },
+        };
+      },
+    };
+    return (P[kind] || P.generic)();
+  }
+
+  /* ---- section factories ---- */
+  function makeSection(type, c, opts = {}) {
+    const id = uid(type.slice(0, 3));
+    switch (type) {
+      case 'hero': return { id, type, data: { variant: opts.variant || 'split', eyebrow: opts.eyebrow || c.hero.eyebrow, headline: opts.headline || c.hero.headline, punchy: c.hero.punchy, punchIx: 0, sub: opts.sub || c.hero.sub, subShort: c.hero.subShort, primary: opts.primary || c.hero.primary, secondary: c.hero.secondary, card: c.hero.card, logos: opts.variant === 'centered' ? null : c.hero.logos } };
+      case 'features': return { id, type, data: clone(c.features) };
+      case 'testimonials': return { id, type, data: clone(c.testimonials) };
+      case 'pricing': return { id, type, data: clone(c.pricing) };
+      case 'faq': return { id, type, data: clone(c.faq) };
+      case 'cta': return { id, type, data: Object.assign(clone(c.cta), { titleIx: 0, href: '#/home' }) };
+      case 'footer': return { id, type, data: Object.assign(clone(c.footer), { name: c.name }) };
+      case 'text': return { id, type, data: { eyebrow: 'Our story', title: c.about.headline, body: c.about.story } };
+      case 'stats': return { id, type, data: { items: c.about.stats } };
+      case 'contact': return { id, type, data: clone(c.contact) };
+      case 'booking': return { id, type, data: clone(c.booking) };
+    }
+    return null;
+  }
+  const PAGE_RECIPES = {
+    about: (c) => [makeSection('hero', c, { variant: 'centered', eyebrow: c.about.eyebrow, headline: c.about.headline, sub: c.about.sub, primary: c.primary }), makeSection('text', c), makeSection('stats', c), makeSection('cta', c), makeSection('footer', c)],
+    pricing: (c) => [makeSection('hero', c, { variant: 'centered', eyebrow: c.pricing.eyebrow, headline: c.pricing.title, sub: c.pricing.lede, primary: c.primary }), makeSection('pricing', c), makeSection('faq', c), makeSection('cta', c), makeSection('footer', c)],
+    contact: (c) => [makeSection('hero', c, { variant: 'centered', eyebrow: c.contact.eyebrow, headline: c.contact.headline, sub: c.contact.sub, primary: c.primary }), makeSection('contact', c), makeSection('footer', c)],
+    booking: (c) => [makeSection('hero', c, { variant: 'centered', eyebrow: c.booking.eyebrow, headline: c.booking.headline, sub: c.booking.sub, primary: c.primary }), makeSection('booking', c), makeSection('faq', c), makeSection('footer', c)],
+  };
+
+  /* ---- flows ---- */
+  const FLOW_LABELS = {
+    booking: ['Guest lands on Home', 'Browse rooms', 'Dates free?', 'Choose room', 'Guest details', 'Pay deposit', 'Confirmation sent', 'Suggest nearby dates'],
+    signup: ['Visitor on Home', 'Start free trial', 'New user?', 'Connect bank', 'Import 90 days', 'First report', 'Activated', 'Sign in instead'],
+    checkout: ['Lands on Home', 'Pick a roast', 'Subscribe?', 'Choose frequency', 'Shipping details', 'Pay', 'First bag ships', 'One-time bag'],
+    contact: ['Visitor on Contact', 'Fill in the form', 'Valid?', 'Send to inbox', 'Auto-reply', 'Follow up in 24h', 'Lead closed', 'Show inline errors'],
+  };
+  function makeFlow(name, labels) {
+    const L = [[0, 48, 'start'], [220, 44, 'step'], [440, 18, 'decision'], [620, 44, 'step'], [840, 44, 'step'], [840, 180, 'step'], [620, 184, 'end'], [220, 190, 'step']];
+    const nodes = L.map(([x, y, kind], i) => ({ id: `n${i}`, label: labels[i], kind, x, y }));
+    const edges = [['n0', 'n1'], ['n1', 'n2'], ['n2', 'n3', 'yes'], ['n3', 'n4'], ['n4', 'n5'], ['n5', 'n6'], ['n2', 'n7', 'no'], ['n7', 'n1']].map(([from, to, label]) => ({ from, to, label }));
+    return { id: uid('flow'), name, nodes, edges };
+  }
+
+  /* ---- parsing helpers ---- */
+  function findSections(low) {
+    const hits = [];
+    for (const [type, aliases] of Object.entries(SECTION_ALIASES)) {
+      let best = -1;
+      for (const a of aliases) { const m = new RegExp(`(^|[^a-z@])${a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z])`).exec(low); if (m && (best < 0 || m.index < best)) best = m.index; }
+      if (best >= 0) hits.push({ type, index: best });
+    }
+    return hits.sort((a, b) => a.index - b.index).map((h) => h.type);
+  }
+  function parseMentions(text, state) {
+    const pages = [], sections = [];
+    for (const m of text.matchAll(/@([A-Za-z][A-Za-z0-9-]*)/g)) {
+      const tok = m[1].toLowerCase();
+      const page = state.pages.find((p) => p.id === tok || p.name.toLowerCase() === tok);
+      if (page) { pages.push({ id: page.id, index: m.index }); continue; }
+      const type = Object.keys(SECTION_ALIASES).find((t) => t === tok || SECTION_ALIASES[t].includes(tok));
+      if (type) { const cur = state.pages.find((p) => p.id === state.currentPage); const s = cur && cur.sections.find((x) => x.type === type); if (s) sections.push({ page: cur.id, id: s.id, type }); }
+    }
+    return { pages, sections };
+  }
+  function insertIndex(page, type) {
+    const rank = CANON.indexOf(type);
+    const i = page.sections.findIndex((s) => CANON.indexOf(s.type) > rank);
+    return i < 0 ? page.sections.length : i;
+  }
+  const pageName = (state, id) => (state.pages.find((p) => p.id === id) || { name: cap(id) }).name;
+  const label = (t) => (SECTION_META[t] || { label: t }).label;
+  const list = (arr) => arr.length <= 1 ? arr.join('') : arr.slice(0, -1).join(', ') + ' and ' + arr[arr.length - 1];
+
+  /* ---- intents ---- */
+  function build(text, state) {
+    const low = text.toLowerCase();
+    const kind = detectKind(low);
+    const c = copyFor(kind, extractName(text), extractPlace(text));
+    const business = { kind, name: c.name, place: extractPlace(text), prompt: text, copy: c };
+    const types = ['hero', 'features', 'testimonials', 'pricing', 'faq', 'cta', 'footer'];
+    const ops = [{ op: 'setBusiness', business }, { op: 'addPage', page: { id: 'home', name: 'Home', sections: [] }, navigate: true, quiet: true }];
+    types.forEach((t) => ops.push({ op: 'addSection', page: 'home', section: makeSection(t, c) }));
+    return {
+      reply: `${c.name}, a ${c.kindLabel}${business.place ? ' in ' + business.place : ''}. I’ll lay out the landing page as seven modules: hero, features, testimonials, pricing, FAQ, a closing CTA and the footer.`,
+      ops,
+      after: `Seven sections are live on @Home. Shape it in plain words, or reference pages with @.`,
+      suggestions: ['Make the headline punchier', 'Warmer colors', 'Add an About page and a Booking page', `Map the ${c.flow} flow`],
+    };
+  }
+
+  async function respond(message, state) {
+    await wait(260);
+    const text = message.trim();
+    const low = text.toLowerCase();
+    const refs = parseMentions(text, state);
+    const cur = state.pages.find((p) => p.id === state.currentPage);
+    const c = state.business && state.business.copy;
+    const secs = findSections(low.replace(/@[a-z0-9-]+/g, ' '));
+    const secsAll = findSections(low);
+
+    if (!text) return { reply: 'Tell me about your business and I’ll start building.', ops: [] };
+    if (/^\s*(undo|revert)\b|\bundo\b|take that back|go back a step/.test(low)) {
+      return pageModel.canUndo() ? { reply: 'Rolled back the last change.', ops: [{ op: 'undo' }] } : { reply: 'Nothing to undo yet.', ops: [] };
+    }
+    if (!state.pages.length || /\b(start over|new site|rebuild everything)\b/.test(low)) return build(text, state);
+
+    if (/(map|draw|chart|diagram|sketch|plot|lay out)\b.*\b(flow|journey|funnel|process)\b|flow ?chart/.test(low)) {
+      const key = /book|reserv/.test(low) ? 'booking' : /sign ?up|onboard|trial|register/.test(low) ? 'signup' : /checkout|purchase|subscri|order|buy/.test(low) ? 'checkout' : /contact|lead|enquir|inquir/.test(low) ? 'contact' : (c ? c.flow : 'contact');
+      const flow = makeFlow(`${cap(key)} flow`, FLOW_LABELS[key]);
+      return { reply: `Mapping the ${key} flow on the canvas: eight steps, one decision, and the loop back when the answer is no.`, ops: [{ op: 'setView', view: 'flow' }, { op: 'addFlow', flow }], after: 'Drag any node and the connectors follow. Say “back to page view” when you’re done.', suggestions: ['Back to page view', 'Undo'] };
+    }
+    if (/\b(flow view|show (me )?(the )?flow|switch to flow|open (the )?flow)\b/.test(low)) return { reply: 'Switching to Flow view.', ops: [{ op: 'setView', view: 'flow' }] };
+    if (/\b(page view|back to (the )?page|show (me )?(the )?page)\b/.test(low)) return { reply: 'Back to the page.', ops: [{ op: 'setView', view: 'page' }] };
+
+    const namedPages = PAGE_TYPES.filter((p) => new RegExp(`\\b${p}\\b`).test(low.replace(/@[a-z]+/g, ' ')));
+    if (/\bpages?\b/.test(low) && /\b(add|create|make|new|build|need|want|set up|spin up|give)\b/.test(low) && namedPages.length) {
+      const fresh = namedPages.filter((p) => !state.pages.find((x) => x.id === p));
+      if (!fresh.length) return { reply: `${list(namedPages.map(cap))} already exist${namedPages.length > 1 ? '' : 's'}. Reference ${namedPages.length > 1 ? 'them' : 'it'} with @.`, ops: [] };
+      const ops = [];
+      fresh.forEach((p) => { ops.push({ op: 'addPage', page: { id: p, name: cap(p), sections: [] }, navigate: true }); PAGE_RECIPES[p](c).forEach((s) => ops.push({ op: 'addSection', page: p, section: s })); });
+      return { reply: `Adding ${list(fresh.map((p) => '@' + cap(p)))}. Each gets its own route and a starting set of sections.`, ops, after: `${fresh.length > 1 ? 'Both pages are' : 'The page is'} in the top bar and on the Flow canvas.`, suggestions: [`@${cap(fresh[0])} link this to the CTA on @Home`, `Match @${cap(fresh[0])}'s hero style`, 'Show me the flow'] };
+    }
+
+    if (/\b(link|point|connect|wire|route)\b/.test(low) && refs.pages.length) {
+      const onM = text.match(/\bon\s+@([A-Za-z][\w-]*)/i);
+      const host = onM ? (state.pages.find((p) => p.name.toLowerCase() === onM[1].toLowerCase()) || {}).id : state.currentPage;
+      const target = (refs.pages.find((p) => p.id !== host) || {}).id;
+      if (!host || !target) return { reply: 'Which page should it point to? Try “@Pricing link this to the CTA on @Home”.', ops: [] };
+      const type = secs.find((t) => ['cta', 'hero'].includes(t)) || 'cta';
+      const sec = pageModel.findByType(host, type);
+      if (!sec) return { reply: `${pageName(state, host)} doesn’t have a ${label(type)} yet. Want me to add one?`, ops: [], suggestions: [`Add a CTA`] };
+      const patch = type === 'cta' ? { href: '#/' + target, button: `See ${pageName(state, target).toLowerCase()}` } : { primaryHref: '#/' + target };
+      return { reply: `Linked the ${label(type)} on @${pageName(state, host)} to @${pageName(state, target)}.`, ops: [{ op: 'updateSection', page: host, id: sec.id, patch, note: `link ${label(type).toLowerCase()} → /${target}` }, { op: 'addLink', from: host, section: sec.id, to: target }], suggestions: ['Show me the flow', 'Undo'] };
+    }
+
+    if (/\bmatch\b|same (style|look)|copy .*style/.test(low) && refs.pages.length) {
+      const src = refs.pages[0].id;
+      const onM = text.match(/\bon\s+@([A-Za-z][\w-]*)/i);
+      let tgt = onM ? (state.pages.find((p) => p.name.toLowerCase() === onM[1].toLowerCase()) || {}).id : (state.currentPage !== src ? state.currentPage : 'home');
+      if (refs.pages[1] && !onM) tgt = refs.pages[1].id;
+      const type = secs[0] || 'hero';
+      const a = pageModel.findByType(src, type), b = pageModel.findByType(tgt, type);
+      if (!a || !b) return { reply: `I need a ${label(type)} on both pages to match styles.`, ops: [] };
+      const ops = [];
+      if (tgt !== state.currentPage) ops.push({ op: 'navigate', page: tgt });
+      ops.push({ op: 'updateSection', page: tgt, id: b.id, patch: { variant: a.data.variant, logos: a.data.variant === 'centered' ? null : b.data.logos || (c && c.hero.logos) }, note: `${label(type).toLowerCase()} style ← ${pageName(state, src)}` });
+      return { reply: `@${pageName(state, tgt)}’s ${label(type).toLowerCase()} now uses the ${a.data.variant} layout from @${pageName(state, src)}.`, ops, suggestions: ['Undo', 'Show me the flow'] };
+    }
+
+    if (/\b(go to|open|navigate|switch to|take me to)\b/.test(low) && refs.pages.length === 1 && !/\b(add|create)\b/.test(low)) {
+      return { reply: `Opening @${pageName(state, refs.pages[0].id)}.`, ops: [{ op: 'setView', view: 'page' }, { op: 'navigate', page: refs.pages[0].id }] };
+    }
+
+    if (/\b(delete|remove|drop|get rid of|lose|kill|cut)\b/.test(low)) {
+      if (/\bpage\b/.test(low) && (refs.pages.length || namedPages.length)) {
+        const id = refs.pages.length ? refs.pages[0].id : namedPages[0];
+        if (id === 'home') return { reply: 'Home is the root page, so it stays. I can clear its sections instead.', ops: [] };
+        if (!pageModel.page(id)) return { reply: `There’s no ${cap(id)} page.`, ops: [] };
+        return { reply: `Removed the ${pageName(state, id)} page.`, ops: [{ op: 'deletePage', page: id }], suggestions: ['Undo'] };
+      }
+      const targets = (refs.sections.length ? refs.sections.map((s) => s.type) : secsAll).map((t) => cur.sections.find((s) => s.type === t)).filter(Boolean);
+      if (!targets.length) return { reply: `I couldn’t find that section on @${cur.name}. It has ${list(cur.sections.map((s) => label(s.type)))}.`, ops: [] };
+      return { reply: `Removing the ${list(targets.map((s) => label(s.type)))}.`, ops: targets.map((s) => ({ op: 'deleteSection', page: cur.id, id: s.id })), suggestions: ['Undo', 'Add a FAQ'] };
+    }
+
+    if (/\b(move|reorder|swap|put|place|shift|bump)\b/.test(low) || (/\b(above|below|before|after)\b/.test(low) && secsAll.length >= 2 && !/\badd\b/.test(low))) {
+      const order = cur.sections.map((s) => s.id);
+      const byType = (t) => cur.sections.find((s) => s.type === t);
+      const s = secsAll.map(byType).filter(Boolean);
+      if (!s.length) return { reply: 'Which section should move? For example “move testimonials above features”.', ops: [] };
+      const a = s[0], b = s[1];
+      const without = order.filter((id) => id !== a.id);
+      let next = null, how = '';
+      if (/\bswap\b/.test(low) && b) { next = order.slice(); const i = next.indexOf(a.id), j = next.indexOf(b.id); [next[i], next[j]] = [next[j], next[i]]; how = `swapped with ${label(b.type)}`; }
+      else if (/\b(top|start|first)\b/.test(low)) { next = [a.id, ...without]; how = 'to the top'; }
+      else if (/\b(bottom|end|last)\b/.test(low)) { const f = byType('footer'); next = f && f.id !== a.id ? [...without.filter((x) => x !== f.id), a.id, f.id] : [...without, a.id]; how = 'to the end'; }
+      else if (b && /\b(above|before)\b/.test(low)) { next = without.slice(); next.splice(next.indexOf(b.id), 0, a.id); how = `above ${label(b.type)}`; }
+      else if (b && /\b(below|after|under|beneath)\b/.test(low)) { next = without.slice(); next.splice(next.indexOf(b.id) + 1, 0, a.id); how = `below ${label(b.type)}`; }
+      else if (/\bup\b/.test(low)) { next = order.slice(); const i = next.indexOf(a.id); if (i > 0) [next[i - 1], next[i]] = [next[i], next[i - 1]]; how = 'up one'; }
+      else if (/\bdown\b/.test(low)) { next = order.slice(); const i = next.indexOf(a.id); if (i < next.length - 1) [next[i + 1], next[i]] = [next[i], next[i + 1]]; how = 'down one'; }
+      if (!next) return { reply: `Where should ${label(a.type)} go? Try “above pricing” or “to the top”.`, ops: [] };
+      return { reply: `Moved ${label(a.type)} ${how}.`, ops: [{ op: 'setOrder', page: cur.id, order: next }], suggestions: ['Undo', 'Warmer colors'] };
+    }
+
+    const restyle = [
+      [/\b(warm|warmer|earthy|terracotta|sand|sunny|cozy|cosy)\b/, 'warm', 'Warmed it up: terracotta accents on a sand-toned base.'],
+      [/\b(green|greener|natural|sage|botanical|calm|calmer)\b/, 'sage', 'Shifted to sage: a quieter green accent on an off-white base.'],
+      [/\b(mono|monochrome|black and white|grayscale|greyscale|minimal|neutral)\b/, 'ink', 'Went monochrome: graphite accents, pure white base.'],
+      [/\b(cool|cooler|blue|teal|cyan|fresh|original)\b/, 'ice', 'Back to the cool palette: ice-teal accents on off-white.'],
+    ];
+    if (/\b(colou?rs?|palette|restyle|re-style|tone|vibe|feel)\b/.test(low) || restyle.some(([re]) => re.test(low))) {
+      const hit = restyle.find(([re]) => re.test(low));
+      if (!hit) return { reply: 'Which direction? I can go warmer, cooler, greener or monochrome.', ops: [], suggestions: ['Warmer colors', 'Cooler colors', 'Monochrome'] };
+      if (state.palette === hit[1]) return { reply: 'That palette is already applied.', ops: [] };
+      return { reply: hit[2], ops: [{ op: 'setPalette', palette: hit[1] }], suggestions: ['Cooler colors', 'Undo'] };
+    }
+
+    if (/\b(punch|punchier|stronger|snappier|sharper|rewrite|reword|tighten|shorter|headline|tagline|title|copy|wording)\b/.test(low)) {
+      const quoted = text.match(/["“]([^"”]{2,120})["”]/);
+      const ctaSec = cur.sections.find((s) => s.type === 'cta');
+      const hero = cur.sections.find((s) => s.type === 'hero');
+      if (secs.includes('cta') && ctaSec) {
+        const titles = (c && c.cta.titles) || [ctaSec.data.title];
+        const ix = ((ctaSec.data.titleIx || 0) + 1) % titles.length;
+        const title = quoted ? quoted[1] : titles[ix];
+        return { reply: `New CTA line: “${title}”`, ops: [{ op: 'updateSection', page: cur.id, id: ctaSec.id, patch: { title, titleIx: ix }, note: 'rewrote cta' }], suggestions: ['Undo', 'Make the headline punchier'] };
+      }
+      if (!hero) return { reply: `@${cur.name} has no hero to rewrite.`, ops: [] };
+      if (/\b(sub|subheadline|subtitle|shorter|tighten)\b/.test(low) && !/\bheadline\b/.test(low.replace(/subheadline/g, ''))) {
+        return { reply: 'Tightened the subheadline to one line.', ops: [{ op: 'updateSection', page: cur.id, id: hero.id, patch: { sub: hero.data.subShort || hero.data.sub }, note: 'tightened sub' }], suggestions: ['Undo'] };
+      }
+      const punchy = hero.data.punchy || [hero.data.headline];
+      const ix = hero.data.punchIx || 0;
+      const headline = quoted ? quoted[1] : punchy[ix % punchy.length];
+      return { reply: `Shorter and sharper: “${headline}”`, ops: [{ op: 'updateSection', page: cur.id, id: hero.id, patch: { headline, punchIx: ix + 1 }, note: 'rewrote headline' }], suggestions: ['Punchier still', 'Rewrite the CTA', 'Undo'] };
+    }
+
+    if (/\b(add|create|insert|include|need|want|give me|put in|bring back)\b/.test(low) && secs.length) {
+      const ops = [], added = [], exists = [];
+      const posM = low.match(/\b(after|below|before|above)\s+(?:the\s+)?([a-z& -]+)/);
+      secs.forEach((t) => {
+        if (cur.sections.find((s) => s.type === t) && t !== (posM && findSections(posM[2])[0])) { exists.push(t); return; }
+        if (posM && findSections(posM[2])[0] === t) return;
+        const sec = makeSection(t, c); if (!sec) return;
+        let index = null;
+        if (posM) { const anchor = cur.sections.find((s) => s.type === findSections(posM[2])[0]); if (anchor) { const i = cur.sections.indexOf(anchor); index = /after|below/.test(posM[1]) ? i + 1 : i; } }
+        ops.push({ op: 'addSection', page: cur.id, section: sec, index });
+        added.push(t);
+      });
+      if (!added.length) return { reply: `@${cur.name} already has ${list(exists.map(label))}.`, ops: [{ op: 'highlight', ids: exists.map((t) => (cur.sections.find((s) => s.type === t) || {}).id) }] };
+      return { reply: `Adding ${list(added.map(label))} to @${cur.name}.`, ops, suggestions: ['Undo', 'Move it to the top'] };
+    }
+
+    if (/\b(continue|finish|build the rest|keep going|complete)\b/.test(low)) {
+      const missing = ['hero', 'features', 'testimonials', 'pricing', 'faq', 'cta', 'footer'].filter((t) => !cur.sections.find((s) => s.type === t));
+      if (!missing.length) return { reply: `@${cur.name} is complete.`, ops: [] };
+      return { reply: `Adding the rest: ${list(missing.map(label))}.`, ops: missing.map((t) => ({ op: 'addSection', page: cur.id, section: makeSection(t, c) })) };
+    }
+
+    return {
+      reply: 'I can add, rewrite, reorder, restyle or remove sections, create pages, link them with @mentions, and map flows. For example: “move testimonials above features”, “add a Contact page”, or “map the booking flow”.',
+      ops: [], suggestions: ['Make the headline punchier', 'Warmer colors', 'Add a Contact page', 'Map the booking flow'],
+    };
+  }
+  return { respond, parseMentions, findSections };
+})();
+
+/* =====================================================================
+   RENDERER: the built site (keyed sections, FLIP reorder)
+   ===================================================================== */
+const renderer = (() => {
+  const siteEl = () => $('#site');
+  const LOGO_SHAPES = [
+    '<i style="width:16px;height:16px;border-radius:50%"></i><b style="width:58px"></b>',
+    '<i style="width:0;height:0;background:none;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:16px solid var(--s-ink)"></i><b style="width:46px"></b>',
+    '<i style="width:15px;height:15px;border-radius:4px"></i><b style="width:64px"></b><b style="width:18px"></b>',
+    '<i style="width:18px;height:9px;border-radius:9px 9px 0 0"></i><b style="width:52px"></b>',
+    '<i style="width:7px;height:16px;border-radius:2px;box-shadow:10px 0 0 var(--s-ink)"></i><b style="width:44px;margin-left:10px"></b>',
+  ];
+  const T = {
+    hero(d) {
+      const actions = `<div class="actions"><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(d.primary)}</a><a class="btn btn-secondary" href="#/home">${esc(d.secondary || 'Learn more')}</a></div>`;
+      const logos = d.logos ? `<div class="logo-row"><span class="lbl">${esc(d.logos)}</span><div class="logos">${LOGO_SHAPES.map((s) => `<span class="ph-logo" aria-hidden="true">${s}</span>`).join('')}</div></div>` : '';
+      if (d.variant === 'centered') return `<div class="wrap"><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}${logos}</div>`;
+      const cd = d.card;
+      const card = cd ? `<div class="hero-card glass"><div class="hc-head"><span class="hc-title">${esc(cd.title)}</span><span class="pill">${esc(cd.tag || '')}</span></div><dl>${cd.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><a class="btn btn-primary" href="#/booking">${esc(cd.cta)}</a><div class="note">${esc(cd.note)}</div></div>` : '';
+      return `<div class="wrap"><div class="hero-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}</div>${card}</div>${logos}</div>`;
+    },
+    features: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p>${esc(d.lede || '')}</p></div><div class="feat-grid">${d.items.map(([ic, t, p]) => `<article class="feat"><div class="ic">${icon(ic)}</div><h3>${esc(t)}</h3><p>${esc(p)}</p></article>`).join('')}</div></div>`,
+    testimonials: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p></p></div><div class="quote-grid">${d.items.map(([q, n, r]) => `<figure class="quote" style="margin:0"><blockquote>“${esc(q)}”</blockquote><figcaption><span class="av">${esc(n.split(/\s|&/).filter(Boolean).map((w) => w[0]).slice(0, 2).join(''))}</span><span class="who"><b>${esc(n)}</b><span>${esc(r)}</span></span></figcaption></figure>`).join('')}</div></div>`,
+    pricing: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p>${esc(d.lede || '')}</p></div><div class="price-grid">${d.plans.map(([n, p, f, feat]) => `<article class="plan ${feat ? 'featured' : ''}"><div class="ph"><span class="pn">${esc(n)}</span>${feat ? '<span class="pill">Most loved</span>' : ''}</div><div class="pr"><b>${esc(p)}</b><span>${esc(d.unit)}</span></div><ul>${f.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><a class="btn ${feat ? 'btn-primary' : 'btn-secondary'}" href="#/booking">${esc(d.cta)}</a></article>`).join('')}</div></div>`,
+    faq: (d) => `<div class="wrap"><div class="faq-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><div class="faq-list">${d.items.map(([q, a], i) => `<details ${i === 0 ? 'open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div></div></div>`,
+    cta: (d) => `<div class="wrap"><div class="cta-band"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2><p>${esc(d.sub)}</p></div><div><a class="btn btn-primary" href="${esc(d.href || '#/home')}">${esc(d.button)} ${icon('arrow')}</a>${d.href && d.href !== '#/home' ? `<span class="link-hint">→ ${esc(d.href.replace('#', ''))}</span>` : ''}</div></div></div>`,
+    footer: (d) => `<div class="wrap"><div class="foot-grid"><div><span class="s-brand"><i></i>${esc(d.name)}</span><p>${esc(d.blurb)}</p></div>${d.cols.map(([h, items]) => `<div><h4>${esc(h)}</h4><ul>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div><div class="foot-base"><span>${esc(d.base)}</span><span>Built with Moss</span></div></div>`,
+    text: (d) => `<div class="wrap"><div class="story"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><div class="body">${d.body.map((p) => `<p>${esc(p)}</p>`).join('')}</div></div></div>`,
+    stats: (d) => `<div class="wrap"><div class="stats">${d.items.map(([v, l]) => `<div class="stat"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div></div>`,
+    contact: (d) => `<div class="wrap"><div class="form-grid"><div class="form-card"><div class="row2"><div class="field"><label>Name</label><div class="in">Your name</div></div><div class="field"><label>Email</label><div class="in">you@example.com</div></div></div><div class="field"><label>Message</label><div class="in tall">Tell us a little about your plans…</div></div><a class="btn btn-primary" href="#/contact">Send message</a></div><div class="details-card glass"><span class="eyebrow">Details</span><dl>${d.details.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></div></div></div>`,
+    booking: (d) => `<div class="wrap"><div class="form-grid"><div class="form-card"><div class="row2"><div class="field"><label>Arrive</label><div class="in">Fri 14 Mar</div></div><div class="field"><label>Leave</label><div class="in">Mon 17 Mar</div></div></div><div class="field"><label>Choose</label><div class="room-opts">${d.rooms.map(([n, p], i) => `<div class="room-opt ${i === 1 ? 'on' : ''}">${esc(n)}<span>${esc(p)}</span></div>`).join('')}</div></div></div><div class="details-card glass"><span class="eyebrow">Summary</span><dl><div><dt>Selection</dt><dd>${esc(d.rooms[1][0])}</dd></div><div><dt>Dates</dt><dd>14 – 17 Mar · 3 nights</dd></div></dl><a class="btn btn-primary" style="width:100%;margin-top:20px" href="#/booking">Continue</a></div></div></div>`,
+  };
+  const CLS = { hero: (d) => `sec-hero ${d.variant === 'centered' ? 'centered' : ''}`, features: () => 'sec-pad', testimonials: () => 'sec-pad sec-tint', pricing: () => 'sec-pad', faq: () => 'sec-pad sec-tint', cta: () => 'sec-cta', footer: () => 'sec-footer', text: () => 'sec-pad', stats: () => 'sec-pad', contact: () => 'sec-pad', booking: () => 'sec-pad' };
+
+  function sectionHTML(sec) { return T[sec.type] ? T[sec.type](sec.data) : ''; }
+  function makeEl(sec) {
+    const el = document.createElement('section');
+    el.className = `sec sec-${sec.type} ${CLS[sec.type] ? CLS[sec.type](sec.data) : ''}`;
+    el.dataset.id = sec.id; el.dataset.type = sec.type; el.setAttribute('aria-label', SECTION_META[sec.type].label);
+    el.innerHTML = sectionHTML(sec); el.dataset.hash = JSON.stringify(sec.data);
+    return el;
+  }
+  function renderTop() {
+    const st = pageModel.get(); const b = st.business;
+    if (!b) { $('#siteTop').innerHTML = ''; return; }
+    const c = b.copy;
+    $('#siteTop').innerHTML = `<div class="s-announce"><span class="pill">${esc(c.announce.tag)}</span><span>${esc(c.announce.text)}</span><span class="arr">→</span></div><div class="wrap"><nav class="s-nav"><a class="s-brand" href="#/home"><i></i>${esc(b.name)}</a><div class="s-links">${st.pages.map((p) => `<a href="#/${p.id}" ${p.id === st.currentPage ? 'aria-current="page"' : ''}>${esc(p.name)}</a>`).join('')}</div><a class="btn btn-primary btn-sm" href="#/booking">${esc(c.primary)}</a></nav></div>`;
+  }
+  function render({ animateId = null, flip = true } = {}) {
+    const st = pageModel.get(); const page = pageModel.current();
+    const site = siteEl(); site.dataset.palette = st.palette;
+    renderTop();
+    const box = $('#siteSections');
+    if (box.dataset.page !== st.currentPage) { box.innerHTML = ''; box.dataset.page = st.currentPage; }
+    const zoom = parseFloat(getComputedStyle(site).zoom) || 1;
+    const before = new Map();
+    if (flip) [...box.children].forEach((el) => before.set(el.dataset.id, el.getBoundingClientRect().top));
+    const existing = new Map([...box.children].map((el) => [el.dataset.id, el]));
+    const wanted = page ? page.sections : [];
+    wanted.forEach((sec, i) => {
+      let el = existing.get(sec.id);
+      const hash = JSON.stringify(sec.data);
+      if (!el) { el = makeEl(sec); if (sec.id === animateId) el.classList.add('unfold'); }
+      else if (el.dataset.hash !== hash) {
+        const fresh = makeEl(sec); fresh.classList.add('refresh'); el.replaceWith(fresh); el = fresh;
+      }
+      existing.delete(sec.id);
+      if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null);
+    });
+    existing.forEach((el) => el.remove());
+    if (flip && !reducedMotion.matches) {
+      [...box.children].forEach((el) => {
+        const t0 = before.get(el.dataset.id); if (t0 == null) return;
+        const dy = (t0 - el.getBoundingClientRect().top) / zoom;
+        if (Math.abs(dy) > 1) el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 640 * SPEED, easing: 'cubic-bezier(.2,.7,.2,1)' });
+      });
+    }
+    $('#frameUrl').innerHTML = st.business ? `${esc(st.business.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))}.moss.site<b>/${esc(st.currentPage === 'home' ? '' : st.currentPage)}</b>` : '';
+    $('#frameCount').textContent = page ? `${String(page.sections.length).padStart(2, '0')} SECTIONS` : '';
+  }
+  async function removeSection(id) {
+    const el = $(`#siteSections [data-id="${id}"]`);
+    if (!el) return;
+    el.style.height = el.offsetHeight + 'px'; el.style.overflow = 'hidden';
+    el.animate([{ opacity: 1, height: el.offsetHeight + 'px' }, { opacity: 0, height: '0px' }], { duration: 520 * SPEED, easing: 'cubic-bezier(.65,0,.35,1)', fill: 'forwards' });
+    await wait(540);
+  }
+  function flash(id) { const el = $(`#siteSections [data-id="${id}"]`); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1800 * SPEED); }
+  return { render, removeSection, flash };
+})();
+
+/* =====================================================================
+   ISO SCENE: floating modules on an isometric grid
+   ===================================================================== */
+const isoScene = (() => {
+  const G = 24, C = 0.8660254, S = 0.5;
+  const W = 2, D = 2, H = 0.75;
+  const NS = 'http://www.w3.org/2000/svg';
+  const L = (x, y, z = 0) => [(x - y) * C * G, (x + y) * S * G - z * G];
+  const pts = (arr) => arr.map((p) => p.map((n) => n.toFixed(2)).join(',')).join(' ');
+  let mods = new Map();
+  let origin = [600, 120];
+
+  function slots(n) {
+    const step = n > 9 ? 3 * 9 / n : 3;
+    const raw = Array.from({ length: n }, (_, i) => [i * step + (i % 2), -i * step + (i % 2)]);
+    const xs = raw.map(([x, y]) => L(x, y)[0]);
+    const minX = Math.min(...xs, 0), maxX = Math.max(...xs, 0);
+    const panel = window.innerWidth > 1100 && document.body.classList.contains('started');
+    const cx = panel ? 520 : 600;
+    origin = [Math.round(cx - (minX + maxX) / 2 - (W - D) * C * G / 2), document.body.classList.contains('started') ? 104 : 128];
+    return raw;
+  }
+  const screen = ([x, y]) => { const [sx, sy] = L(x, y); return [origin[0] + sx, origin[1] + sy]; };
+
+  function moduleSVG(sec, i) {
+    const top = [L(0, 0, H), L(W, 0, H), L(W, D, H), L(0, D, H)];
+    const left = [L(0, D, H), L(W, D, H), L(W, D, 0), L(0, D, 0)];
+    const right = [L(W, 0, H), L(W, D, H), L(W, D, 0), L(W, 0, 0)];
+    const foot = [L(0.9, 0.9), L(W + 1.6, 0.9), L(W + 1.6, D + 1.6), L(0.9, D + 1.6)];
+    const ins = 0.28;
+    const glow = [L(ins, ins, H), L(W - ins, ins, H), L(W - ins, D - ins, H), L(ins, D - ins, H)];
+    const k = 1.05 / 24;
+    const o = L((W - 1.05) / 2, (D - 1.05) / 2, H);
+    const m = [C * G * k, S * G * k, -C * G * k, S * G * k, o[0], o[1]].map((n) => n.toFixed(4)).join(' ');
+    const lab = L(W, D, 0);
+    const meta = SECTION_META[sec.type] || SECTION_META.hero;
+    return `<g class="shadow"><polygon points="${pts(foot)}" fill="rgba(var(--shadow-c), .16)" filter="url(#blurS)"/></g>
+      <g class="drop"><g class="float" style="--fd:${(5.2 + (i % 3) * 0.9).toFixed(1)}s;--fdel:${(-i * 0.7).toFixed(1)}s">
+        <polygon points="${pts(left)}" fill="var(--mod-l)"/>
+        <polygon points="${pts(right)}" fill="var(--mod-r)"/>
+        <polygon points="${pts(top)}" fill="var(--mod-top)"/>
+        <polygon class="glow" points="${pts(glow)}" fill="none" stroke="var(--accent-glow)" stroke-width="3" filter="url(#blurG)"/>
+        <polygon points="${pts(top)}" fill="none" stroke="var(--mod-edge)" stroke-width="1"/>
+        <polyline points="${pts([L(0, D, H), L(W, D, H), L(W, 0, H)])}" fill="none" stroke="var(--mod-edge)" stroke-width="1.2"/>
+        <line x1="${lab[0]}" y1="${L(W, D, H)[1]}" x2="${lab[0]}" y2="${lab[1]}" stroke="var(--mod-line)" stroke-width="1"/>
+        <g transform="matrix(${m})" stroke="var(--ink-2)" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"><path d="${ICONS[meta.icon]}" vector-effect="non-scaling-stroke"/></g>
+      </g></g>
+      <text class="mod-label" x="${lab[0]}" y="${lab[1] + 22}" text-anchor="middle">${String(i + 1).padStart(2, '0')} ${esc(meta.label)}</text>`;
+  }
+
+  function render({ enter = null, ghosts = false } = {}) {
+    const page = pageModel.current();
+    const secs = ghosts ? [] : page ? page.sections : [];
+    const layer = $('#isoMods');
+    const sl = slots(ghosts ? 3 : secs.length);
+    if (ghosts) {
+      layer.innerHTML = sl.map((p, i) => { const [x, y] = screen(p); return `<g class="ghost" transform="translate(${x} ${y})"><polygon points="${pts([L(0, 0, H), L(W, 0, H), L(W, D, H), L(0, D, H)])}"/><polygon points="${pts([L(0, D, H), L(W, D, H), L(W, D, 0), L(0, D, 0)])}"/><polygon points="${pts([L(W, 0, H), L(W, D, H), L(W, D, 0), L(W, 0, 0)])}"/></g>`; }).join('');
+      $('#isoLinks').innerHTML = ''; mods.clear(); return;
+    }
+    layer.querySelectorAll('.ghost').forEach((g) => g.remove());
+    const seen = new Set();
+    secs.forEach((sec, i) => {
+      const [x, y] = screen(sl[i]);
+      let g = mods.get(sec.id);
+      const key = sec.type + i;
+      if (!g || g.dataset.key !== key) {
+        const fresh = document.createElementNS(NS, 'g');
+        fresh.setAttribute('class', 'mod');
+        fresh.dataset.id = sec.id; fresh.dataset.key = key;
+        fresh.innerHTML = moduleSVG(sec, i);
+        if (g) { fresh.style.transform = g.style.transform; g.replaceWith(fresh); } else { fresh.style.transform = `translate(${x}px, ${y}px)`; if (sec.id === enter) fresh.classList.add('enter'); layer.appendChild(fresh); }
+        g = fresh; mods.set(sec.id, g);
+      }
+      requestAnimationFrame(() => { g.style.transform = `translate(${x}px, ${y}px)`; });
+      seen.add(sec.id);
+    });
+    // depth order: back-to-front by index
+    secs.forEach((sec) => { const g = mods.get(sec.id); if (g) layer.appendChild(g); });
+    [...mods.keys()].forEach((id) => { if (!seen.has(id)) { const g = mods.get(id); g.classList.add('leaving'); setTimeout(() => g.remove(), 400 * SPEED); mods.delete(id); } });
+    renderLinks(secs, sl, enter);
+  }
+
+  function renderLinks(secs, sl, enter) {
+    const layer = $('#isoLinks');
+    let out = '';
+    for (let i = 1; i < secs.length; i++) {
+      const [ax, ay] = sl[i - 1], [bx, by] = sl[i];
+      const a = screen([ax + W / 2, ay + D / 2]), m = screen([bx + W / 2, ay + D / 2]), b = screen([bx + W / 2, by + D / 2]);
+      const d = `M${a[0].toFixed(1)} ${a[1].toFixed(1)} L${m[0].toFixed(1)} ${m[1].toFixed(1)} L${b[0].toFixed(1)} ${b[1].toFixed(1)}`;
+      const isNew = secs[i].id === enter;
+      const id = `lk-${secs[i].id}`;
+      out += `<g data-for="${secs[i].id}">${isNew ? `<mask id="m-${id}" maskUnits="userSpaceOnUse" x="-100" y="-100" width="1400" height="460"><path class="link-reveal" d="${d}" pathLength="1"/></mask>` : ''}
+        <path id="${id}" class="link-path" d="${d}" ${isNew ? `mask="url(#m-${id})"` : ''}/>
+        ${reducedMotion.matches ? '' : `<circle class="pulse-halo" r="5"><animateMotion dur="${(2.6 + (i % 3) * 0.5).toFixed(1)}s" repeatCount="indefinite" begin="${(-i * 0.8).toFixed(1)}s"><mpath href="#${id}"/></animateMotion></circle><circle class="pulse" r="1.8"><animateMotion dur="${(2.6 + (i % 3) * 0.5).toFixed(1)}s" repeatCount="indefinite" begin="${(-i * 0.8).toFixed(1)}s"><mpath href="#${id}"/></animateMotion></circle>`}</g>`;
+    }
+    layer.innerHTML = out;
+    const rv = layer.querySelector('.link-reveal');
+    if (rv) requestAnimationFrame(() => requestAnimationFrame(() => rv.classList.add('go')));
+  }
+  function flash(id) { const g = mods.get(id); if (!g) return; g.classList.remove('flash'); void g.getBBox(); g.classList.add('flash'); setTimeout(() => g.classList.remove('flash'), 1800 * SPEED); }
+  function setActive(id) { mods.forEach((g, k) => g.classList.toggle('active', k === id)); }
+  function reset() { mods.forEach((g) => g.remove()); mods.clear(); }
+  function initParallax() {
+    const scene = $('#scene');
+    scene.addEventListener('pointermove', (e) => {
+      if (reducedMotion.matches) return;
+      const r = scene.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - 0.5, py = (e.clientY - r.top) / r.height - 0.5;
+      $('.iso .layer-grid').style.transform = `translate(${px * -4}px, ${py * -3}px)`;
+      $('.iso .layer-links').style.transform = `translate(${px * 6}px, ${py * 4}px)`;
+      $('.iso .layer-mods').style.transform = `translate(${px * 9}px, ${py * 6}px)`;
+      $('#scenePanel').style.setProperty('--ppx', `${px * 12}px`); $('#scenePanel').style.setProperty('--ppy', `${py * 8}px`);
+    });
+    scene.addEventListener('pointerleave', () => { $$('.iso .layer-grid, .iso .layer-links, .iso .layer-mods').forEach((g) => (g.style.transform = '')); $('#scenePanel').style.setProperty('--ppx', '0px'); $('#scenePanel').style.setProperty('--ppy', '0px'); });
+  }
+  return { render, flash, setActive, reset, initParallax };
+})();
+
+/* =====================================================================
+   FLOW CANVAS: pan / zoom, page modules, flowcharts, draggable nodes
+   ===================================================================== */
+const flowCanvas = (() => {
+  const view = { x: 40, y: 80, z: 1 };
+  const NODE = { step: [168, 52], start: [168, 44], end: [168, 44], decision: [120, 120] };
+  let root, world, edgeLayer, nodeLayer, drawn = new Set();
+  const GW = 41.569, GH = 24;
+  function gridMask() {
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${GW}' height='${GH}'><path d='M0 0L${GW} ${GH}M${GW} 0L0 ${GH}' stroke='black' stroke-opacity='.3' stroke-width='.8'/><circle cx='0' cy='0' r='1.1'/><circle cx='${GW}' cy='0' r='1.1'/><circle cx='0' cy='${GH}' r='1.1'/><circle cx='${GW}' cy='${GH}' r='1.1'/><circle cx='${GW / 2}' cy='${GH / 2}' r='1.1'/></svg>`;
+    return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
+  }
+  function apply() {
+    world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.z})`;
+    const g = $('#flowGrid');
+    g.style.setProperty('--gw', `${GW * view.z}px`); g.style.setProperty('--gh', `${GH * view.z}px`);
+    g.style.setProperty('--gx', `${view.x}px`); g.style.setProperty('--gy', `${view.y}px`);
+    $('#zoomLabel').textContent = Math.round(view.z * 100) + '%';
+  }
+  function zoomAt(f, cx, cy) {
+    const z = Math.min(2.4, Math.max(0.3, view.z * f));
+    view.x = cx - (cx - view.x) * (z / view.z); view.y = cy - (cy - view.y) * (z / view.z); view.z = z; apply();
+  }
+  function init() {
+    root = $('#flowView'); world = $('#world'); edgeLayer = $('#edgeLayer'); nodeLayer = $('#nodeLayer');
+    $('#flowGrid').style.setProperty('--grid-mask', gridMask());
+    apply();
+    root.addEventListener('wheel', (e) => { e.preventDefault(); const r = root.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+    let pan = null, drag = null;
+    root.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.flow-tools')) return;
+      const card = e.target.closest('.fnode, .pcard');
+      if (card) {
+        drag = { el: card, sx: e.clientX, sy: e.clientY, ox: parseFloat(card.style.left), oy: parseFloat(card.style.top), moved: false };
+        card.classList.add('dragging'); card.setPointerCapture(e.pointerId); return;
+      }
+      pan = { sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y }; root.classList.add('panning'); root.setPointerCapture(e.pointerId);
+    });
+    root.addEventListener('pointermove', (e) => {
+      if (drag) {
+        const nx = drag.ox + (e.clientX - drag.sx) / view.z, ny = drag.oy + (e.clientY - drag.sy) / view.z;
+        if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 3) drag.moved = true;
+        drag.el.style.left = nx + 'px'; drag.el.style.top = ny + 'px';
+        const st = pageModel.get();
+        if (drag.el.dataset.page) st.pagePos[drag.el.dataset.page] = { x: nx, y: ny };
+        else { const f = st.flows.find((x) => x.id === drag.el.dataset.flow); const n = f && f.nodes.find((x) => x.id === drag.el.dataset.node); if (n) { n.x = nx - f.ox; n.y = ny - f.oy; } }
+        updateEdges();
+      } else if (pan) { view.x = pan.ox + e.clientX - pan.sx; view.y = pan.oy + e.clientY - pan.sy; apply(); }
+    });
+    const end = () => {
+      if (drag) { drag.el.classList.remove('dragging'); if (!drag.moved && drag.el.dataset.page) app.openPage(drag.el.dataset.page); }
+      drag = null; pan = null; root.classList.remove('panning');
+    };
+    root.addEventListener('pointerup', end); root.addEventListener('pointercancel', end);
+    $('#zoomIn').addEventListener('click', () => { const r = root.getBoundingClientRect(); zoomAt(1.2, r.width / 2, r.height / 2); });
+    $('#zoomOut').addEventListener('click', () => { const r = root.getBoundingClientRect(); zoomAt(1 / 1.2, r.width / 2, r.height / 2); });
+    $('#zoomFit').addEventListener('click', fit);
+  }
+  function pagePos(st, p, i) { return st.pagePos[p.id] || { x: 40 + i * 256, y: 0 }; }
+  function render({ animateFlow = null } = {}) {
+    const st = pageModel.get();
+    let html = '';
+    st.pages.forEach((p, i) => {
+      const pos = pagePos(st, p, i);
+      html += `<div class="pcard glass ${p.id === st.currentPage ? 'current' : ''} ${drawn.has('p:' + p.id) ? '' : 'enter'}" data-page="${p.id}" style="left:${pos.x}px;top:${pos.y}px" tabindex="0" role="button" aria-label="Open ${esc(p.name)} page"><div class="pc-top"><span>/${p.id === 'home' ? '' : p.id}</span>${icon('page')}</div><h3>${esc(p.name)}</h3><div class="secs">${p.sections.map((s) => `<span>${esc(SECTION_META[s.type].label)}</span>`).join('')}</div></div>`;
+      drawn.add('p:' + p.id);
+    });
+    st.flows.forEach((f) => {
+      html += `<div class="flow-title" style="left:${f.ox}px;top:${f.oy - 34}px">${esc(f.name)}<span>${f.nodes.length} nodes</span></div>`;
+      f.nodes.forEach((n, i) => {
+        const hidden = animateFlow === f.id ? 'style-hidden' : '';
+        const content = n.kind === 'decision' ? `<span>${esc(n.label)}</span>` : `<span class="ix">${String(i + 1).padStart(2, '0')}</span><span>${esc(n.label)}</span>`;
+        html += `<div class="fnode ${n.kind} ${n.kind === 'decision' ? '' : 'glass'} ${hidden}" data-flow="${f.id}" data-node="${n.id}" style="left:${f.ox + n.x}px;top:${f.oy + n.y}px;${hidden ? 'opacity:0' : ''}">${content}</div>`;
+      });
+    });
+    nodeLayer.innerHTML = html;
+    $('.flow-empty') && $('.flow-empty').remove();
+    if (!st.pages.length) root.insertAdjacentHTML('beforeend', '<div class="flow-empty">Pages and flows appear here</div>');
+    updateEdges(animateFlow);
+  }
+  function box(el) { return { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }; }
+  function pathBetween(a, b) {
+    const ac = [a.x + a.w / 2, a.y + a.h / 2], bc = [b.x + b.w / 2, b.y + b.h / 2];
+    const dx = bc[0] - ac[0], dy = bc[1] - ac[1];
+    let s, e, c1, c2;
+    if (Math.abs(dx) >= Math.abs(dy) * 0.9) {
+      const sg = Math.sign(dx) || 1; s = [ac[0] + sg * a.w / 2, ac[1]]; e = [bc[0] - sg * b.w / 2, bc[1]];
+      const k = Math.max(30, Math.abs(e[0] - s[0]) / 2); c1 = [s[0] + sg * k, s[1]]; c2 = [e[0] - sg * k, e[1]];
+    } else {
+      const sg = Math.sign(dy) || 1; s = [ac[0], ac[1] + sg * a.h / 2]; e = [bc[0], bc[1] - sg * b.h / 2];
+      const k = Math.max(30, Math.abs(e[1] - s[1]) / 2); c1 = [s[0], s[1] + sg * k]; c2 = [e[0], e[1] - sg * k];
+    }
+    const f = (p) => p.map((n) => n.toFixed(1)).join(' ');
+    return `M${f(s)} C${f(c1)} ${f(c2)} ${f(e)}`;
+  }
+  function edgeList() {
+    const st = pageModel.get(); const out = [];
+    st.pages.filter((p) => p.id !== 'home').forEach((p) => {
+      const explicit = st.links.find((l) => l.from === 'home' && l.to === p.id);
+      if (!explicit) out.push({ id: `nav-${p.id}`, a: `[data-page="home"]`, b: `[data-page="${p.id}"]`, cls: 'nav' });
+    });
+    st.links.forEach((l, i) => out.push({ id: `lnk-${i}`, a: `[data-page="${l.from}"]`, b: `[data-page="${l.to}"]`, cls: 'link', label: 'link' }));
+    st.flows.forEach((f) => f.edges.forEach((e, i) => out.push({ id: `${f.id}-e${i}`, flow: f.id, a: `[data-flow="${f.id}"][data-node="${e.from}"]`, b: `[data-flow="${f.id}"][data-node="${e.to}"]`, cls: '', label: e.label })));
+    return out;
+  }
+  function updateEdges(animateFlow = null) {
+    const list = edgeList();
+    const existing = new Map([...edgeLayer.querySelectorAll('g[data-edge]')].map((g) => [g.dataset.edge, g]));
+    list.forEach((e) => {
+      const A = nodeLayer.querySelector(e.a), B = nodeLayer.querySelector(e.b);
+      if (!A || !B) return;
+      const d = pathBetween(box(A), box(B));
+      let g = existing.get(e.id);
+      if (!g) {
+        g = document.createElementNS('http://www.w3.org/2000/svg', 'g'); g.dataset.edge = e.id; if (e.flow) g.dataset.flow = e.flow;
+        const hidden = animateFlow && e.flow === animateFlow;
+        g.innerHTML = `<path id="pe-${e.id}" class="edge ${e.cls} ${hidden ? 'drawing' : ''}" ${hidden ? 'pathLength="1"' : ''} marker-end="url(#${e.cls === 'link' ? 'arrowA' : 'arrow'})"/>${e.label ? `<text class="edge-label" text-anchor="middle" ${hidden ? 'opacity="0"' : ''}>${esc(e.label)}</text>` : ''}${e.flow && !reducedMotion.matches ? `<circle class="fpulse" r="2.2" opacity=".85"><animateMotion dur="3.2s" repeatCount="indefinite" begin="${(-Math.random() * 3).toFixed(1)}s"><mpath href="#pe-${e.id}"/></animateMotion></circle>` : ''}`;
+        edgeLayer.appendChild(g);
+      }
+      existing.delete(e.id);
+      const p = g.querySelector('path'); p.setAttribute('d', d);
+      const t = g.querySelector('text');
+      if (t) { const len = p.getTotalLength(); const mid = p.getPointAtLength(len / 2); t.setAttribute('x', mid.x); t.setAttribute('y', mid.y - 6); }
+    });
+    existing.forEach((g) => g.remove());
+  }
+  async function animateFlow(flowId) {
+    const f = pageModel.get().flows.find((x) => x.id === flowId); if (!f) return;
+    for (let i = 0; i < f.nodes.length; i++) {
+      const n = f.nodes[i];
+      const el = nodeLayer.querySelector(`[data-flow="${f.id}"][data-node="${n.id}"]`);
+      el.style.opacity = ''; el.classList.add('enter'); sound.play('tick');
+      await wait(170);
+      for (let j = 0; j < f.edges.length; j++) {
+        const e = f.edges[j];
+        const idx = [e.from, e.to].map((id) => f.nodes.findIndex((x) => x.id === id));
+        if (Math.max(...idx) !== i) continue;
+        const g = edgeLayer.querySelector(`[data-edge="${f.id}-e${j}"]`); if (!g) continue;
+        const p = g.querySelector('path'); requestAnimationFrame(() => p.classList.add('go')); sound.play('rise');
+        setTimeout(() => { p.classList.remove('drawing', 'go'); p.removeAttribute('pathLength'); const t = g.querySelector('text'); if (t) t.removeAttribute('opacity'); }, 680 * SPEED);
+      }
+    }
+    await wait(500);
+  }
+  function fit() {
+    const els = [...nodeLayer.children].filter((e) => e.offsetWidth);
+    if (!els.length) return;
+    const xs = els.map((e) => e.offsetLeft), ys = els.map((e) => e.offsetTop - 30);
+    const x2 = els.map((e) => e.offsetLeft + e.offsetWidth), y2 = els.map((e) => e.offsetTop + e.offsetHeight);
+    const bx = Math.min(...xs), by = Math.min(...ys), bw = Math.max(...x2) - bx, bh = Math.max(...y2) - by;
+    const r = root.getBoundingClientRect();
+    const z = Math.min(1.1, Math.max(0.3, Math.min((r.width - 96) / bw, (r.height - 140) / bh)));
+    view.z = z; view.x = (r.width - bw * z) / 2 - bx * z; view.y = (r.height - bh * z) / 2 - by * z + 10; apply();
+  }
+  function flashPage(id) { const el = nodeLayer.querySelector(`[data-page="${id}"]`); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1800 * SPEED); }
+  return { init, render, animateFlow, fit, flashPage, updateEdges, view };
+})();
+
+/* =====================================================================
+   APP: chat UI, op application, routing, wiring
+   ===================================================================== */
+const app = (() => {
+  let busy = false; let idleWaiters = [];
+  let view = 'page';
+  const EXAMPLES = [
+    ['Stay', 'A seaside pousada in Trancoso with nine rooms and a breakfast garden'],
+    ['Shop', 'A specialty coffee roaster in Lisbon selling subscriptions'],
+    ['SaaS', 'A bookkeeping app for freelance designers called "Ledgerly"'],
+  ];
+
+  function setStatus(text, isBusy) { const s = $('#status'); s.classList.toggle('busy', !!isBusy); s.querySelector('span').textContent = text; }
+  function setBusy(v) { busy = v; $$('.send-btn').forEach((b) => (b.disabled = v)); if (!v) { setStatus('Ready', false); idleWaiters.splice(0).forEach((r) => r()); } }
+
+  function formatText(text) {
+    const st = pageModel.get();
+    return esc(text).replace(/@([A-Za-z][A-Za-z0-9-]*)/g, (m, n) => {
+      const ok = st.pages.find((p) => p.name.toLowerCase() === n.toLowerCase()) || agent.findSections(n.toLowerCase()).length;
+      return ok ? `<span class="mention">@${n}</span>` : m;
+    });
+  }
+  function scrollChat() { const m = $('#messages'); m.scrollTop = m.scrollHeight; }
+  function addUser(text) { const el = document.createElement('div'); el.className = 'msg user'; el.innerHTML = formatText(text); $('#messages').appendChild(el); scrollChat(); }
+  function addAgent() {
+    const el = document.createElement('div'); el.className = 'msg agent';
+    el.innerHTML = `<span class="agent-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3l7.5 4.3v9.4L12 21l-7.5-4.3V7.3z M4.5 7.3L12 11.6l7.5-4.3M12 11.6V21"/></svg></span><div class="body"><span class="typing" aria-label="Moss is typing"><i></i><i></i><i></i></span><div class="text"></div><ul class="log"></ul><div class="text after"></div></div>`;
+    $('#messages').appendChild(el); scrollChat(); return el;
+  }
+  async function stream(el, text) {
+    const parts = text.split(/(\s+)/); let acc = '';
+    for (const w of parts) { acc += w; el.textContent = acc; if (w.trim()) { setPanel(acc); await wait(26); } }
+    el.innerHTML = formatText(text); setPanel(text); scrollChat();
+  }
+  function setPanel(text) { $('#scenePanelText').textContent = text.replace(/\s+/g, ' '); }
+  function logLine(msgEl, k, v) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="st"><i></i></span><span class="k">${esc(k)}</span><span>${esc(v)}</span>`;
+    msgEl.querySelector('.log').appendChild(li); scrollChat();
+    return () => { li.classList.add('done'); li.querySelector('.st').innerHTML = icon('check'); };
+  }
+  function setSuggestions(list) {
+    const box = $('#suggest'); box.innerHTML = '';
+    (list || []).forEach((s) => { const b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = s; b.addEventListener('click', () => send(s)); box.appendChild(b); });
+  }
+
+  function renderTabs(enterId) {
+    const st = pageModel.get(); const nav = $('#tabs');
+    nav.innerHTML = st.pages.map((p) => `<button class="tab ${p.id === enterId ? 'enter' : ''}" data-page="${p.id}" ${p.id === st.currentPage ? 'aria-current="page"' : ''} title="/${p.id === 'home' ? '' : p.id}">${esc(p.name)}</button>`).join('');
+    $$('.tab', nav).forEach((b) => b.addEventListener('click', () => openPage(b.dataset.page)));
+  }
+  function renderAll(opts = {}) {
+    renderTabs(opts.enterTab);
+    renderer.render({ animateId: opts.animateId, flip: opts.flip !== false });
+    isoScene.render({ enter: opts.enterModule });
+    flowCanvas.render();
+  }
+  function openPage(id) {
+    if (!pageModel.page(id)) return;
+    if (location.hash !== '#/' + id) { location.hash = '#/' + id; return; }
+    navigate(id);
+  }
+  function navigate(id) {
+    const st = pageModel.get(); if (!pageModel.page(id)) return;
+    const changed = st.currentPage !== id;
+    st.currentPage = id;
+    if (changed) { isoScene.reset(); $('#pageView').scrollTo({ top: 0, behavior: 'instant' }); }
+    if (location.hash !== '#/' + id) history.replaceState(null, '', '#/' + id);
+    renderAll({ flip: false });
+    if (view === 'flow' && changed) setView('page');
+  }
+  function setView(v) {
+    view = v;
+    $('#pageView').classList.toggle('hidden', v !== 'page'); $('#flowView').classList.toggle('hidden', v !== 'flow');
+    $('#viewPage').setAttribute('aria-pressed', v === 'page'); $('#viewFlow').setAttribute('aria-pressed', v === 'flow');
+    if (v === 'flow') { flowCanvas.render(); requestAnimationFrame(() => flowCanvas.fit()); }
+    sound.play('click');
+  }
+  function scrollToSection(id) {
+    const el = $(`#siteSections [data-id="${id}"]`); if (!el) return;
+    const pv = $('#pageView');
+    const top = el.getBoundingClientRect().top - pv.getBoundingClientRect().top + pv.scrollTop - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--scene-h')) - 12;
+    pv.scrollTo({ top: Math.max(0, top), behavior: reducedMotion.matches ? 'instant' : 'smooth' });
+  }
+
+  const MUTATING = new Set(['setBusiness', 'addPage', 'addSection', 'updateSection', 'setOrder', 'deleteSection', 'deletePage', 'setPalette', 'addLink', 'addFlow']);
+  async function applyOp(op, msgEl) {
+    const st = pageModel.get();
+    switch (op.op) {
+      case 'setBusiness': st.business = op.business; break;
+      case 'addPage': {
+        if (!pageModel.page(op.page.id)) st.pages.push(clone(op.page));
+        if (!st.pagePos[op.page.id]) st.pagePos[op.page.id] = { x: 40 + (st.pages.length - 1) * 256, y: 0 };
+        const done = op.quiet ? null : logLine(msgEl, 'page', `/${op.page.id}`);
+        if (!op.quiet) sound.play('chime');
+        if (op.navigate) { st.currentPage = op.page.id; isoScene.reset(); history.replaceState(null, '', '#/' + op.page.id); $('#pageView').scrollTo({ top: 0, behavior: 'instant' }); }
+        renderAll({ enterTab: op.page.id, flip: false });
+        if (!op.quiet) { $(`.tab[data-page="${op.page.id}"]`)?.classList.add('flash'); await wait(500); done(); }
+        break;
+      }
+      case 'navigate': navigate(op.page); await wait(200); break;
+      case 'addSection': {
+        if (st.currentPage !== op.page) navigate(op.page);
+        const page = pageModel.page(op.page);
+        const idx = op.index == null ? page.sections.length : Math.min(op.index, page.sections.length);
+        page.sections.splice(idx, 0, clone(op.section));
+        const id = op.section.id;
+        const done = logLine(msgEl, 'module', SECTION_META[op.section.type].label.toLowerCase());
+        setStatus(`Building · ${SECTION_META[op.section.type].label}`, true);
+        isoScene.render({ enter: id }); isoScene.setActive(id);
+        await wait(430); sound.play('tick');
+        await wait(260); sound.play('rise');
+        await wait(420);
+        renderTabs(); renderer.render({ animateId: id }); flowCanvas.render();
+        sound.play('click'); scrollToSection(id);
+        await wait(520); done();
+        break;
+      }
+      case 'updateSection': {
+        const sec = pageModel.section(op.page, op.id); if (!sec) break;
+        Object.assign(sec.data, op.patch);
+        const done = logLine(msgEl, 'edit', op.note || SECTION_META[sec.type].label.toLowerCase());
+        renderer.render(); isoScene.flash(op.id); scrollToSection(op.id); sound.play('click');
+        await wait(600); renderer.flash(op.id); done();
+        break;
+      }
+      case 'setOrder': {
+        const page = pageModel.page(op.page);
+        page.sections = op.order.map((id) => page.sections.find((s) => s.id === id)).filter(Boolean);
+        const done = logLine(msgEl, 'reorder', page.sections.map((s) => SECTION_META[s.type].label.toLowerCase()).slice(0, 4).join(' → ') + (page.sections.length > 4 ? ' …' : ''));
+        isoScene.render(); renderer.render(); flowCanvas.render(); sound.play('rise');
+        await wait(700); done();
+        break;
+      }
+      case 'deleteSection': {
+        const page = pageModel.page(op.page); const sec = page.sections.find((s) => s.id === op.id); if (!sec) break;
+        const done = logLine(msgEl, 'remove', SECTION_META[sec.type].label.toLowerCase());
+        scrollToSection(op.id); await wait(300);
+        await renderer.removeSection(op.id);
+        page.sections = page.sections.filter((s) => s.id !== op.id);
+        renderer.render({ flip: false }); isoScene.render(); flowCanvas.render(); sound.play('click');
+        await wait(300); done();
+        break;
+      }
+      case 'deletePage': {
+        st.pages = st.pages.filter((p) => p.id !== op.page); st.links = st.links.filter((l) => l.from !== op.page && l.to !== op.page);
+        delete st.pagePos[op.page];
+        const done = logLine(msgEl, 'page', `removed /${op.page}`);
+        if (st.currentPage === op.page) navigate('home'); else renderAll();
+        await wait(300); done(); break;
+      }
+      case 'setPalette': {
+        st.palette = op.palette;
+        const done = logLine(msgEl, 'style', `palette → ${op.palette}`);
+        renderer.render(); sound.play('rise'); await wait(700); done(); break;
+      }
+      case 'addLink': {
+        st.links.push({ from: op.from, section: op.section, to: op.to });
+        const done = logLine(msgEl, 'link', `/${op.from === 'home' ? '' : op.from} → /${op.to}`);
+        flowCanvas.render(); renderer.flash(op.section); $(`.tab[data-page="${op.to}"]`)?.classList.add('flash'); sound.play('rise');
+        await wait(500); done(); break;
+      }
+      case 'addFlow': {
+        const f = clone(op.flow);
+        const maxY = Math.max(0, ...$$('#nodeLayer .pcard').map((e) => e.offsetTop + e.offsetHeight), ...st.flows.map((x) => x.oy + 330));
+        f.ox = 40; f.oy = maxY + 120;
+        st.flows.push(f);
+        const done = logLine(msgEl, 'flow', `${f.nodes.length} nodes · ${f.edges.length} connectors`);
+        if (view !== 'flow') setView('flow');
+        flowCanvas.render({ animateFlow: f.id }); flowCanvas.fit(); sound.play('chime');
+        await flowCanvas.animateFlow(f.id); done(); break;
+      }
+      case 'setView': setView(op.view); await wait(200); break;
+      case 'highlight': (op.ids || []).forEach((id) => { renderer.flash(id); isoScene.flash(id); }); break;
+      case 'undo': {
+        const done = logLine(msgEl, 'undo', 'restored previous state');
+        pageModel.undo();
+        const s2 = pageModel.get();
+        if (!pageModel.page(s2.currentPage)) s2.currentPage = s2.pages[0] ? s2.pages[0].id : 'home';
+        history.replaceState(null, '', '#/' + s2.currentPage);
+        $('#siteSections').dataset.page = '';
+        isoScene.reset(); renderAll({ flip: false }); sound.play('click');
+        await wait(400); done(); break;
+      }
+    }
+  }
+
+  function flashMentions(text) {
+    const refs = agent.parseMentions(text, pageModel.get());
+    refs.pages.forEach((p) => { const t = $(`.tab[data-page="${p.id}"]`); if (t) { t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); } flowCanvas.flashPage(p.id); });
+    refs.sections.forEach((s) => { renderer.flash(s.id); isoScene.flash(s.id); });
+  }
+
+  async function send(raw) {
+    const text = (raw || '').trim();
+    if (!text || busy) return;
+    sound.unlock();
+    if (!document.body.classList.contains('started')) {
+      document.body.classList.add('started');
+      isoScene.render(); // clears ghosts
+    }
+    setBusy(true); setStatus('Thinking', true); setSuggestions([]);
+    addUser(text); flashMentions(text);
+    const msg = addAgent();
+    let res;
+    try { res = await agent.respond(text, pageModel.get()); }
+    catch (err) { res = { reply: 'Something went wrong on my side. Try that again?', ops: [] }; console.error(err); }
+    msg.querySelector('.typing').remove();
+    await stream(msg.querySelector('.text'), res.reply);
+    const ops = res.ops || [];
+    if (ops.some((o) => MUTATING.has(o.op))) pageModel.snapshot();
+    for (const op of ops) await applyOp(op, msg);
+    isoScene.setActive(null);
+    if (res.after) await stream(msg.querySelector('.after'), res.after);
+    setSuggestions(res.suggestions);
+    setBusy(false);
+  }
+
+  /* ---- @mention autocomplete ---- */
+  const mm = { open: false, items: [], ix: 0, start: 0 };
+  function mentionCandidates(q) {
+    const st = pageModel.get(); const cur = pageModel.current();
+    const pages = st.pages.map((p) => ({ kind: 'Page', name: p.name, sub: '/' + (p.id === 'home' ? '' : p.id), icon: 'page' }));
+    const secs = cur ? cur.sections.map((s) => ({ kind: 'Section', name: SECTION_META[s.type].label, sub: cur.name, icon: SECTION_META[s.type].icon })) : [];
+    return [...pages, ...secs].filter((c) => c.name.toLowerCase().startsWith(q.toLowerCase()));
+  }
+  function renderMenu() {
+    const menu = $('#mentionMenu');
+    if (!mm.open || !mm.items.length) { menu.hidden = true; mm.open = false; $('#chatInput').removeAttribute('aria-activedescendant'); return; }
+    let html = '', last = '';
+    mm.items.forEach((c, i) => {
+      if (c.kind !== last) { html += `<div class="mm-h">${c.kind === 'Page' ? 'Pages' : 'Sections on this page'}</div>`; last = c.kind; }
+      html += `<div role="option" id="mm-${i}" data-i="${i}" aria-selected="${i === mm.ix}">${icon(c.icon)}<span>${esc(c.name)}</span><span class="k">${esc(c.sub)}</span></div>`;
+    });
+    menu.innerHTML = html; menu.hidden = false;
+    $('#chatInput').setAttribute('aria-activedescendant', `mm-${mm.ix}`);
+    $$('[role="option"]', menu).forEach((o) => o.addEventListener('mousedown', (e) => { e.preventDefault(); pick(+o.dataset.i); }));
+  }
+  function updateMention() {
+    const ta = $('#chatInput'); const upto = ta.value.slice(0, ta.selectionStart);
+    const m = upto.match(/(^|\s)@([A-Za-z0-9-]*)$/);
+    if (!m) { mm.open = false; renderMenu(); return; }
+    mm.start = upto.length - m[2].length - 1; mm.items = mentionCandidates(m[2]); mm.ix = 0; mm.open = true; renderMenu();
+  }
+  function pick(i) {
+    const ta = $('#chatInput'); const c = mm.items[i]; if (!c) return;
+    const before = ta.value.slice(0, mm.start), after = ta.value.slice(ta.selectionStart);
+    const ins = '@' + c.name + ' ';
+    ta.value = before + ins + after; const pos = (before + ins).length; ta.setSelectionRange(pos, pos);
+    mm.open = false; renderMenu(); autosize(ta); ta.focus(); sound.play('click');
+  }
+  function autosize(ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'; }
+
+  function initZoom() {
+    const pv = $('#pageView');
+    const fit = () => {
+      const w = pv.clientWidth; const mobile = w < 700;
+      const fw = mobile ? w - 32 : Math.min(w - 96, 820);
+      const zoom = mobile ? 1 : fw / 1240;
+      document.documentElement.style.setProperty('--frame-w', fw + 'px');
+      document.documentElement.style.setProperty('--zoom', zoom.toFixed(4));
+      document.documentElement.style.setProperty('--site-w', (mobile ? fw - 2 : 1240) + 'px');
+      if (document.body.classList.contains('started')) isoScene.render();
+    };
+    new ResizeObserver(fit).observe(pv); fit();
+  }
+
+  function init() {
+    theme.init();
+    const sb = $('#soundBtn');
+    const paintSound = () => { const on = sound.isEnabled(); sb.innerHTML = icon(on ? 'soundOn' : 'soundOff'); sb.setAttribute('aria-pressed', on); sb.setAttribute('aria-label', on ? 'Mute sounds' : 'Unmute sounds'); };
+    sb.addEventListener('click', () => { sound.unlock(); sound.setEnabled(!sound.isEnabled()); paintSound(); sound.play('click'); });
+    paintSound();
+    ['pointerdown', 'keydown'].forEach((ev) => window.addEventListener(ev, () => sound.unlock(), { once: true, capture: true }));
+
+    $('#examples').innerHTML = EXAMPLES.map(([k, t]) => `<button class="chip" type="button" data-t="${esc(t)}"><span class="mono">${esc(k.toUpperCase())}</span>${esc(t)}</button>`).join('');
+    $$('#examples .chip').forEach((b) => b.addEventListener('click', () => send(b.dataset.t)));
+    const ii = $('#introInput');
+    $('#introForm').addEventListener('submit', (e) => { e.preventDefault(); const v = ii.value; ii.value = ''; send(v); setTimeout(() => $('#chatInput').focus(), 50); });
+    ii.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#introForm').requestSubmit(); } });
+    ii.addEventListener('input', () => autosize(ii));
+
+    const ta = $('#chatInput');
+    $('#composer').addEventListener('submit', (e) => { e.preventDefault(); if (busy) return; const v = ta.value; ta.value = ''; autosize(ta); mm.open = false; renderMenu(); send(v); });
+    ta.addEventListener('input', () => { autosize(ta); updateMention(); });
+    ta.addEventListener('click', updateMention);
+    ta.addEventListener('keydown', (e) => {
+      if (mm.open && mm.items.length) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); mm.ix = (mm.ix + 1) % mm.items.length; renderMenu(); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); mm.ix = (mm.ix - 1 + mm.items.length) % mm.items.length; renderMenu(); return; }
+        const q = ta.value.slice(mm.start + 1, ta.selectionStart).toLowerCase();
+        const exact = e.key === 'Enter' && mm.items[mm.ix].name.toLowerCase() === q;
+        if (exact) { mm.open = false; renderMenu(); }
+        else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(mm.ix); return; }
+        if (e.key === 'Escape') { e.preventDefault(); mm.open = false; renderMenu(); return; }
+      }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#composer').requestSubmit(); }
+    });
+    ta.addEventListener('blur', () => setTimeout(() => { mm.open = false; renderMenu(); }, 120));
+
+    $('#viewPage').addEventListener('click', () => setView('page'));
+    $('#viewFlow').addEventListener('click', () => setView('flow'));
+    $('#sheetHandle').addEventListener('click', () => { const c = $('#chat').classList.toggle('collapsed'); $('#sheetHandle').setAttribute('aria-expanded', !c); });
+    window.addEventListener('hashchange', () => { const id = location.hash.replace(/^#\//, ''); if (pageModel.page(id)) navigate(id); });
+
+    flowCanvas.init();
+    isoScene.initParallax();
+    initZoom();
+    isoScene.render({ ghosts: true });
+    renderTabs();
+    setSuggestions([]);
+  }
+  const whenIdle = () => new Promise((r) => { if (!busy) r(); else idleWaiters.push(r); });
+  return { init, send, openPage, whenIdle, isBusy: () => busy, view: () => view };
+})();
+
+app.init();
+window.moss = { app, agent, pageModel, renderer, isoScene, flowCanvas, theme, sound };
+</script>
+</body>
+</html>
