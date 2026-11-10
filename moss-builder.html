@@ -605,6 +605,23 @@ body:not(.started) .chat { visibility: hidden; }
 .mention-menu [role="option"][aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
 .mention-menu [role="option"] svg.i { color: var(--ink-3); }
 
+
+/* Voice: mic buttons, listening state */
+.mic-btn { position: relative; flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); display: grid; place-items: center; transition: background-color var(--t1), border-color var(--t1), color var(--t1), transform var(--t1); }
+.mic-btn:hover { border-color: var(--ink-3); transform: translateY(-1px); }
+.mic-btn svg.i { width: 17px; height: 17px; }
+.mic-btn.big { width: 52px; height: 52px; border: 0; background: var(--btn-bg); color: var(--btn-ink); box-shadow: var(--sh1); }
+.mic-btn.big svg.i { width: 22px; height: 22px; }
+.mic-btn[aria-pressed="true"] { background: var(--accent-glow); color: #06242b; border-color: transparent; }
+.mic-btn[aria-pressed="true"]::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--accent-glow); animation: micpulse calc(1400ms * var(--speed)) ease-out infinite; pointer-events: none; }
+@keyframes micpulse { from { transform: scale(.92); opacity: .75; } to { transform: scale(1.4); opacity: 0; } }
+.prompt-box { align-items: center; }
+.prompt-box .mic-btn.big { margin-left: -12px; }
+.composer.listening { border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.voice-hint { margin: 16px 0 0; font: 11px var(--f-mono); letter-spacing: .04em; color: var(--ink-3); }
+.voice-hint kbd, .chat-foot kbd { font: inherit; padding: 1px 6px; border: 1px solid var(--line-2); border-radius: 4px; background: var(--surface); }
+body.no-voice .mic-btn, body.no-voice .voice-only { display: none; }
+body:not(.no-voice) .novoice-only { display: none; }
 /* =====================================================================
    RESPONSIVE
    ===================================================================== */
@@ -736,13 +753,15 @@ body.started .canvas { background: var(--bg-2); }
         <div class="intro" id="intro">
           <span class="eyebrow">Moss Builder</span>
           <h1>Talk it through.<br><em>Watch it get built.</em></h1>
-          <p class="lede">Describe your business in a sentence. Moss lays out the page module by module, and you shape it in plain words.</p>
+          <p class="lede">Tap the mic and describe your business. Moss lays out the page module by module, and you shape it out loud.</p>
           <form class="prompt-box glass" id="introForm">
             <label for="introInput" class="sr-only">Describe your business</label>
+            <button class="mic-btn big" type="button" id="introMic" aria-pressed="false" aria-label="Talk to Moss" title="Talk (or hold Space)"><svg class="i" viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z M18.5 11a6.5 6.5 0 0 1-13 0 M12 17.5V21"/></svg></button>
             <textarea id="introInput" rows="1" placeholder="Describe your business…"></textarea>
             <button class="send-btn" type="submit" aria-label="Build"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
           </form>
           <div class="examples" id="examples"></div>
+          <p class="voice-hint voice-only">Tap the mic or hold <kbd>Space</kbd> to talk. Moss answers out loud.</p>
         </div>
 
         <div class="frame-wrap">
@@ -794,11 +813,12 @@ body.started .canvas { background: var(--bg-2); }
         <form class="composer" id="composer">
           <label for="chatInput" class="sr-only">Message Moss</label>
           <textarea id="chatInput" rows="1" placeholder="Ask for a change · @ to reference" aria-autocomplete="list" aria-controls="mentionMenu"></textarea>
+          <button class="mic-btn" type="button" id="micBtn" aria-pressed="false" aria-label="Talk to Moss" title="Talk (or hold Space)"><svg class="i" viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z M18.5 11a6.5 6.5 0 0 1-13 0 M12 17.5V21"/></svg></button>
           <button class="send-btn" type="submit" aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
         </form>
         <div class="chat-foot">
           <span class="powered"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l7.5 4.3v9.4L12 21l-7.5-4.3V7.3z"/></svg>Powered by Moss</span>
-          <span>⏎ send · ⇧⏎ newline</span>
+          <span class="voice-only">hold <kbd>Space</kbd> to talk</span><span class="novoice-only">⏎ send · ⇧⏎ newline</span>
         </div>
       </div>
     </aside>
@@ -1135,7 +1155,7 @@ const agent = (() => {
     return {
       reply: `${c.name}, a ${c.kindLabel}${business.place ? ' in ' + business.place : ''}. I’ll lay out the landing page as seven modules: hero, features, testimonials, pricing, FAQ, a closing CTA and the footer.`,
       ops,
-      after: `Seven sections are live on @Home. Shape it in plain words, or reference pages with @.`,
+      after: `Seven sections are live on @Home. Ask for any change, or name a page to work on it.`,
       suggestions: ['Make the headline punchier', 'Warmer colors', 'Add an About page and a Booking page', `Map the ${c.flow} flow`],
     };
   }
@@ -1946,6 +1966,62 @@ const flowCanvas = (() => {
 /* =====================================================================
    APP: chat UI, op application, routing, wiring
    ===================================================================== */
+
+/* =====================================================================
+   VOICE: browser speech recognition in, speech synthesis out.
+   One small interface so a hosted (or Moss) speech service can replace it later.
+   ===================================================================== */
+const voice = (() => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const synth = window.speechSynthesis || null;
+  let rec = null, active = false, handlers = {}, finalText = '', chosen = null;
+  const lang = () => navigator.language || 'en-US';
+  function pickVoice() {
+    if (!synth || !synth.getVoices) return null;
+    if (chosen) return chosen;
+    const all = synth.getVoices() || []; if (!all.length) return null;
+    const same = all.filter((v) => (v.lang || '').toLowerCase().startsWith(lang().slice(0, 2).toLowerCase()));
+    const pool = same.length ? same : all;
+    const prefer = [/natural/i, /premium|enhanced/i, /samantha|ava|allison|aria|jenny|google us english|google uk english female/i];
+    chosen = prefer.map((re) => pool.find((v) => re.test(v.name))).find(Boolean) || pool.find((v) => v.default) || pool[0];
+    return chosen;
+  }
+  if (synth && synth.addEventListener) synth.addEventListener('voiceschanged', () => { chosen = null; });
+  const forSpeech = (t) => String(t || '').replace(/@([A-Za-z][\w-]*)/g, '$1').replace(/[“”"]/g, '').replace(/\s+/g, ' ').trim();
+
+  function start(h = {}) {
+    if (!SR || active) return false;
+    cancelSpeech();
+    handlers = h; finalText = '';
+    rec = new SR();
+    rec.lang = lang(); rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    rec.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript;
+      }
+      handlers.onInterim && handlers.onInterim(`${finalText} ${interim}`.replace(/\s+/g, ' ').trim());
+    };
+    rec.onerror = (e) => { handlers.onError && handlers.onError(e.error || 'error'); };
+    rec.onend = () => { active = false; const end = handlers.onEnd; handlers = {}; end && end(finalText.replace(/\s+/g, ' ').trim()); };
+    try { rec.start(); active = true; } catch (e) { active = false; return false; }
+    return true;
+  }
+  function stop() { if (rec && active) { try { rec.stop(); } catch (e) {} } }       // finish and deliver what was heard
+  function abort() { if (rec && active) { handlers.onEnd = null; try { rec.abort(); } catch (e) {} active = false; } } // discard
+  function speak(text) {
+    const t = forSpeech(text);
+    if (!synth || !t || !sound.isEnabled()) return;
+    const u = new SpeechSynthesisUtterance(t);
+    const v = pickVoice(); if (v) u.voice = v;
+    u.lang = v ? v.lang : lang(); u.rate = 1.04;
+    synth.speak(u);
+  }
+  function cancelSpeech() { if (synth) synth.cancel(); }
+  return { supported: () => !!SR, start, stop, abort, speak, cancelSpeech, isListening: () => active, forSpeech };
+})();
+
 const app = (() => {
   let busy = false; let idleWaiters = [];
   let view = 'page';
@@ -2138,9 +2214,59 @@ const app = (() => {
     refs.sections.forEach((s) => { renderer.flash(s.id); isoScene.flash(s.id); });
   }
 
-  async function send(raw) {
+
+  /* ---- voice input: tap the mic or hold Space; sends on pause ---- */
+  function fromSpeech(text) {
+    let t = text.trim();
+    pageModel.get().pages.forEach((p) => {
+      const n = p.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      t = t.replace(new RegExp(`\\b(?:at|on)\\s+(?:the\\s+)?${n}(?:\\s+page)?\\b`, 'gi'), (m) => m.replace(/^(\S+)\s+(?:the\s+)?[\s\S]*$/i, (_, w) => (/^on$/i.test(w) ? 'on @' : '@') + p.name));
+    });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  function setMic(on) {
+    $$('.mic-btn').forEach((b) => { b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'Stop listening' : 'Talk to Moss'); });
+    $('#composer').classList.toggle('listening', on);
+    if (on) setStatus('Listening', true); else if (!busy) setStatus('Ready', false);
+  }
+  function startListening(ta) {
+    if (!voice.supported() || voice.isListening()) return;
+    sound.unlock();
+    const base = ta.value.trim();
+    const ok = voice.start({
+      onInterim: (heard) => { ta.value = (base ? base + ' ' : '') + heard; autosize(ta); },
+      onError: (err) => { if (/not-allowed|service-not-allowed/.test(err)) setStatus('Mic blocked', false); },
+      onEnd: (heard) => {
+        setMic(false);
+        if (!heard) { ta.value = base; autosize(ta); return; }
+        const text = fromSpeech((base ? base + ' ' : '') + heard);
+        if (busy) { ta.value = text; autosize(ta); return; } // keep it; send when Moss is free
+        ta.value = ''; autosize(ta);
+        send(text, { voice: true });
+        if (ta.id === 'introInput') setTimeout(() => $('#chatInput').focus(), 50);
+      },
+    });
+    if (ok) { setMic(true); sound.play('click'); }
+  }
+  const micTarget = () => (document.body.classList.contains('started') ? $('#chatInput') : $('#introInput'));
+  function toggleMic(ta) { if (voice.isListening()) voice.stop(); else startListening(ta || micTarget()); }
+  function initVoice() {
+    if (!voice.supported()) { document.body.classList.add('no-voice'); return; }
+    $('#micBtn').addEventListener('click', () => toggleMic($('#chatInput')));
+    $('#introMic').addEventListener('click', () => toggleMic($('#introInput')));
+    const typing = (el) => el && (el.closest('input, textarea, select, button, [contenteditable="true"], .flowview') !== null);
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && voice.isListening()) { voice.abort(); setMic(false); return; }
+      if (e.code !== 'Space' || e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      e.preventDefault(); startListening(micTarget());
+    });
+    window.addEventListener('keyup', (e) => { if (e.code === 'Space' && voice.isListening() && !typing(e.target)) { e.preventDefault(); voice.stop(); } });
+  }
+
+  async function send(raw, opts = {}) {
     const text = (raw || '').trim();
     if (!text || busy) return;
+    const spoken = !!opts.voice;
     sound.unlock();
     if (!document.body.classList.contains('started')) {
       document.body.classList.add('started');
@@ -2151,9 +2277,12 @@ const app = (() => {
     addUser(text); flashMentions(text);
     const msg = addAgent();
     let res;
+    const ack = spoken ? setTimeout(() => voice.speak('On it.'), 1200) : null; // fill a slow Moss turn
     try { res = await agent.respond(text, pageModel.get()); }
     catch (err) { res = { reply: 'Something went wrong on my side. Try that again?', ops: [] }; console.error(err); }
+    clearTimeout(ack);
     msg.querySelector('.typing').remove();
+    if (spoken) voice.speak(res.reply);
     await stream(msg.querySelector('.text'), res.reply);
     const ops = res.ops || [];
     const building = ops.some((o) => o.op === 'addSection');
@@ -2171,7 +2300,7 @@ const app = (() => {
       d.innerHTML = `<summary>${icon('check')}<span>${esc(label)}</span></summary>`;
       logEl.replaceWith(d); d.appendChild(logEl);
     }
-    if (res.after) await stream(msg.querySelector('.after'), res.after);
+    if (res.after) { if (spoken) voice.speak(res.after); await stream(msg.querySelector('.after'), res.after); }
     setSuggestions(res.suggestions);
     setBusy(false);
   }
@@ -2263,6 +2392,7 @@ const app = (() => {
     $('#viewFlow').addEventListener('click', () => setView('flow'));
     $('#sheetHandle').addEventListener('click', () => { const c = $('#chat').classList.toggle('collapsed'); $('#sheetHandle').setAttribute('aria-expanded', !c); });
     window.addEventListener('hashchange', () => { const id = location.hash.replace(/^#\//, ''); if (pageModel.page(id)) navigate(id); });
+    initVoice();
 
     flowCanvas.init();
     isoScene.initParallax();
@@ -2272,11 +2402,11 @@ const app = (() => {
     setSuggestions([]);
   }
   const whenIdle = () => new Promise((r) => { if (!busy) r(); else idleWaiters.push(r); });
-  return { init, send, openPage, whenIdle, isBusy: () => busy, view: () => view };
+  return { init, send, openPage, whenIdle, isBusy: () => busy, view: () => view, fromSpeech };
 })();
 
 app.init();
-window.moss = { app, agent, pageModel, renderer, isoScene, flowCanvas, theme, sound };
+window.moss = { app, agent, pageModel, renderer, isoScene, flowCanvas, theme, sound, voice };
 </script>
 </body>
 </html>
