@@ -289,3 +289,32 @@ User-approved change to PROMPT.md §4 for the builder chrome:
 5. Feature rows sit on four baselines; drop the icons and align the description column with the paragraph above.
 
 **Reading.** The rail and agent-panel complaints from iterations 3–7 are gone. The new #1 gap is caused by where the build stage sits (it covers the preview in the mid-build frame), not by having it.
+
+---
+
+## Iteration 9 (build stage in the chat, icon rail, neutral page eyebrows)
+
+Changes scored in this run (made after iteration 8, at the user's request):
+- **Build stage in the chat panel**: the isometric stage opens under the conversation only while sections are being built, with a camera that follows the newest module. It never covers the preview.
+- **Rail**: a 56px icon strip (one line icon per section, labels as tooltips, 2px accent bar on the active one).
+- **Preview eyebrows**: neutral grey 13px sans caps instead of teal mono (a further, user-approved departure from §4; mono stays in the tool chrome).
+- **Hero**: "See the rooms" is a text link; the booking card is aligned to the headline's cap height.
+- **Feature rows**: no icons, one baseline, descriptions aligned under the section lede.
+
+| | |
+|---|---|
+| Screenshot | `screenshots/iter-9.png` |
+| Our letter | E |
+| Our rank | **4 / 5** (C > B > A > E > D) |
+| Our scores | Composition 3 · Spacing 4 · Typography 4 · Color 3 · Components 4 · Originality 3 |
+| Our total | **21 / 30** (down from 22) |
+| Others | C 26 · B 25 · A 22 · D 20 |
+
+**Top gaps for E (critic, in order of impact).** No changes made after this run.
+1. The preview hero has no image or visual anchor. A hospitality page rendered as text plus a booking card reads as a wireframe. Use a full-width photograph or a 60/40 split, with the booking card overlapping its lower edge.
+2. Rail, canvas and chat sit at the same near-white value. Put the canvas on a darker neutral well with the page as a raised sheet, and tint the chat one step off-white.
+3. The pale cyan accent appears in four small places at low contrast (teal mono labels ~3:1). Commit to one saturated accent ("deep moss green would match the name") and darken the mono labels to 4.5:1.
+4. The "Assembling" widget duplicates the checklist above it, its labels collide, and it's "the most generic AI-builder trope on the screen". Delete it and turn the checklist into a 7-step progress row.
+5. Feature rows still on three baselines; the description column (x≈628) doesn't line up with the booking card (x≈664).
+
+**Reading.** Moving the stage and slimming the rail removed iteration 8's top gaps (preview occlusion, rail width), but the total held flat (22 → 21, within the critic's ±1 run-to-run noise). Across iterations 5–9 the score has plateaued at 21–22, while the references sit at 24–27. The newly exposed #1 gap, no imagery in the generated hero, is the largest remaining lever, and the only one that doesn't conflict with the brief: an inline SVG or CSS illustration would keep the file self-contained. Gaps 3 and 4 ask to replace the ice-cyan accent and delete the isometric build moment, both core to PROMPT.md §4.
