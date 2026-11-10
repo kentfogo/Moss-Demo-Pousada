@@ -1549,10 +1549,13 @@ const agent = (() => {
         }
       }
     }
+    // Keep @ only for real pages (existing or added in this turn); "@Pipeline Plumbing" becomes "Pipeline Plumbing".
+    const pageNames = new Set(sim.pages.map((pg) => pg.name.toLowerCase()));
+    const unAt = (t) => t && t.replace(/@([A-Za-z][\w-]*)/g, (m, n) => (pageNames.has(n.toLowerCase()) ? m : n));
     return {
-      reply: str(json.reply, 600) || (ops.length ? 'On it.' : 'Could you say a little more about what you want changed?'),
+      reply: unAt(str(json.reply, 600)) || (ops.length ? 'On it.' : 'Could you say a little more about what you want changed?'),
       ops,
-      after: str(json.after, 300) || undefined,
+      after: unAt(str(json.after, 300)) || undefined,
       suggestions: Array.isArray(json.suggestions) ? json.suggestions.map((x) => str(x, 48)).filter(Boolean).slice(0, 4) : undefined,
     };
   }

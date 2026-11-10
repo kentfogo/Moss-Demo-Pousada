@@ -13,7 +13,7 @@ const check = (name, ok, detail = '') => { results.push(!!ok); console.log(`${ok
 const requests = [];
 const REPLIES = {
   build: {
-    reply: 'Miradouro, a rooftop bar in Porto. Laying out the landing page now.',
+    reply: 'Miradouro, a rooftop bar in Porto. Laying out @Home for @Miradouro now.',
     ops: [
       { op: 'setBusiness', business: { name: 'Miradouro', kind: 'rooftop cocktail bar', place: 'Porto', announce: { tag: 'New', text: 'Sunset sessions every Friday' }, primary: 'Book a table' } },
       { op: 'addPage', page: { id: 'home', name: 'Home' }, navigate: true },
@@ -79,6 +79,8 @@ const server = http.createServer((req, res) => {
   const t1 = await types();
   check('model sections rendered; bad page and unknown op dropped', JSON.stringify(t1) === JSON.stringify(['hero', 'features', 'testimonials', 'stats', 'cta', 'footer']), t1.join(','));
   check('model copy used', (await page.locator('.sec-hero h1').innerText()) === 'The best seat in Porto is up here.');
+  const r1 = await page.locator('.msg.agent .text:not(.after)').first().innerText();
+  check('@ kept for pages, dropped for the business name', r1.includes('@Home') && r1.includes('for Miradouro'), r1);
   check('object-shaped items accepted (features, card rows)', (await page.locator('.feat h3').first().innerText()) === 'Port tonic, reworked' && (await page.locator('.hero-card dd').first().innerText()) === '20:41');
   check('junk stats data falls back to defaults', (await page.locator('.stat').count()) === 3);
   const href = await page.getAttribute('.cta-band a.btn', 'href');
