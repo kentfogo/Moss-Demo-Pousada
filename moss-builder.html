@@ -606,6 +606,60 @@ body:not(.started) .chat { visibility: hidden; }
 .mention-menu [role="option"] svg.i { color: var(--ink-3); }
 
 
+/* Plan board: the brief, the outline and the three looks, shown in place of the empty page */
+body.planning #frame { display: none; }
+.plan-board { max-width: 900px; margin: 0 auto 80px; padding: 28px 30px 30px; border-radius: var(--r3); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--sh2); }
+.plan-board[hidden] { display: none; }
+.pb-top { display: flex; justify-content: space-between; align-items: center; }
+.pb-top .mono { font-size: 11px; color: var(--ink-3); }
+.pb-title { margin: 10px 0 18px; font: 400 38px/1.05 var(--f-display); letter-spacing: -.01em; }
+.pb-q { padding: 18px 20px; border-radius: var(--r2); background: var(--bg); border: 1px solid var(--line); margin-bottom: 22px; animation: msgin var(--t2) var(--ease) both; }
+.pb-q .mono { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.pb-q p { margin: 8px 0 14px; font-size: 21px; line-height: 1.3; font-weight: 500; letter-spacing: -.01em; }
+.pb-q small { display: block; margin-top: 12px; color: var(--ink-3); font-size: 12.5px; }
+.pb-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pb-cols { display: grid; grid-template-columns: 1fr 1.1fr; gap: 22px; }
+.plan-board h3 { margin: 0 0 10px; font: 500 10.5px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.pb-brief dl { margin: 0; display: grid; gap: 2px; }
+.pb-brief dl > div { display: grid; grid-template-columns: 96px 1fr; gap: 10px; padding: 8px 10px; border-radius: var(--r1); font-size: 13.5px; transition: background-color var(--t2); }
+.pb-brief dt { color: var(--ink-3); font-size: 12px; padding-top: 1px; }
+.pb-brief dd { margin: 0; color: var(--ink-3); }
+.pb-brief .on dd { color: var(--ink); }
+.pb-brief .asking { background: var(--accent-soft); }
+.pb-brief .asking dd { color: var(--accent); }
+.pb-brief .fresh { animation: tabflash calc(1400ms * var(--speed)) var(--ease); }
+.pb-outline ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pb-outline li { display: grid; grid-template-columns: 26px 1fr auto; gap: 4px 10px; padding: 9px 12px; border: 1px dashed var(--line-2); border-radius: var(--r2); font-size: 13px; }
+.pb-outline li .n { font: 11px var(--f-mono); color: var(--ink-3); padding-top: 2px; }
+.pb-outline li b { font-weight: 600; }
+.pb-outline li .v { font: 10.5px var(--f-mono); color: var(--ink-3); }
+.pb-outline li p { grid-column: 2 / -1; margin: 0; color: var(--ink-2); font-size: 12.5px; }
+.pb-outline li.done { border-style: solid; background: var(--bg); }
+.pb-outline li.done .n { color: var(--accent); }
+.pb-wait { color: var(--ink-3); font-size: 13px; margin: 0; padding: 14px; border: 1px dashed var(--line-2); border-radius: var(--r2); }
+.pb-dirs { margin-top: 24px; }
+.pb-dir-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.pb-dir { position: relative; padding: 16px; border-radius: var(--r2); border: 1px solid var(--line-2); text-align: left; display: grid; gap: 8px; cursor: pointer; transition: transform var(--t1), box-shadow var(--t1); }
+.pb-dir:hover { transform: translateY(-2px); box-shadow: var(--sh2); }
+.pb-dir[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent-glow), var(--sh2); }
+.pb-dir .aa { font-size: 40px; line-height: 1; }
+.pb-dir .sw { display: flex; gap: 4px; }
+.pb-dir .sw i { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.pb-dir b { font-size: 14px; }
+.pb-dir span.why { font-size: 12px; opacity: .78; line-height: 1.4; }
+.pb-dir .tag { position: absolute; top: 12px; right: 12px; font: 10px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; }
+.pb-go { margin-top: 18px; display: flex; gap: 10px; align-items: center; }
+.pb-go .btn { height: 38px; }
+.pb-go span { font-size: 12.5px; color: var(--ink-3); }
+.rail li.ghost button { opacity: .45; border: 1px dashed var(--line-2); cursor: default; }
+.pcard.draft { border: 1px dashed var(--line-2); background: color-mix(in srgb, var(--surface) 70%, transparent); box-shadow: none; }
+.pcard.draft h3 { color: var(--ink-2); }
+.pcard.draft .why { margin: -4px 0 10px; font-size: 12px; color: var(--ink-3); line-height: 1.4; }
+.pcard.draft .pc-build { margin-top: 10px; height: 28px; padding: 0 12px; border-radius: var(--rp); border: 1px solid var(--line-2); background: var(--surface); font-size: 12px; }
+.pcard.draft .pc-build:hover { border-color: var(--accent); color: var(--accent); }
+.edge.draft { stroke-dasharray: 3 6; opacity: .55; }
+@media (max-width: 760px) { .pb-cols, .pb-dir-row { grid-template-columns: 1fr; } .plan-board { padding: 20px; } }
+
 /* Voice: mic buttons, listening state */
 .mic-btn { position: relative; flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); display: grid; place-items: center; transition: background-color var(--t1), border-color var(--t1), color var(--t1), transform var(--t1); }
 .mic-btn:hover { border-color: var(--ink-3); transform: translateY(-1px); }
@@ -767,6 +821,7 @@ body.started .canvas { background: var(--bg-2); }
         </div>
 
         <div class="frame-wrap">
+          <div class="plan-board" id="planBoard" hidden aria-live="polite"></div>
           <div class="frame" id="frame">
             <div class="frame-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url" id="frameUrl"></span><span class="count" id="frameCount"></span></div>
             <div class="site" id="site" data-palette="ice">
@@ -814,7 +869,7 @@ body.started .canvas { background: var(--bg-2); }
         <div class="mention-menu glass" id="mentionMenu" role="listbox" aria-label="Mention a page or section" hidden></div>
         <form class="composer" id="composer">
           <label for="chatInput" class="sr-only">Message Moss</label>
-          <textarea id="chatInput" rows="1" placeholder="Ask for a change · @ to reference" aria-autocomplete="list" aria-controls="mentionMenu"></textarea>
+          <textarea id="chatInput" rows="1" placeholder="Ask for a change, or type @" aria-autocomplete="list" aria-controls="mentionMenu"></textarea>
           <button class="mic-btn" type="button" id="micBtn" aria-pressed="false" aria-label="Talk to Moss" title="Talk (or hold Space)"><svg class="i" viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z M18.5 11a6.5 6.5 0 0 1-13 0 M12 17.5V21"/></svg></button>
           <button class="send-btn" type="submit" aria-label="Send"><svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
         </form>
@@ -938,7 +993,7 @@ const sound = (() => {
    PAGE MODEL: JSON state for pages / sections / links / flows + undo
    ===================================================================== */
 const pageModel = (() => {
-  const fresh = () => ({ business: null, palette: 'ice', design: null, pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
+  const fresh = () => ({ business: null, palette: 'ice', design: null, plan: null, drafts: [], pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
   let state = fresh();
   const history = [];
   return {
@@ -1165,7 +1220,136 @@ const agent = (() => {
     };
   }
 
-  async function localRespond(message, state) {
+
+  /* ---------------- Plan mode: a grill-me style interview, then a plan, then a guided build ----------------
+     Offline version (the live version runs on Moss with the Planner prompt in api/agent.js). */
+  const PLAN_RE = /\b(plan mode|plan it( out)?|help me (build|make|create|design|plan)|let'?s (build|make|create|design|plan)|build (it|this|one) (with me|together)|work (on it |on this )?with me|can we (build|make|create))\b/;
+  const AUTO_RE = /\b(just build|build it all|build everything|build the rest|skip (the )?(questions|plan|interview)|autopilot|surprise me)\b/;
+  function modeOf(low, state, opts = {}) {
+    if (opts.mode) return opts.mode;
+    if (AUTO_RE.test(low)) return 'autopilot';
+    if (PLAN_RE.test(low)) return 'plan';
+    if (!state.pages.length && !state.plan) return 'plan'; // a new site plans first
+    return undefined;
+  }
+  const BRIEF_KEYS = [['business', 'Business'], ['offer', 'Known for'], ['audience', 'Audience'], ['action', 'Main action'], ['proof', 'Proof'], ['tone', 'Feel'], ['must', 'Must-haves'], ['facts', 'Facts']];
+  function QUESTIONS(kind) {
+    const k = {
+      pousada: { offer: ['Slow, quiet stays by the beach', 'The breakfast garden', 'Hosts who know the area'], audience: ['Couples on a getaway', 'Families', 'Remote workers'], action: ['Book a room', 'Check availability', 'Message us on WhatsApp'] },
+      coffee: { offer: ['Freshly roasted single origins', 'Flexible subscriptions', 'Direct trade with farms'], audience: ['Home brewers', 'Offices', 'Cafés (wholesale)'], action: ['Start a subscription', 'Shop a bag', 'Book a cupping'] },
+      saas: { offer: ['It saves hours every week', 'It is simpler than the alternatives', 'It is built for one niche'], audience: ['Freelancers', 'Small agencies', 'Finance teams'], action: ['Start a free trial', 'Book a demo', 'Join the waitlist'] },
+      generic: { offer: ['Quality of the work', 'Speed and reliability', 'Fair, upfront prices'], audience: ['Local customers', 'Businesses', 'First-time buyers'], action: ['Call us', 'Book online', 'Get a quote'] },
+    }[kind] || null;
+    const o = k || { offer: ['Quality of the work', 'Speed and reliability', 'Fair, upfront prices'], audience: ['Local customers', 'Businesses', 'First-time buyers'], action: ['Call us', 'Book online', 'Get a quote'] };
+    return [
+      { id: 'offer', question: 'What do you want people to know you for, above everything else?', options: o.offer, why: 'This becomes the headline.' },
+      { id: 'audience', question: 'Who do you most want this page to win over?', options: o.audience, why: 'Copy and proof get written for them.' },
+      { id: 'action', question: 'What is the one thing a visitor should do?', options: o.action, why: 'Every section points at this.' },
+      { id: 'proof', question: 'What proof can we show that you are good at this?', options: ['Reviews from customers', 'Numbers: years, jobs, ratings', 'Press or partner logos'], why: 'Trust decides whether they act.' },
+      { id: 'tone', question: 'How should it feel when someone lands?', options: ['Warm and relaxed', 'Bold and loud', 'Clean and premium'], why: 'This picks the look.' },
+      { id: 'must', question: 'Anything the page must include?', options: ['Prices up front', 'A photo gallery', 'How it works, step by step'], why: 'Must-haves go into the plan first.' },
+    ];
+  }
+  const ORDINAL = [/^(the )?(first|1st|one|a)( one)?\b|^1\b/, /^(the )?(second|2nd|two|b)( one)?\b|^2\b/, /^(the )?(third|3rd|three|c)( one)?\b|^3\b/];
+  const ordinalOf = (low) => { const l = low.replace(/^(go with|pick|choose|let'?s (go with|do)|i'?ll take)\s+/, '').trim(); const i = ORDINAL.findIndex((re) => re.test(l)); return i < 0 ? null : i; };
+  const VAGUE_WORDS = /\b(i don'?t know|don'?t know|not sure|no idea|whatever|anything is fine|idk|dunno|hmm+|no clue|you tell me)\b/;
+  const VAGUE = { test: (l) => l.split(/\s+/).length <= 6 && VAGUE_WORDS.test(l) };
+  const ACKS = ['Got it.', 'Good.', 'Noted.', 'Makes sense.', 'Helpful.'];
+  function proposePlan(brief, kind, name) {
+    const must = (brief.must || '').toLowerCase(), proof = (brief.proof || '').toLowerCase(), tone = (brief.tone || '').toLowerCase();
+    const sec = [{ type: 'hero', intent: `Lead with ${(brief.offer || 'what you are known for').replace(/^./, (m) => m.toLowerCase())} and one button: ${brief.action || 'the main action'}` }];
+    if (/how it works|step/.test(must) || kind === 'generic' || kind === 'saas') sec.push({ type: 'steps', intent: 'Show how it works in three steps' });
+    sec.push({ type: 'features', intent: `Why ${(brief.audience || 'customers').replace(/^./, (m) => m.toLowerCase())} choose you` });
+    if (/gallery|photo/.test(must) || kind === 'pousada' || kind === 'coffee') sec.push({ type: 'gallery', intent: 'Let the photos do the selling' });
+    if (/logo|press|partner/.test(proof)) sec.push({ type: 'logos', intent: 'Borrow trust from names people know' });
+    sec.push({ type: /number|years|rating/.test(proof) ? 'stats' : 'testimonials', intent: 'Proof, in their words or in numbers' });
+    if (/price/.test(must) || kind !== 'generic') sec.push({ type: 'pricing', intent: 'Clear prices, no surprises' });
+    sec.push({ type: 'faq', intent: 'Answer what stops people from acting' });
+    sec.push({ type: 'cta', intent: `One last push: ${brief.action || 'get in touch'}` });
+    sec.push({ type: 'footer', intent: 'Contact details and links' });
+    const ids = /bold|loud/.test(tone) ? ['brutal', 'trade', 'darktech'] : /clean|premium|minimal/.test(tone) ? ['swiss', 'luxury', 'mono'] : /warm|relax/.test(tone) ? ['hospitality', 'editorial', 'playful'] : ({ pousada: ['hospitality', 'editorial', 'luxury'], coffee: ['editorial', 'brutal', 'mono'], saas: ['swiss', 'darktech', 'playful'] }[kind] || ['swiss', 'hospitality', 'brutal']);
+    const directions = ids.map((id) => { const d = MossSite.byId(id); return { direction: id, name: d.name, why: d.mood, hue: MossSite.hashHue(name + id) }; });
+    const lc = (t) => (t && !/^[A-Z]{2}/.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t);
+    return { sections: sec.slice(0, 10), directions, summary: `${name}: ${lc(brief.offer) || 'what you do best'}, for ${lc(brief.audience) || 'your customers'}, built around one action: ${lc(brief.action) || 'getting in touch'}.` };
+  }
+  function pickDirection(low, dirs) {
+    const o = ordinalOf(low); if (o != null && dirs[o]) return o;
+    const i = dirs.findIndex((d) => low.includes(d.name.toLowerCase()) || low.includes(d.direction)); return i < 0 ? null : i;
+  }
+  function plannedSection(ps, c) { const sec = makeSection(ps.type, c); if (sec && ps.variant) sec.data.variant = ps.variant; return sec; }
+  function suggestNextLocal(kind) {
+    const why = { about: 'Tell the story behind the business', contact: 'Make it easy to reach you', pricing: 'Compare options side by side', booking: 'Let people book without a call' };
+    const ids = { pousada: ['booking', 'about', 'contact'], coffee: ['pricing', 'about', 'contact'], saas: ['pricing', 'about', 'contact'] }[kind] || ['contact', 'about', 'pricing'];
+    const steps = { pousada: ['Lands on Home', 'Browses rooms', 'Picks dates', 'Pays deposit', 'Gets confirmation'], coffee: ['Lands on Home', 'Picks a roast', 'Chooses a plan', 'Checks out', 'First bag ships'], saas: ['Lands on Home', 'Reads features', 'Starts trial', 'Connects account', 'First result'] }[kind] || ['Lands on Home', 'Reads services', 'Gets a quote', 'Books a slot', 'Job done'];
+    return { op: 'suggestNext', pages: ids.map((id) => ({ id, name: cap(id), why: why[id], sections: (PAGE_RECIPES[id] ? ['hero', ...{ about: ['text', 'stats', 'cta'], contact: ['contact'], pricing: ['pricing', 'faq', 'cta'], booking: ['booking', 'faq'] }[id], 'footer'] : ['hero', 'footer']) })), journeys: [{ name: 'Visitor journey', steps }] };
+  }
+  function startPlan(text, state) {
+    const kind = detectKind(text.toLowerCase());
+    const place = extractPlace(text);
+    const c = copyFor(kind, extractName(text), place);
+    const business = { kind, name: c.name, place, prompt: text, copy: c };
+    const q = QUESTIONS(kind)[0];
+    return { reply: `Let's plan ${c.name} together, one question at a time. ${q.question}`, ops: [{ op: 'setBusiness', business }, { op: 'startPlan', brief: { business: `${c.name}, a ${c.kindLabel}${place ? ' in ' + place : ''}` } }, { op: 'askQuestion', ...q }], suggestions: q.options };
+  }
+  function planRespond(text, low, state, opts) {
+    const plan = state.plan; if (!plan || plan.phase === 'done') return null;
+    const c = state.business && state.business.copy; const kind = state.business ? state.business.kind : 'generic'; const name = state.business ? state.business.name : 'Your site';
+    const auto = AUTO_RE.test(low) || opts.mode === 'autopilot';
+    if (plan.phase === 'interview') {
+      const qs = QUESTIONS(kind); const cur = plan.question; const ops = [];
+      const enough = auto || /\b(that'?s (enough|it)|enough questions|build it|let'?s (build|start|go)|skip( it)?|go ahead|you decide)\b/.test(low);
+      if (cur && !enough) {
+        if (VAGUE.test(low)) return { reply: `No problem, I'll suggest one. ${cur.question} Pick one of these, or tell me in your own words.`, ops: [], suggestions: cur.options };
+        const o = ordinalOf(low); const answer = o != null && cur.options[o] ? cur.options[o] : text.replace(/^(it'?s|its|we'?re|mostly|probably)\s+/i, '');
+        ops.push({ op: 'setBrief', patch: { [cur.id]: answer } });
+      }
+      const brief = Object.assign({}, plan.brief, ops[0] ? ops[0].patch : {});
+      const next = qs.find((q) => !brief[q.id]);
+      if (next && !enough) { ops.push({ op: 'askQuestion', ...next }); return { reply: `${ACKS[Object.keys(brief).length % ACKS.length]} ${next.question}`, ops, suggestions: next.options }; }
+      const proposal = proposePlan(brief, kind, name);
+      ops.push({ op: 'setPlan', ...proposal });
+      const names = proposal.directions.map((d) => d.name);
+      if (auto) {
+        ops.push({ op: 'chooseDirection', index: 0 }, { op: 'addPage', page: { id: 'home', name: 'Home', sections: [] }, navigate: true, quiet: true });
+        proposal.sections.forEach((ps) => ops.push({ op: 'addSection', page: 'home', section: plannedSection(ps, c) }));
+        ops.push(suggestNextLocal(kind), { op: 'setView', view: 'flow' });
+        return { reply: `Building all ${proposal.sections.length} sections in ${names[0]}.`, ops, after: 'Home is done. Here is what usually comes next. Which should I build?', suggestions: ['Build the booking page', 'Skip the rest'] };
+      }
+      return { reply: `${proposal.summary} The plan is ${proposal.sections.length} sections. Three looks: ${list(names)}. Which one?`, ops, suggestions: names.map((n) => `Go with ${n}`) };
+    }
+    if (plan.phase === 'proposed') {
+      const pick = pickDirection(low, plan.directions);
+      const start = auto || /\b(start|let'?s go|build( it)?|go ahead|begin|looks good|perfect|yes)\b/.test(low);
+      const ops = [];
+      if (pick != null) ops.push({ op: 'chooseDirection', index: pick });
+      if (!start) {
+        if (pick == null) return null; // a plan edit or a question: let the normal agent handle it
+        const d = plan.directions[pick];
+        return { reply: `${d.name} it is. Say "let's start" and I'll build the hero first.`, ops, suggestions: ["Let's start", 'Build the rest'] };
+      }
+      if (pick == null && plan.chosen == null) ops.push({ op: 'chooseDirection', index: 0 });
+      ops.push({ op: 'addPage', page: { id: 'home', name: 'Home', sections: [] }, navigate: true, quiet: true });
+      const todo = auto ? plan.sections : plan.sections.slice(0, 1);
+      todo.forEach((ps) => ops.push({ op: 'addSection', page: 'home', section: plannedSection(ps, c) }));
+      if (auto) { ops.push(suggestNextLocal(kind), { op: 'setView', view: 'flow' }); return { reply: 'Building the whole page now.', ops, after: 'Home is done. Here is what usually comes next. Which should I build?' }; }
+      const nxt = plan.sections[1];
+      return { reply: `The ${label(plan.sections[0].type).toLowerCase()} is in. Keep it, or change something?${nxt ? ` Say "next" for the ${label(nxt.type).toLowerCase()}.` : ''}`, ops, suggestions: ['Next', 'Make the headline punchier', 'Build the rest'] };
+    }
+    if (plan.phase === 'building') {
+      const remaining = plan.sections.filter((x) => !x.done);
+      const isNext = /^(next|keep going|continue|looks good|good|great|perfect|nice|ok(ay)?|yes|go on|carry on|move on|next one|next section|love it|keep it)\b/.test(low);
+      if (!isNext && !auto) return null; // edits to what was just built go to the normal agent
+      const todo = auto ? remaining : remaining.slice(0, 1);
+      const ops = todo.map((ps) => ({ op: 'addSection', page: 'home', section: plannedSection(ps, c) }));
+      const left = remaining.length - todo.length;
+      if (!left) { ops.push(suggestNextLocal(kind), { op: 'setView', view: 'flow' }); return { reply: todo.length > 1 ? `Building the last ${todo.length} sections.` : `The ${label(todo[0].type).toLowerCase()} is in, and Home is done.`, ops, after: 'Here is what usually comes next. Which should I build?', suggestions: ['Build the booking page', 'Build the about page', 'Skip the rest'] }; }
+      const nxt = remaining[todo.length];
+      return { reply: `The ${label(todo[todo.length - 1].type).toLowerCase()} is in. Keep it, or change something? Next up: ${label(nxt.type).toLowerCase()}.`, ops, suggestions: ['Next', 'Build the rest'] };
+    }
+    return null;
+  }
+
+  async function localRespond(message, state, opts = {}) {
     await wait(260);
     const text = message.trim();
     const low = text.toLowerCase();
@@ -1179,6 +1363,9 @@ const agent = (() => {
     if (/^\s*(undo|revert)\b|\bundo\b|take that back|go back a step/.test(low)) {
       return pageModel.canUndo() ? { reply: 'Rolled back the last change.', ops: [{ op: 'undo' }] } : { reply: 'Nothing to undo yet.', ops: [] };
     }
+    if (/\b(skip the rest|no more pages|that'?s all for now|dismiss( the)? suggestions)\b/.test(low) && (state.drafts || []).length) return { reply: 'Okay, no more pages for now.', ops: [{ op: 'dismissDrafts' }], suggestions: ['Make the headline punchier', 'Warmer colors'] };
+    const planned = planRespond(text, low, state, opts); if (planned) return planned;
+    if (!state.pages.length && !state.plan) return modeOf(low, state, opts) === 'autopilot' ? build(text.replace(/^(just|please)\s+/i, '').replace(AUTO_RE, '').trim() || text, state) : startPlan(text, state);
     if (!state.pages.length) return build(text, state);
     if (/\b(start over|start again|start from scratch|from scratch|scrap (it|this|everything)|redo (the whole thing|everything|it all|the (whole )?site)|rebuild everything|new site)\b/.test(low)) {
       const again = state.business ? build(state.business.prompt || state.business.name, Object.assign({}, state, { pages: [] })) : null;
@@ -1367,11 +1554,12 @@ const agent = (() => {
   }
   async function respond(message, state, opts = {}) {
     const low = message.trim().toLowerCase();
-    if (!REMOTE || remoteDisabled || isLocalCommand(low, state)) return localRespond(message.replace(/^(go to|open|show( me)?|take me to)\s+(the\s+)?([A-Za-z])/i, (m, a, b, c, d) => `${a} @${d}`), state);
+    const mode = modeOf(low, state, opts);
+    if (!REMOTE || remoteDisabled || isLocalCommand(low, state)) return localRespond(message.replace(/^(go to|open|show( me)?|take me to)\s+(the\s+)?([A-Za-z])/i, (m, a, b, c, d) => `${a} @${d}`), state, { mode });
     try {
       const r = await fetch('/api/agent', {
         method: 'POST', headers: { 'content-type': 'application/json' }, signal: opts.signal,
-        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-8), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections(), live: !!opts.live }),
+        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-8), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections(), live: !!opts.live, mode }),
       });
       const json = await r.json().catch(() => ({}));
       if (!r.ok) { if (r.status === 503 || r.status === 404) remoteDisabled = true; throw new Error(json.error || `HTTP ${r.status}`); }
@@ -1381,7 +1569,7 @@ const agent = (() => {
     } catch (err) {
       if (err && err.name === 'AbortError') return { reply: '', ops: [], aborted: true };
       console.warn('Moss inference unavailable, using the offline agent:', err.message);
-      const res = await localRespond(message, state);
+      const res = await localRespond(message, state, { mode });
       if (!warned) { warned = true; res.reply = `Moss inference isn’t reachable (${err.message}), so the offline demo agent answered. ${res.reply}`; }
       return res;
     }
@@ -1490,7 +1678,8 @@ const agent = (() => {
           break;
         }
         case 'addSection': {
-          const pg = pageOf(pageId); const sec = raw.section || {}; const type = String(sec.type || '').toLowerCase();
+          if (!pageOf(pageId) && pageId === 'home' && !sim.pages.length) { sim.pages.push({ id: 'home', name: 'Home', sections: [] }); sim.currentPage = 'home'; ops.push({ op: 'addPage', page: { id: 'home', name: 'Home', sections: [] }, navigate: true, quiet: true }); }
+          const pg = pageOf(pageId); const sec = raw.section || {}; const type = String(sec.type || '').toLowerCase().replace('callstrip', 'callStrip');
           if (!pg || !SECTION_META[type]) break;
           if (!copy) copy = copyFor('generic', sim.business && sim.business.name, null);
           const base = makeSection(type, copy);
@@ -1583,6 +1772,37 @@ const agent = (() => {
           const id = slug(raw.page); if (pageOf(id)) { sim.currentPage = id; ops.push({ op: 'navigate', page: id }); }
           break;
         }
+        case 'startPlan': ops.push({ op: 'startPlan', brief: cleanValue(raw.brief) || {} }); break;
+        case 'askQuestion': {
+          const q = str(raw.question, 220); if (!q) break;
+          ops.push({ op: 'askQuestion', id: slug(raw.id) || 'q' + ops.length, question: q, options: (Array.isArray(raw.options) ? raw.options : []).map((x) => str(x, 60)).filter(Boolean).slice(0, 4), why: str(raw.why, 120) || '' });
+          break;
+        }
+        case 'setBrief': {
+          const patch = {}; const src = raw.patch && typeof raw.patch === 'object' ? raw.patch : {};
+          Object.keys(src).slice(0, 12).forEach((k) => { const key = k.toLowerCase().replace(/[^a-z]/g, '').slice(0, 20); const v = str(Array.isArray(src[k]) ? src[k].join(', ') : src[k], 240); if (key && v) patch[key] = v; });
+          if (Object.keys(patch).length) ops.push({ op: 'setBrief', patch });
+          break;
+        }
+        case 'setPlan': {
+          const sections = (Array.isArray(raw.sections) ? raw.sections : []).map((x) => ({ type: String((x && x.type) || '').toLowerCase().replace('callstrip', 'callStrip'), variant: str(x && x.variant, 20) || undefined, intent: str(x && x.intent, 140) || '' })).filter((x) => SECTION_META[x.type]).slice(0, 10);
+          const directions = (Array.isArray(raw.directions) ? raw.directions : []).map((d) => { const dir = window.MossSite && MossSite.byId(d && (d.direction || d.id)); return dir ? { direction: dir.id, name: str(d.name, 40) || dir.name, why: str(d.why, 160) || dir.mood, hue: Number.isFinite(Number(d.hue)) ? Number(d.hue) : MossSite.hashHue((state.business && state.business.name) + dir.id), hue2: Number.isFinite(Number(d.hue2)) ? Number(d.hue2) : undefined } : null; }).filter(Boolean).slice(0, 3);
+          if (sections.length) ops.push({ op: 'setPlan', sections, directions, summary: str(raw.summary, 300) || '' });
+          break;
+        }
+        case 'chooseDirection': {
+          const dirs = (ops.find((o) => o.op === 'setPlan') || {}).directions || (state.plan && state.plan.directions) || [];
+          let i = Number.isInteger(raw.index) ? raw.index : dirs.findIndex((d) => d.direction === raw.id || d.direction === raw.direction || (raw.name && d.name.toLowerCase() === String(raw.name).toLowerCase()));
+          if (i >= 0 && i < dirs.length) ops.push({ op: 'chooseDirection', index: i });
+          break;
+        }
+        case 'suggestNext': {
+          const pagesS = (Array.isArray(raw.pages) ? raw.pages : []).map((x) => ({ id: slug(x && (x.id || x.name)), name: str(x && x.name, 30), why: str(x && x.why, 140) || '', sections: (Array.isArray(x && x.sections) ? x.sections : []).map((t) => String(t && t.type ? t.type : t)).filter((t) => SECTION_META[t]).slice(0, 8) })).filter((x) => x.id && x.name && !pageOf(x.id)).slice(0, 6);
+          const journeys = (Array.isArray(raw.journeys) ? raw.journeys : []).slice(0, 2).map((j) => ({ name: str(j && j.name, 40) || 'Journey', steps: (Array.isArray(j && j.steps) ? j.steps : []).map((x) => str(x, 30)).filter(Boolean).slice(0, 8) })).filter((j) => j.steps.length >= 2);
+          if (pagesS.length) ops.push({ op: 'suggestNext', pages: pagesS, journeys });
+          break;
+        }
+        case 'dismissDrafts': ops.push({ op: 'dismissDrafts' }); break;
       }
     }
     // Deleting every section of a page one by one becomes a single step: deletePage (or resetPage for Home).
@@ -1604,13 +1824,13 @@ const agent = (() => {
       reply: unAt(str(json.reply, 600)) || (ops.length ? 'On it.' : 'Could you say a little more about what you want changed?'),
       ops,
       after: unAt(str(json.after, 300)) || undefined,
-      suggestions: Array.isArray(json.suggestions) ? json.suggestions.map((x) => str(x, 48)).filter(Boolean).slice(0, 4) : undefined,
+      suggestions: Array.isArray(json.suggestions) && json.suggestions.length ? json.suggestions.map((x) => str(x, 48)).filter(Boolean).slice(0, 4) : ((ops.find((o) => o.op === 'askQuestion') || {}).options || undefined),
     };
   }
 
   // Append a note (e.g. an interruption) to the last assistant turn so the model knows what really happened.
   function note(text) { const last = turns[turns.length - 1]; if (last && last.role === 'assistant') last.content += ' ' + text; else turns.push({ role: 'assistant', content: text }); }
-  return { respond, localRespond, normalize, layoutFlow, parseMentions, findSections, note, isRemote: () => REMOTE && !remoteDisabled };
+  return { BRIEF_KEYS, modeOf, respond, localRespond, normalize, layoutFlow, parseMentions, findSections, note, isRemote: () => REMOTE && !remoteDisabled };
 })();
 
 /* =====================================================================
@@ -1712,6 +1932,8 @@ const renderer = (() => {
     $('#frameCount').textContent = page ? `${String(page.sections.length).padStart(2, '0')} SECTIONS` : '';
     const ol = $('#railList');
     ol.innerHTML = (page ? page.sections : []).map((sec, i) => `<li><button type="button" data-id="${sec.id}" title="${String(i + 1).padStart(2, '0')} · ${esc(SECTION_META[sec.type].label)}" aria-label="${esc(SECTION_META[sec.type].label)}" ${sec.id === ol.dataset.active ? 'aria-current="true"' : ''}>${icon(SECTION_META[sec.type].icon)}</button></li>`).join('');
+    const planSt = pageModel.get().plan;
+    if (planSt && st.currentPage === 'home' && planSt.phase === 'building') ol.insertAdjacentHTML('beforeend', planSt.sections.filter((x) => !x.done).map((x) => `<li class="ghost"><button type="button" tabindex="-1" title="Planned · ${esc(SECTION_META[x.type].label)}" aria-label="Planned: ${esc(SECTION_META[x.type].label)}">${icon(SECTION_META[x.type].icon)}</button></li>`).join(''));
     $('#railCount').textContent = page ? String(page.sections.length) : '';
   }
   async function removeSection(id) {
@@ -1939,12 +2161,13 @@ const flowCanvas = (() => {
         drag.el.style.left = nx + 'px'; drag.el.style.top = ny + 'px';
         const st = pageModel.get();
         if (drag.el.dataset.page) st.pagePos[drag.el.dataset.page] = { x: nx, y: ny };
+        else if (drag.el.dataset.draft) st.pagePos['draft:' + drag.el.dataset.draft] = { x: nx, y: ny };
         else { const f = st.flows.find((x) => x.id === drag.el.dataset.flow); const n = f && f.nodes.find((x) => x.id === drag.el.dataset.node); if (n) { n.x = nx - f.ox; n.y = ny - f.oy; } }
         updateEdges();
       } else if (pan) { view.x = pan.ox + e.clientX - pan.sx; view.y = pan.oy + e.clientY - pan.sy; apply(); }
     });
     const end = () => {
-      if (drag) { drag.el.classList.remove('dragging'); if (!drag.moved && drag.el.dataset.page) app.openPage(drag.el.dataset.page); }
+      if (drag) { drag.el.classList.remove('dragging'); if (!drag.moved && drag.el.dataset.page) app.openPage(drag.el.dataset.page); if (!drag.moved && drag.el.dataset.draft) app.send(`Build the ${drag.el.dataset.name} page`); }
       drag = null; pan = null; root.classList.remove('panning');
     };
     root.addEventListener('pointerup', end); root.addEventListener('pointercancel', end);
@@ -1960,6 +2183,10 @@ const flowCanvas = (() => {
       const pos = pagePos(st, p, i);
       html += `<div class="pcard glass ${p.id === st.currentPage ? 'current' : ''} ${drawn.has('p:' + p.id) ? '' : 'enter'}" data-page="${p.id}" style="left:${pos.x}px;top:${pos.y}px" tabindex="0" role="button" aria-label="Open ${esc(p.name)} page"><div class="pc-top"><span>/${p.id === 'home' ? '' : p.id}</span>${icon('page')}</div><h3>${esc(p.name)}</h3><div class="secs">${p.sections.map((s) => `<span>${esc(SECTION_META[s.type].label)}</span>`).join('')}</div></div>`;
       drawn.add('p:' + p.id);
+    });
+    (st.drafts || []).forEach((d, i) => {
+      const pos = st.pagePos['draft:' + d.id] || { x: 40 + (st.pages.length + i) * 256, y: 0 };
+      html += `<div class="pcard draft enter" data-draft="${esc(d.id)}" data-name="${esc(d.name)}" style="left:${pos.x}px;top:${pos.y}px" tabindex="0" role="button" aria-label="Build the ${esc(d.name)} page"><div class="pc-top"><span>/${esc(d.id)}</span><span>suggested</span></div><h3>${esc(d.name)}</h3><p class="why">${esc(d.why)}</p><div class="secs">${d.sections.map((t) => `<span>${esc(SECTION_META[t].label)}</span>`).join('')}</div><button type="button" class="pc-build" tabindex="-1">Build this page</button></div>`;
     });
     st.flows.forEach((f) => {
       html += `<div class="flow-title" style="left:${f.ox}px;top:${f.oy - 34}px">${esc(f.name)}<span>${f.nodes.length} nodes</span></div>`;
@@ -1995,6 +2222,7 @@ const flowCanvas = (() => {
       const explicit = st.links.find((l) => l.from === 'home' && l.to === p.id);
       if (!explicit) out.push({ id: `nav-${p.id}`, a: `[data-page="home"]`, b: `[data-page="${p.id}"]`, cls: 'nav' });
     });
+    (st.drafts || []).forEach((d) => out.push({ id: `draft-${d.id}`, a: `[data-page="home"]`, b: `[data-draft="${d.id}"]`, cls: 'nav draft' }));
     st.links.forEach((l, i) => out.push({ id: `lnk-${i}`, a: `[data-page="${l.from}"]`, b: `[data-page="${l.to}"]`, cls: 'link', label: 'link' }));
     st.flows.forEach((f) => f.edges.forEach((e, i) => out.push({ id: `${f.id}-e${i}`, flow: f.id, a: `[data-flow="${f.id}"][data-node="${e.from}"]`, b: `[data-flow="${f.id}"][data-node="${e.to}"]`, cls: '', label: e.label })));
     return out;
@@ -2238,8 +2466,35 @@ const app = (() => {
     nav.innerHTML = st.pages.map((p) => `<button class="tab ${p.id === enterId ? 'enter' : ''}" data-page="${p.id}" ${p.id === st.currentPage ? 'aria-current="page"' : ''} title="/${p.id === 'home' ? '' : p.id}">${esc(p.name)}</button>`).join('');
     $$('.tab', nav).forEach((b) => b.addEventListener('click', () => openPage(b.dataset.page)));
   }
+  /* ---- plan board ---- */
+  function renderPlanBoard(fresh = []) {
+    const st = pageModel.get(); const board = $('#planBoard'); const plan = st.plan;
+    const home = pageModel.page('home');
+    const show = !!plan && (plan.phase === 'interview' || plan.phase === 'proposed') && !(home && home.sections.length);
+    document.body.classList.toggle('planning', show);
+    board.hidden = !show;
+    if (!show) { board.innerHTML = ''; return; }
+    const keys = agent.BRIEF_KEYS; const q = plan.question;
+    const answered = keys.filter(([k]) => plan.brief[k]).length;
+    const seed = st.business && st.business.name;
+    const dirCard = (d, i) => {
+      const ds = MossSite.sanitizeDesign({ direction: d.direction, hue: d.hue, hue2: d.hue2 }, null, { seed }); const c = ds.colors;
+      MossSite.ensureFont(ds.type.display);
+      return `<button type="button" class="pb-dir" data-say="Go with ${esc(d.name)}" aria-pressed="${plan.chosen === i}" style="background:${c.bg};color:${c.ink};border-color:${c.ink}22"><span class="tag">${plan.chosen === i ? 'chosen' : String.fromCharCode(65 + i)}</span><span class="aa" style="font-family:'${ds.type.display}',serif;text-transform:${ds.type.case}">Aa</span><span class="sw">${['bg', 'surface', 'ink', 'accent', 'accent2'].map((k) => `<i style="background:${c[k]}"></i>`).join('')}</span><b>${esc(d.name)}</b><span class="why">${esc(d.why)}</span></button>`;
+    };
+    board.innerHTML = `<div class="pb-top"><span class="eyebrow">Planning · ${plan.phase === 'interview' ? 'interview' : 'pick a look'}</span><span class="mono">${answered}/${keys.length} in the brief</span></div>
+      <h2 class="pb-title">${esc((st.business && st.business.name) || 'Your new site')}</h2>
+      ${q && plan.phase === 'interview' ? `<div class="pb-q"><span class="mono">Moss asks</span><p>${esc(q.question)}</p><div class="pb-opts">${q.options.map((o) => `<button type="button" class="chip" data-say="${esc(o)}">${esc(o)}</button>`).join('')}<button type="button" class="chip" data-say="That's enough, make the plan">Enough, make the plan</button></div>${q.why ? `<small>${esc(q.why)}</small>` : ''}</div>` : ''}
+      ${plan.summary ? `<p class="pb-wait" style="border-style:solid;margin-bottom:22px">${esc(plan.summary)}</p>` : ''}
+      <div class="pb-cols">
+        <section class="pb-brief"><h3>Brief</h3><dl>${keys.map(([k, lbl]) => `<div class="${plan.brief[k] ? 'on' : ''} ${q && q.id === k && plan.phase === 'interview' ? 'asking' : ''} ${fresh.includes(k) ? 'fresh' : ''}"><dt>${esc(lbl)}</dt><dd>${esc(plan.brief[k] || (q && q.id === k ? 'asking…' : '—'))}</dd></div>`).join('')}</dl></section>
+        <section class="pb-outline"><h3>Home page</h3>${plan.sections.length ? `<ol>${plan.sections.map((x, i) => `<li class="${x.done ? 'done' : ''}"><span class="n">${x.done ? '✓' : String(i + 1).padStart(2, '0')}</span><b>${esc(SECTION_META[x.type].label)}</b><span class="v">${esc(x.variant || '')}</span><p>${esc(x.intent)}</p></li>`).join('')}</ol>` : '<p class="pb-wait">The section plan appears once the brief is clear. Answer a few questions, or say “that’s enough”.</p>'}</section>
+      </div>
+      ${plan.directions.length ? `<section class="pb-dirs"><h3>Pick a look</h3><div class="pb-dir-row">${plan.directions.map(dirCard).join('')}</div><div class="pb-go">${plan.chosen != null ? `<button type="button" class="btn btn-primary" data-say="Let's start">Let's start</button><button type="button" class="btn btn-secondary" data-say="Build the rest">Build it all</button>` : ''}<span>${plan.chosen != null ? 'Moss builds one section at a time and checks in.' : 'Tap a look or say “the second one”.'}</span></div></section>` : ''}`;
+  }
   function renderAll(opts = {}) {
     renderTabs(opts.enterTab);
+    renderPlanBoard();
     renderer.render({ animateId: opts.animateId, flip: opts.flip !== false });
     isoScene.render({ enter: opts.enterModule });
     flowCanvas.render();
@@ -2288,13 +2543,14 @@ const app = (() => {
   function rememberDirection(id) {
     try { const k = 'moss-recent-directions'; const list = JSON.parse(localStorage.getItem(k) || '[]').filter((x) => x !== id); list.unshift(id); localStorage.setItem(k, JSON.stringify(list.slice(0, 4))); } catch (e) {}
   }
-  const MUTATING = new Set(['resetPage', 'resetSite', 'setBusiness', 'setDesign', 'addPage', 'addSection', 'updateSection', 'setOrder', 'deleteSection', 'deletePage', 'setPalette', 'addLink', 'addFlow']);
+  const MUTATING = new Set(['startPlan', 'askQuestion', 'setBrief', 'setPlan', 'chooseDirection', 'suggestNext', 'dismissDrafts', 'resetPage', 'resetSite', 'setBusiness', 'setDesign', 'addPage', 'addSection', 'updateSection', 'setOrder', 'deleteSection', 'deletePage', 'setPalette', 'addLink', 'addFlow']);
   async function applyOp(op, msgEl) {
     const st = pageModel.get();
     switch (op.op) {
       case 'setBusiness': st.business = op.business; break;
       case 'addPage': {
         if (!pageModel.page(op.page.id)) st.pages.push(clone(op.page));
+        st.drafts = (st.drafts || []).filter((d) => d.id !== op.page.id);
         if (!st.pagePos[op.page.id]) st.pagePos[op.page.id] = { x: 40 + (st.pages.length - 1) * 256, y: 0 };
         const done = op.quiet ? null : logLine(msgEl, 'page', `/${op.page.id}`);
         if (!op.quiet) sound.play('chime');
@@ -2310,6 +2566,11 @@ const app = (() => {
         const idx = op.index == null ? page.sections.length : Math.min(op.index, page.sections.length);
         page.sections.splice(idx, 0, clone(op.section));
         const id = op.section.id;
+        if (st.plan && op.page === 'home' && st.plan.sections.length) {
+          const ps = st.plan.sections.find((x) => !x.done && x.type === op.section.type); if (ps) ps.done = true;
+          st.plan.phase = st.plan.sections.every((x) => x.done) ? 'done' : 'building';
+          renderPlanBoard();
+        }
         const done = logLine(msgEl, 'module', SECTION_META[op.section.type].label.toLowerCase());
         setStatus(`Building · ${SECTION_META[op.section.type].label}`, true);
         $('#stageCap').textContent = `${String(page.sections.length).padStart(2, '0')} · ${SECTION_META[op.section.type].label.toLowerCase()}`;
@@ -2371,12 +2632,56 @@ const app = (() => {
       case 'resetSite': {
         const done = logLine(msgEl, 'site', 'cleared everything');
         await fadePage();
-        Object.assign(st, { business: null, design: null, palette: 'ice', pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
+        Object.assign(st, { business: null, design: null, plan: null, drafts: [], palette: 'ice', pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
         history.replaceState(null, '', '#/home');
         $('#siteSections').dataset.page = '';
         isoScene.reset(); renderAll({ flip: false }); sound.play('click');
         await wait(250); done(); break;
       }
+      case 'startPlan': {
+        st.plan = { phase: 'interview', brief: Object.assign({}, op.brief || {}), question: null, sections: [], directions: [], chosen: null, summary: '' };
+        logLine(msgEl, 'plan', 'interview started')();
+        renderPlanBoard(); break;
+      }
+      case 'askQuestion': {
+        if (!st.plan) st.plan = { phase: 'interview', brief: {}, question: null, sections: [], directions: [], chosen: null, summary: '' };
+        st.plan.question = { id: op.id, question: op.question, options: op.options || [], why: op.why || '' };
+        renderPlanBoard(); sound.play('tick'); break;
+      }
+      case 'setBrief': {
+        if (!st.plan) st.plan = { phase: 'interview', brief: {}, question: null, sections: [], directions: [], chosen: null, summary: '' };
+        Object.assign(st.plan.brief, op.patch); renderPlanBoard(Object.keys(op.patch)); break;
+      }
+      case 'setPlan': {
+        if (!st.plan) st.plan = { phase: 'interview', brief: {}, question: null, sections: [], directions: [], chosen: null, summary: '' };
+        Object.assign(st.plan, { phase: 'proposed', question: null, sections: op.sections.map((x) => Object.assign({}, x, { done: false })), directions: op.directions || [], summary: op.summary || '' });
+        if (st.plan.chosen != null && !st.plan.directions[st.plan.chosen]) st.plan.chosen = null;
+        logLine(msgEl, 'plan', `${op.sections.length} sections · ${(op.directions || []).length} looks`)();
+        renderPlanBoard(); sound.play('rise'); await wait(300); break;
+      }
+      case 'chooseDirection': {
+        const d = st.plan && st.plan.directions[op.index]; if (!d) break;
+        st.plan.chosen = op.index;
+        st.design = MossSite.sanitizeDesign({ direction: d.direction, hue: d.hue, hue2: d.hue2 }, null, { seed: st.business && st.business.name });
+        rememberDirection(d.direction);
+        logLine(msgEl, 'style', d.name.toLowerCase())();
+        renderPlanBoard(); renderer.render({ flip: false }); sound.play('click'); break;
+      }
+      case 'suggestNext': {
+        st.drafts = op.pages.filter((x) => !pageModel.page(x.id));
+        if (st.plan) st.plan.phase = 'done';
+        (op.journeys || []).forEach((j) => {
+          const nodes = j.steps.map((label, i) => ({ id: 'n' + i, label, kind: i === 0 ? 'start' : i === j.steps.length - 1 ? 'end' : 'step' }));
+          const edges = nodes.slice(1).map((n, i) => ({ from: 'n' + i, to: n.id }));
+          agent.layoutFlow(nodes, edges);
+          const maxY = Math.max(0, ...st.flows.map((x) => x.oy + 330));
+          st.flows.push({ id: uid('flow'), name: j.name, nodes, edges, ox: 40, oy: Math.max(maxY, 260) + 60 });
+        });
+        logLine(msgEl, 'next', `${st.drafts.length} suggested pages`)();
+        if (view !== 'flow') setView('flow');
+        flowCanvas.render(); requestAnimationFrame(() => flowCanvas.fit()); sound.play('chime'); await wait(300); break;
+      }
+      case 'dismissDrafts': { st.drafts = []; flowCanvas.render(); break; }
       case 'setDesign': {
         st.design = MossSite.sanitizeDesign(op.design, st.design, { seed: st.business && st.business.name });
         rememberDirection(st.design.direction);
@@ -2550,7 +2855,7 @@ const app = (() => {
     const t = turn = { controller: new AbortController(), aborted: false };
     let res;
     const ack = spoken ? setTimeout(() => { if (!t.aborted && voice.quietFor() > 1500) voice.speak('On it.'); }, 2500) : null; // fill a slow Moss turn, quietly
-    try { res = await agent.respond(text, pageModel.get(), { signal: t.controller.signal, live: isLive }); }
+    try { res = await agent.respond(text, pageModel.get(), { signal: t.controller.signal, live: isLive, mode: opts.mode }); }
     catch (err) { res = { reply: 'Something went wrong on my side. Try that again?', ops: [] }; console.error(err); }
     clearTimeout(ack);
     msg.querySelector('.typing').remove();
@@ -2643,7 +2948,8 @@ const app = (() => {
     ['pointerdown', 'keydown'].forEach((ev) => window.addEventListener(ev, () => sound.unlock(), { once: true, capture: true }));
 
     $('#examples').innerHTML = EXAMPLES.map(([k, t]) => `<button class="chip" type="button" data-t="${esc(t)}"><span class="mono">${esc(k.toUpperCase())}</span>${esc(t)}</button>`).join('');
-    $$('#examples .chip').forEach((b) => b.addEventListener('click', () => send(b.dataset.t)));
+    $$('#examples .chip').forEach((b) => b.addEventListener('click', () => send(b.dataset.t, { mode: 'autopilot' })));
+    $('#planBoard').addEventListener('click', (e) => { const b = e.target.closest('[data-say]'); if (b && !busy) send(b.dataset.say); });
     const ii = $('#introInput');
     $('#introForm').addEventListener('submit', (e) => { e.preventDefault(); const v = ii.value; ii.value = ''; send(v); setTimeout(() => $('#chatInput').focus(), 50); });
     ii.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#introForm').requestSubmit(); } });

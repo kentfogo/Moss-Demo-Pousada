@@ -69,7 +69,17 @@ check('missing key half → not configured', mossSettings({ MOSS_PROJECT_ID: 'p'
 const live = (await import('../api/agent.js')).buildMessages({ message: 'hi', state: {}, live: true }).at(-1).content;
 check('live mode asks for short spoken replies', live.includes('VOICE: live spoken conversation'));
 
-// 7. helpers
+// 7. the phase picks the right instructions
+const { phaseOf, buildMessages: bm } = await import('../api/agent.js');
+const home = { pages: [{ id: 'home', name: 'Home', sections: [{ id: 'h', type: 'hero', data: {} }] }] };
+check('new site → interview; "just build" → build now', phaseOf({ pages: [] }) === 'interview' && phaseOf({ pages: [] }, 'autopilot') === 'autobuild');
+check('plan phases → interview / review / guided; built site → editing', phaseOf({ pages: [], plan: { phase: 'interview' } }) === 'interview' && phaseOf({ pages: [], plan: { phase: 'proposed' } }) === 'review' && phaseOf(Object.assign({ plan: { phase: 'building' } }, home)) === 'guided' && phaseOf(home) === 'edit');
+const sys = bm({ message: 'hi', state: { pages: [] } })[0].content;
+check('the interview prompt asks one question per turn and builds nothing', sys.includes('PHASE: INTERVIEW') && sys.includes('Exactly ONE question per turn') && sys.includes('no addSection'));
+const guided = bm({ message: 'next', state: Object.assign({ plan: { phase: 'building', sections: [{ type: 'hero', done: true }, { type: 'steps', variant: 'list', intent: 'how it works' }] } }, home) });
+check('guided build tells Moss the next planned section', guided[0].content.includes('PHASE: GUIDED BUILD') && guided.at(-1).content.includes('"next":{"type":"steps"'));
+
+// 8. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');
 check('compactState keeps flow names only', JSON.stringify(compactState({ flows: [{ name: 'Booking', nodes: [1, 2] }] }).flows) === '["Booking"]');
 

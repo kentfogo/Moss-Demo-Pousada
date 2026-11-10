@@ -57,7 +57,7 @@ async function open(browser, speed) {
   // 1. the mic stays on across turns
   await page.click('#introMic');
   check('tapping the mic starts a live session', (await live()) && (await page.getAttribute('#introMic', 'aria-pressed')) === 'true');
-  await say('a seaside pousada in Trancoso with nine rooms');
+  await say('just build a seaside pousada in Trancoso with nine rooms');
   const types = await page.$$eval('#siteSections > section', (els) => els.map((e) => e.dataset.type));
   check('a spoken description builds the page', types.length === 7, types.join(','));
   check('Moss speaks its reply', (await spoken()).some((t) => t.includes('boutique pousada')));
@@ -152,7 +152,7 @@ async function open(browser, speed) {
   {
     const { ctx: c2, page: p2, errors: e2 } = await open(browser, 0.5);
     await p2.click('#introMic');
-    await p2.evaluate(() => window.__say('a specialty coffee roaster in Lisbon'));
+    await p2.evaluate(() => window.__say('just build a specialty coffee roaster in Lisbon'));
     await p2.waitForFunction(() => window.moss.pageModel.get().pages[0] && window.moss.pageModel.get().pages[0].sections.length >= 2, null, { timeout: 15000 });
     await p2.evaluate(() => window.__say('stop'));
     await p2.waitForTimeout(1800); await p2.evaluate(() => window.moss.app.whenIdle());

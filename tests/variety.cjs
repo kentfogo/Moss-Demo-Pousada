@@ -18,7 +18,7 @@ const check = (name, ok, detail = '') => { results.push(!!ok); console.log(`${ok
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto(URL);
-  await page.evaluate(() => window.moss.app.send('A seaside pousada in Trancoso with nine rooms'));
+  await page.evaluate(() => window.moss.app.send('A seaside pousada in Trancoso with nine rooms', { mode: 'autopilot' }));
   await page.evaluate(() => window.moss.app.whenIdle());
   // add the new section types so they're in every screenshot's page too
   await page.evaluate(() => {

@@ -32,6 +32,8 @@ const REPLIES = {
   punchier: { reply: 'Shorter and sharper.', ops: [{ op: 'updateSection', page: 'home', id: 'hero', patch: { headline: 'Porto, from above.' }, note: 'rewrote headline' }] },
   reorder: { reply: 'Testimonials now lead.', ops: [{ op: 'setOrder', page: 'home', order: ['hero', 'testimonials', 'features', 'stats', 'cta', 'footer'] }] },
   flow: { reply: 'Mapping reservations.', ops: [{ op: 'setView', view: 'flow' }, { op: 'addFlow', flow: { name: 'Reservation flow', nodes: [{ id: 'a', label: 'Guest opens site', kind: 'start' }, { id: 'b', label: 'Picks a time', kind: 'step' }, { id: 'c', label: 'Table free?', kind: 'decision' }, { id: 'd', label: 'Confirms booking', kind: 'step' }, { id: 'e', label: 'Joins waitlist', kind: 'step' }, { id: 'f', label: 'Gets confirmation', kind: 'end' }], edges: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'd', label: 'yes' }, { from: 'c', to: 'e', label: 'no' }, { from: 'd', to: 'f' }, { from: 'e', to: 'b' }, { from: 'zz', to: 'a' }] } }] },
+  bakery: { reply: 'Let us plan it. What do you want to be known for?', ops: [{ op: 'setBusiness', business: { name: 'Crumb', kind: 'bakery', place: 'Leeds', primary: 'Order' } }, { op: 'startPlan', brief: { business: 'Crumb, a bakery in Leeds' } }, { op: 'askQuestion', id: 'offer', question: 'What do you want people to know you for?', options: ['Sourdough', 'Pastries', 'Cakes'], why: 'Headline' }] },
+  sourdough: { reply: 'Here is the plan. Which look?', ops: [{ op: 'setBrief', patch: { offer: 'Sourdough baked at 4am' } }, { op: 'setPlan', summary: 'Crumb sells sourdough.', sections: [{ type: 'hero', variant: 'bigtype', intent: 'Lead with the bread' }, { type: 'gallery', intent: 'Loaves' }, { type: 'callstrip', intent: 'Order by phone' }, { type: 'nonsense' }, { type: 'footer', intent: 'Links' }], directions: [{ direction: 'editorial', name: 'Paper and flour', why: 'Warm', hue: 30 }, { direction: 'brutal', name: 'Loud loaf', why: 'Bold', hue: 350 }, { direction: 'made-up', name: 'Nope' }] }] },
   wipeAbout: { reply: 'Removing @About.', ops: [{ op: 'deleteSection', page: 'about-us', id: 'hero' }, { op: 'deleteSection', page: 'about-us', id: 'footer' }] },
   restyleDark: { reply: 'Going dark.', ops: [{ op: 'setDesign', design: { direction: 'darktech', colors: { bg: '#07090c', surface: '#10151b', ink: '#e8edf2', muted: '#98a4b0', accent: '#5ccfee', accent2: '#1a2a33', inverse: '#10151b' } } }] },
   startOver: { reply: 'Starting over.', ops: [{ op: 'resetSite' }, { op: 'setBusiness', business: { name: 'Miradouro', kind: 'rooftop bar', place: 'Porto', primary: 'Book' } }, { op: 'setDesign', design: { direction: 'swiss', hue: 200 } }, { op: 'addPage', page: { id: 'home', name: 'Home' } }, { op: 'addSection', page: 'home', section: { type: 'hero', data: { headline: 'Porto, *six floors up*.', sub: 'Cocktails with a view.', primary: 'Book', secondary: 'Menu', eyebrow: 'Rooftop bar' } } }] },
@@ -47,7 +49,7 @@ const server = http.createServer((req, res) => {
       const m = json.message.toLowerCase();
       if (m.includes('slow')) { setTimeout(() => { try { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(REPLIES.about)); } catch (e) {} }, 2500); return; }
       if (m.includes('fail')) { res.writeHead(500, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ error: 'Moss inference returned 500' })); }
-      const key = m.includes('everything off') ? 'wipeAbout' : m.includes('dark') ? 'restyleDark' : m.includes('start over') ? 'startOver' : m.includes('rooftop') ? 'build' : m.includes('punch') ? 'punchier' : m.includes('move') ? 'reorder' : m.includes('flow') ? 'flow' : 'about';
+      const key = m.includes('bakery') ? 'bakery' : m.includes('sourdough') ? 'sourdough' : m.includes('everything off') ? 'wipeAbout' : m.includes('dark') ? 'restyleDark' : m.includes('start over') ? 'startOver' : m.includes('rooftop') ? 'build' : m.includes('punch') ? 'punchier' : m.includes('move') ? 'reorder' : m.includes('flow') ? 'flow' : 'about';
       res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(REPLIES[key]));
     });
     return;
@@ -164,6 +166,16 @@ const server = http.createServer((req, res) => {
   const fresh = await page.evaluate(() => { const s = window.moss.pageModel.get(); return { pages: s.pages.map((p) => p.id + ':' + p.sections.length), dir: s.design && s.design.direction, hue: s.design && s.design.hue, flows: s.flows.length }; });
   check('resetSite then rebuild leaves only the new site', JSON.stringify(fresh.pages) === '["home:1"]' && fresh.dir === 'swiss' && fresh.hue === 200 && fresh.flows === 0, JSON.stringify(fresh));
   check('accent words in headlines render', (await page.locator('.sec-hero h1 em.acc').innerText()) === 'six floors up');
+
+  // plan mode on Moss: interview ops are cleaned and shown on the board
+  await page.goto(url);
+  await say('Help me build a site for my bakery');
+  check('plan mode is sent to Moss for a new site', requests.at(-1).mode === 'plan');
+  check('Moss\'s question appears on the Brief board with its options', (await page.locator('.pb-q p').innerText()).includes('know you for') && (await page.locator('.pb-q .chip').count()) === 4);
+  await say('Sourdough baked at 4am');
+  const mp = await page.evaluate(() => window.moss.pageModel.get().plan);
+  check('setPlan from Moss is cleaned (types fixed, junk dropped)', mp.phase === 'proposed' && JSON.stringify(mp.sections.map((x) => x.type)) === '["hero","gallery","callStrip","footer"]' && mp.directions.length === 2 && mp.brief.offer === 'Sourdough baked at 4am', JSON.stringify(mp.sections.map((x) => x.type)));
+  check('the look cards render', (await page.locator('.pb-dir').count()) === 2);
 
   check('no alert fired', !alerted);
   check('no console/page errors', errors.length === 0, errors.slice(0, 3).join(' | '));

@@ -57,6 +57,15 @@ OPS (applied in order):
     5–10 nodes, exactly one start, at least one end, labels under 28 characters. Layout is automatic.
 - {"op":"setView","view":"page"|"flow"}   send setView "flow" before addFlow.
 - {"op":"navigate","page":pageId}
+PLANNING OPS (see PHASE):
+- {"op":"setBusiness",...}   as above; send it as soon as you know the business name.
+- {"op":"startPlan","brief":{"business":string}}   once, at the start of an interview.
+- {"op":"askQuestion","id":briefKey,"question":string,"options":[2–3 short answers],"why"?:string}   exactly one per turn while interviewing.
+- {"op":"setBrief","patch":{briefKey:string}}   record what the user just told you. briefKey ∈ business, offer, audience, action, proof, tone, colors, must, facts.
+- {"op":"setPlan","summary":string,"sections":[{"type","variant"?,"intent"}],"directions":[{"direction":directionId,"name":string,"why":string,"hue":0-359} ×3]}   the Home page plan and three clearly different looks.
+- {"op":"chooseDirection","index":0|1|2}   the user picked a look.
+- {"op":"suggestNext","pages":[{"id":slug,"name","why","sections":[types]} ×3–5],"journeys":[{"name","steps":[short labels]}]}   what to build after Home; shown as draft pages on the Flow canvas.
+- {"op":"dismissDrafts"}   the user doesn't want the remaining suggestions.
 
 SECTION TYPES and their data (plain text, no markdown, no emoji). Wrap 1–3 words of a headline or title in *asterisks* to set them in the accent colour.
 Any section may carry "variant" (a layout) and visual sections may carry "art":{"kind":artKind,"seed":string,"label"?:string}. artKind ∈ orb, dotgrid, shapes, pattern, frame, iso (generated to match the palette).
@@ -81,7 +90,7 @@ LAYOUTS (variant) per type — omit to use the design's default:
 - callStrip: {"title","sub","phone","button","href"?}   urgent call-to-action strip for local services.
 
 RULES
-- First message (STATE has no pages): setBusiness, setDesign, addPage home, then 6–8 addSection ops on "home" chosen FOR THIS BUSINESS (not always the same set): always hero first and footer last; pick from features, steps, gallery, testimonials, logos, pricing, faq, callStrip, cta. A plumber wants steps + callStrip; a burger bar wants gallery + menu-like pricing; a SaaS wants logos + features + pricing.
+- Sections chosen FOR THIS BUSINESS (not always the same set): hero first and footer last; pick from features, steps, gallery, testimonials, logos, pricing, faq, callStrip, cta, stats. A plumber wants steps + callStrip; a burger bar wants gallery + menu-like pricing; a SaaS wants logos + features + pricing.
 - DESIGN: every business gets its own look. Choose the direction whose "fits" matches best, avoid RECENT directions unless the user asked for one, then customise colours, fonts and layouts so it feels made for this business. Vary section layouts down the page (do not use the same layout twice in a row when an alternative fits).
 - New pages: addPage, then 3–5 fitting sections ending with footer (about: hero centered, text, stats, cta, footer; contact: hero centered, contact, footer; booking: hero centered, booking, faq, footer; pricing: hero centered, pricing, faq, cta, footer).
 - Edits: change only what was asked. Use updateSection with just the changed fields. Use the real section ids from STATE.
@@ -91,6 +100,35 @@ RULES
 - If the request is unclear or impossible, return "ops": [] and ask one short question in reply.
 - Undo is handled by the app; never emit an undo op.
 Return only the JSON object.`;
+
+
+export const PHASES = {
+  autobuild: `PHASE: BUILD NOW (the user asked you to just build it). Send setBusiness, setDesign, addPage home, then 6–8 addSection ops on "home", each with complete data. If STATE.plan exists, build its sections in order with its chosen look. After the last section, send suggestNext and setView "flow".`,
+  interview: `PHASE: INTERVIEW. You are planning this site WITH the user, like a sharp product designer running a "grill me" session. Do not build anything yet: no addPage, no addSection.
+- First turn: setBusiness (if you can name it), startPlan, then askQuestion.
+- Every turn: setBrief with what they just said (map "the first/second one" to STATE.plan.question.options), then askQuestion with the next most important open question. Exactly ONE question per turn, under 20 words, with 2–3 concrete suggested answers that fit this business.
+- Grill: if an answer is vague ("not sure", "everyone", "good quality"), push back with a sharper follow-up or offer a concrete default, instead of moving on. Never ask what you already know.
+- Cover, in order of importance: what they want to be known for (offer and difference), who the customer is, the one action a visitor should take, proof they have, how it should feel (and colours they love or hate), must-have sections, hard facts (phone, area, prices, hours).
+- Stop when you understand enough (usually 5–8 answers) or when the user says "that's enough", "build it" or similar: send setPlan (summary of 2 sentences, 6–9 Home sections with a layout and a one-line intent each, and 3 clearly different directions with a brand hue each), and in reply summarise in one sentence and ask which look they want.`,
+  review: `PHASE: PLAN REVIEW. STATE.plan has sections and three looks. The user may change the plan (send a full setPlan with the change), pick a look (chooseDirection), or say start. When they say start, "let's go" or similar: chooseDirection if none is chosen, then setDesign is NOT needed (the app applies the look), addPage home, and build ONLY the first planned section (one addSection, with the planned layout). Reply in one sentence: what you built, then "Keep it, or change something?". If they say "build it all" or "build the rest", build every planned section, then suggestNext and setView "flow".`,
+  guided: `PHASE: GUIDED BUILD. You build Home together, one section at a time. STATE.plan.next is the next planned section.
+- "next", "keep going", "looks good", "yes": build ONLY STATE.plan.next (one addSection with its planned type and layout, complete data). Reply: one sentence on what you built + "Keep it, or change something?".
+- A change request: edit what is already built (updateSection / setDesign / setOrder…). Do not add the next section in the same turn.
+- "build the rest": addSection for every remaining planned section, in order.
+- After the last planned section is built, also send suggestNext (3–5 pages that fit this business, each with why and sections, and one visitor journey) and setView "flow", and ask which pages to build next.`,
+  edit: `PHASE: EDITING. Change only what was asked. Building suggested pages: addPage + sections for each page the user picks (their drafts are in STATE.drafts), and link them from Home's nav/CTA where it helps. If they ask what else to build, send suggestNext.`,
+};
+export function phaseOf(state = {}, mode) {
+  const pages = Array.isArray(state.pages) ? state.pages : [];
+  const home = pages.find((p) => p.id === 'home');
+  const plan = state.plan && typeof state.plan === 'object' ? state.plan : null;
+  if (mode === 'autopilot' && !(home && home.sections && home.sections.length) ) return 'autobuild';
+  if (plan && plan.phase === 'interview') return 'interview';
+  if (plan && plan.phase === 'proposed') return mode === 'autopilot' ? 'autobuild' : 'review';
+  if (plan && plan.phase === 'building') return 'guided';
+  if (!pages.length) return mode === 'autopilot' ? 'autobuild' : 'interview';
+  return 'edit';
+}
 
 /** Compact the client state so the prompt stays small: no copy library, just what the model needs. */
 export function compactState(state = {}) {
@@ -103,6 +141,12 @@ export function compactState(state = {}) {
     pages: pages.map((p) => ({ id: p.id, name: p.name, sections: (p.sections || []).map((s) => ({ id: s.id, type: s.type, data: stripLocal(s.data) })) })),
     links: Array.isArray(state.links) ? state.links : [],
     flows: (Array.isArray(state.flows) ? state.flows : []).map((f) => f.name),
+    plan: state.plan && typeof state.plan === 'object' ? (() => {
+      const pl = state.plan; const secs = Array.isArray(pl.sections) ? pl.sections : [];
+      const next = secs.find((x) => !x.done);
+      return { phase: pl.phase, brief: pl.brief || {}, question: pl.question || null, sections: secs.map((x) => ({ type: x.type, variant: x.variant, intent: x.intent, done: !!x.done })), next: next ? { type: next.type, variant: next.variant, intent: next.intent } : null, directions: (pl.directions || []).map((d) => ({ direction: d.direction, name: d.name })), chosen: pl.chosen ?? null };
+    })() : null,
+    drafts: (Array.isArray(state.drafts) ? state.drafts : []).map((d) => ({ id: d.id, name: d.name })),
   };
 }
 function stripLocal(data) {
@@ -129,25 +173,25 @@ function designContext(directions, recent) {
   return `DIRECTIONS:\n${JSON.stringify(list)}\nFONTS: ${FONT_LIST}\nRECENT (avoid unless asked): ${rec.join(', ') || 'none'}\n\n`;
 }
 
-export function buildMessages({ message, state, history, directions, recentDirections, live }) {
+export function buildMessages({ message, state, history, directions, recentDirections, live, mode }) {
   const turns = (Array.isArray(history) ? history : []).slice(-8)
     .filter((t) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string')
     .map((t) => ({ role: t.role, content: t.content.slice(0, 1500) }));
   return [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: `${SYSTEM_PROMPT}\n\n${PHASES[phaseOf(state, mode)]}` },
     ...turns,
     { role: 'user', content: `${designContext(directions, recentDirections)}${live ? 'VOICE: live spoken conversation. Keep reply under 20 words and "after" under 15 words; they are read aloud. Put detail in the page, not the speech.\n\n' : ''}STATE:\n${JSON.stringify(compactState(state))}\n\nMESSAGE:\n${message}` },
   ];
 }
 
-export async function callMoss({ message, state, history, directions, recentDirections, live }, env = process.env, fetchImpl = fetch) {
+export async function callMoss({ message, state, history, directions, recentDirections, live, mode }, env = process.env, fetchImpl = fetch) {
   const { token, base, model } = mossSettings(env);
   if (!token) {
     // Names only (never values), so a misnamed or wrongly scoped variable is easy to spot.
     const seen = Object.keys(env).filter((k) => /moss/i.test(k)).sort();
     throw Object.assign(new Error(`Moss inference is not configured (set MOSS_PROJECT_ID and MOSS_PROJECT_KEY). Moss variables visible to this deployment: ${seen.length ? seen.join(', ') : 'none'}`), { status: 503 });
   }
-  const payload = { model, messages: buildMessages({ message, state, history, directions, recentDirections, live }), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
+  const payload = { model, messages: buildMessages({ message, state, history, directions, recentDirections, live, mode }), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
   const post = (body) => fetchImpl(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
@@ -182,7 +226,7 @@ export default async function handler(req, res) {
   if (message.length > MAX_MESSAGE) return res.status(413).json({ error: 'message too long' });
   if (JSON.stringify(body.state || {}).length > MAX_STATE) return res.status(413).json({ error: 'state too large' });
   try {
-    const result = await callMoss({ message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live });
+    const result = await callMoss({ message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live, mode: ['plan', 'autopilot'].includes(body.mode) ? body.mode : undefined });
     res.setHeader('cache-control', 'no-store');
     return res.status(200).json(result);
   } catch (err) {
