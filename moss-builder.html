@@ -1780,7 +1780,7 @@ const agent = (() => {
         }
         case 'setBrief': {
           const patch = {}; const src = raw.patch && typeof raw.patch === 'object' ? raw.patch : {};
-          Object.keys(src).slice(0, 12).forEach((k) => { const key = k.toLowerCase().replace(/[^a-z]/g, '').slice(0, 20); const v = str(Array.isArray(src[k]) ? src[k].join(', ') : src[k], 240); if (key && v) patch[key] = v; });
+          Object.keys(src).slice(0, 12).forEach((k) => { const key = k.toLowerCase().replace(/[^a-z]/g, '').slice(0, 20); const v = str(Array.isArray(src[k]) ? src[k].join(', ') : src[k], 240); if (key && v && !VAGUE.test(v.toLowerCase())) patch[key] = v; }); // a vague answer leaves the question open
           if (Object.keys(patch).length) ops.push({ op: 'setBrief', patch });
           break;
         }
