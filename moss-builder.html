@@ -1367,7 +1367,7 @@ const agent = (() => {
     return renderer.validate(type, merged) ? merged : base;
   }
 
-  // Layered left-to-right layout from the start node; wraps after 5 columns.
+  // Layered layout from the start node: left to right, wrapping after 5 columns into a right-to-left row.
   const NODE_SIZE = { step: [168, 52], start: [168, 44], end: [168, 44], decision: [120, 120] };
   function layoutFlow(nodes, edges) {
     const out = new Map(nodes.map((n) => [n.id, []]));
@@ -1384,7 +1384,8 @@ const agent = (() => {
     nodes.forEach((n) => {
       const r = rank.get(n.id), i = cols.get(r).indexOf(n);
       const [w, h] = NODE_SIZE[n.kind];
-      const cx = (r % PER_ROW) * 220 + 84, cy = Math.floor(r / PER_ROW) * rowHeight + 26 + i * 150;
+      const row = Math.floor(r / PER_ROW), col = row % 2 ? PER_ROW - 1 - (r % PER_ROW) : r % PER_ROW; // snake rows so a wrap drops straight down
+      const cx = col * 220 + 84, cy = row * rowHeight + 26 + i * 150;
       n.x = Math.round(cx - w / 2); n.y = Math.round(cy - h / 2);
     });
   }

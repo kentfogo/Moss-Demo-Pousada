@@ -104,6 +104,14 @@ const server = http.createServer((req, res) => {
   });
   check('freeform flow laid out without overlaps', flow.nodes === 6 && flow.edges === 6 && !flow.overlap && flow.view === 'flow', JSON.stringify(flow));
 
+  const wrap = await page.evaluate(() => {
+    const nodes = Array.from({ length: 8 }, (_, i) => ({ id: 'n' + i, label: 'Step ' + i, kind: i === 0 ? 'start' : i === 7 ? 'end' : 'step' }));
+    const edges = nodes.slice(1).map((n, i) => ({ from: 'n' + i, to: n.id }));
+    window.moss.agent.layoutFlow(nodes, edges);
+    return nodes.map((n) => [n.x, n.y]);
+  });
+  check('long flows wrap straight down, then run right to left', wrap[5][0] === wrap[4][0] && wrap[5][1] > wrap[4][1] && wrap[6][0] < wrap[5][0], JSON.stringify(wrap));
+
   await say('add an about page');
   const pages = await page.evaluate(() => window.moss.pageModel.get().pages.map((p) => p.id + ':' + p.sections.length));
   check('page id slugged, sections filled', pages.includes('about-us:2'), pages.join(','));
