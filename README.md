@@ -3,7 +3,7 @@
 A chat-driven page builder: you describe your business, and a Moss agent builds the landing page live, section by section. You then shape it in plain words ("make the headline punchier", "add a Booking page", "map the booking flow").
 
 - `moss-builder.html` is the whole front end (inline CSS and JS, one embedded font, no external assets).
-- `api/agent.js` is a Vercel function that calls **Moss inference** through its OpenAI-compatible chat completions API.
+- `api/agent.js` is a Vercel function that calls **Moss Inference** (`https://inference.moss.dev/v1/chat/completions`, OpenAI-compatible).
 
 ## How it works
 
@@ -16,18 +16,19 @@ The key never reaches the browser. Undo is handled locally. If the endpoint fail
 ## Deploy on Vercel
 
 1. Import this repository in Vercel (framework preset: **Other**; no build command).
-2. In **Project → Settings → Environment Variables**, add:
+2. In **Project → Settings → Environment Variables**, set:
 
    | Name | Value |
    |---|---|
-   | `MOSS_API_KEY` | your Moss inference key |
-   | `MOSS_BASE_URL` | the OpenAI-compatible base URL, ending in `/v1` (the function appends `/chat/completions`) |
-   | `MOSS_MODEL` | the model id to use |
+   | `MOSS_PROJECT_ID` | your Moss project id |
+   | `MOSS_PROJECT_KEY` | your Moss project key (`MOSS_API_KEY` also works) |
+   | `MOSS_MODEL` | optional, default `moss/fastlane-1` |
+   | `MOSS_BASE_URL` | optional, default `https://inference.moss.dev/v1` |
    | `MOSS_TEMPERATURE` | optional, default `0.4` |
 
-3. Deploy. `/` serves the builder (see `vercel.json`) and `/api/agent` runs the function.
+   The function calls `POST <base>/chat/completions` with `Authorization: Bearer <project id>:<project key>`.
 
-If your local `.env` uses different variable names, either rename them to the ones above or set the values under these names in Vercel.
+3. Deploy. `/` serves the builder (see `vercel.json`) and `/api/agent` runs the function.
 
 **Run locally:** run `vercel dev` with the variables in `.env.local`.
 

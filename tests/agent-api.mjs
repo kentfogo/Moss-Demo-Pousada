@@ -1,7 +1,7 @@
 // Tests for api/agent.js against a mock OpenAI-compatible Moss server. No real credentials needed.
 // Run: node tests/agent-api.mjs
 import http from 'node:http';
-import handler, { callMoss, extractJSON, compactState } from '../api/agent.js';
+import handler, { callMoss, extractJSON, compactState, mossSettings } from '../api/agent.js';
 
 const results = [];
 const check = (name, ok, detail = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); };
@@ -23,14 +23,14 @@ const server = http.createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}/v1`;
-const env = (model) => ({ MOSS_API_KEY: 'test-key', MOSS_BASE_URL: base + '/', MOSS_MODEL: model });
+const env = (model) => ({ MOSS_PROJECT_ID: 'proj_123', MOSS_PROJECT_KEY: 'key_abc', MOSS_BASE_URL: base + '/', MOSS_MODEL: model });
 const state = { business: { name: 'Pousada Maré', kind: 'pousada', copy: { big: 'x'.repeat(5000) } }, pages: [{ id: 'home', name: 'Home', sections: [{ id: 'her1', type: 'hero', data: { headline: 'Hi', punchy: ['a'], punchIx: 1 } }] }], currentPage: 'home' };
 
 // 1. happy path
 const out = await callMoss({ message: 'add a faq', state, history: [{ role: 'user', content: 'earlier' }, { role: 'system', content: 'ignored' }] }, env('moss-test'));
 const req1 = seen.at(-1);
 check('posts to <base>/chat/completions', req1.url === '/v1/chat/completions', req1.url);
-check('sends bearer key and model', req1.auth === 'Bearer test-key' && req1.json.model === 'moss-test');
+check('sends Bearer <project id>:<project key> and model', req1.auth === 'Bearer proj_123:key_abc' && req1.json.model === 'moss-test', req1.auth);
 check('asks for JSON mode', req1.json.response_format && req1.json.response_format.type === 'json_object');
 check('system prompt first, history kept, foreign roles dropped', req1.json.messages[0].role === 'system' && req1.json.messages[1].content === 'earlier' && req1.json.messages.length === 3);
 const lastUser = req1.json.messages.at(-1).content;
@@ -47,7 +47,7 @@ catch (e) { check('upstream 500 → 502 error', e.status === 502, e.message); }
 
 // 4. handler: not configured / bad input
 const mockRes = () => { const r = { code: 0, body: null, headers: {} }; r.status = (c) => ((r.code = c), r); r.json = (b) => ((r.body = b), r); r.setHeader = (k, v) => (r.headers[k] = v); return r; };
-const saved = { ...process.env }; delete process.env.MOSS_API_KEY; delete process.env.MOSS_BASE_URL; delete process.env.MOSS_MODEL;
+const saved = { ...process.env }; ['MOSS_API_KEY', 'MOSS_PROJECT_ID', 'MOSS_PROJECT_KEY', 'MOSS_BASE_URL', 'MOSS_MODEL'].forEach((k) => delete process.env[k]);
 let r = mockRes(); await handler({ method: 'POST', body: { message: 'hi', state } }, r);
 check('handler: 503 when Moss env vars are missing', r.code === 503, r.body && r.body.error);
 r = mockRes(); await handler({ method: 'GET' }, r); check('handler: 405 on GET', r.code === 405);
@@ -58,7 +58,14 @@ r = mockRes(); await handler({ method: 'POST', body: JSON.stringify({ message: '
 check('handler: 200 with string body', r.code === 200 && r.body.ops.length === 1 && r.headers['cache-control'] === 'no-store');
 process.env = saved;
 
-// 5. helpers
+// 5. defaults match Moss Inference
+const d = mossSettings({ MOSS_PROJECT_ID: 'p', MOSS_PROJECT_KEY: 'k' });
+check('defaults: inference.moss.dev, moss/fastlane-1, id:key token', d.base === 'https://inference.moss.dev/v1' && d.model === 'moss/fastlane-1' && d.token === 'p:k');
+check('MOSS_API_KEY works as the project key', mossSettings({ MOSS_PROJECT_ID: 'p', MOSS_API_KEY: 'k2' }).token === 'p:k2');
+check('a full id:key token is used as is', mossSettings({ MOSS_API_KEY: 'p:k3' }).token === 'p:k3');
+check('missing key half → not configured', mossSettings({ MOSS_PROJECT_ID: 'p' }).token === '');
+
+// 6. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');
 check('compactState keeps flow names only', JSON.stringify(compactState({ flows: [{ name: 'Booking', nodes: [1, 2] }] }).flows) === '["Booking"]');
 

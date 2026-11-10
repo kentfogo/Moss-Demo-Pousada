@@ -3,12 +3,25 @@
 // using Moss inference through its OpenAI-compatible chat completions API.
 //
 // Environment (set in Vercel → Project → Settings → Environment Variables):
-//   MOSS_API_KEY   required  bearer token for Moss inference (never sent to the browser)
-//   MOSS_BASE_URL  required  e.g. https://<moss-host>/v1   (the "/chat/completions" path is appended)
-//   MOSS_MODEL     required  model id to request
-//   MOSS_TEMPERATURE optional, default 0.4
+//   MOSS_PROJECT_ID   required  Moss project id
+//   MOSS_PROJECT_KEY  required  Moss project key (MOSS_API_KEY also accepted); sent as "Bearer <id>:<key>", never to the browser
+//   MOSS_MODEL        optional  default "moss/fastlane-1"
+//   MOSS_BASE_URL     optional  default "https://inference.moss.dev/v1" ("/chat/completions" is appended)
+//   MOSS_TEMPERATURE  optional  default 0.4
 
 export const config = { maxDuration: 60 };
+
+export const DEFAULT_BASE_URL = 'https://inference.moss.dev/v1';
+export const DEFAULT_MODEL = 'moss/fastlane-1';
+
+export function mossSettings(env = process.env) {
+  // Moss expects "Bearer <project id>:<project key>". Accept the key as MOSS_PROJECT_KEY or MOSS_API_KEY;
+  // a value that already contains ":" is treated as the full token.
+  const id = env.MOSS_PROJECT_ID || env.MOSS_PROJECT || '';
+  const key = env.MOSS_PROJECT_KEY || env.MOSS_API_KEY || '';
+  const token = key.includes(':') ? key : id && key ? `${id}:${key}` : '';
+  return { token, base: (env.MOSS_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, ''), model: env.MOSS_MODEL || DEFAULT_MODEL };
+}
 
 const MAX_MESSAGE = 2000;
 const MAX_STATE = 80_000;
@@ -103,12 +116,12 @@ export function buildMessages({ message, state, history }) {
 }
 
 export async function callMoss({ message, state, history }, env = process.env, fetchImpl = fetch) {
-  const base = (env.MOSS_BASE_URL || '').replace(/\/+$/, '');
-  if (!env.MOSS_API_KEY || !base || !env.MOSS_MODEL) throw Object.assign(new Error('Moss inference is not configured (MOSS_API_KEY, MOSS_BASE_URL, MOSS_MODEL)'), { status: 503 });
-  const payload = { model: env.MOSS_MODEL, messages: buildMessages({ message, state, history }), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
+  const { token, base, model } = mossSettings(env);
+  if (!token) throw Object.assign(new Error('Moss inference is not configured (set MOSS_PROJECT_ID and MOSS_PROJECT_KEY)'), { status: 503 });
+  const payload = { model, messages: buildMessages({ message, state, history }), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
   const post = (body) => fetchImpl(`${base}/chat/completions`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${env.MOSS_API_KEY}` },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
   let r = await post(payload);
