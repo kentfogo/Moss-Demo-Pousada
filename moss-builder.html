@@ -37,7 +37,7 @@
   --t3: calc(640ms * var(--speed));
 
   --chat-w: 344px;
-  --rail-w: 200px;
+  --rail-w: 56px;
   --top-h: 56px;
   --scene-h: 156px;
 }
@@ -237,7 +237,7 @@ body:not(.started) .scene::before { display: none; }
 @keyframes glowflash { 0%, 50% { opacity: 1; stroke-width: 6; } }
 .iso .mod.active .glow { opacity: .9; }
 .iso .mod.active polygon[fill="var(--mod-top)"] { fill: var(--surface); }
-.iso .mod-label { font: 500 12px var(--f-mono); letter-spacing: .1em; fill: var(--ink-2); text-transform: uppercase; transition: fill var(--t2); }
+.iso .mod-label { font: 500 18px var(--f-mono); letter-spacing: .1em; fill: var(--ink-2); text-transform: uppercase; transition: fill var(--t2); }
 .iso .mod.active .mod-label { fill: var(--ink); }
 .iso .leader { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 4; opacity: .55; }
 .iso .leader-dot { fill: var(--accent-glow); }
@@ -310,7 +310,7 @@ body:not(.started) .frame-wrap { display: none; }
 :root[data-theme="dark"] .site[data-palette="ink"]  { --s-bg: #131417; --s-tint: #1a1b1f; --s-accent: #e6e7ea; --s-glow: #9ea3ad; --s-card: #1c1d22; --s-dark: #08090a; }
 .site .btn-primary { background: var(--s-ink); color: var(--s-bg); }
 .site .btn-secondary { color: var(--s-ink); border-color: color-mix(in srgb, var(--s-ink) 22%, transparent); }
-.site .eyebrow { color: var(--s-accent); font-size: 14px; letter-spacing: .14em; }
+.site .eyebrow { font: 600 13px var(--f-sans); letter-spacing: .1em; text-transform: uppercase; color: var(--s-ink-2); }
 .site h1, .site h2, .site h3 { font-family: var(--f-display); font-weight: 400; letter-spacing: -.005em; margin: 0; }
 .site p { margin: 0; }
 .site .wrap { max-width: 1080px; margin: 0 auto; padding: 0 56px; }
@@ -343,7 +343,9 @@ body:not(.started) .frame-wrap { display: none; }
 .sec-hero { padding: 40px 0 32px; }
 .sec-hero + .sec-pad { padding-top: 24px; padding-bottom: 56px; }
 .hero-grid { display: grid; grid-template-columns: 1.35fr .9fr; gap: 56px; align-items: start; }
-.hero-grid .hero-card { margin-top: 40px; }
+.hero-grid .hero-card { margin-top: 52px; }
+.site .text-link { display: inline-flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 500; color: var(--s-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--s-ink) 25%, transparent); text-underline-offset: 6px; }
+.site .text-link svg.i { width: 18px; height: 18px; }
 .sec-hero h1 { font-size: 76px; line-height: .98; margin: 18px 0 20px; text-wrap: balance; }
 .sec-hero .sub { font-size: 20px; line-height: 1.55; color: var(--s-ink-2); max-width: 30em; }
 .sec-hero .actions { display: flex; gap: 12px; margin-top: 32px; }
@@ -385,13 +387,12 @@ body:not(.started) .frame-wrap { display: none; }
 .feat-split h2 { font-size: 60px; line-height: 1; margin-top: 16px; text-wrap: balance; }
 .feat-split .lede { color: var(--s-ink-2); font-size: 19px; line-height: 1.55; max-width: 24em; }
 .feat-list { list-style: none; margin: 0; padding: 0; counter-reset: f; }
-.feat { display: grid; grid-template-columns: 36px 22px 280px 1fr; gap: 0 20px; align-items: baseline; padding: 16px 0; border-top: 1px solid var(--s-line); }
+.feat { display: grid; grid-template-columns: 1.2fr 1fr; gap: 0 56px; align-items: baseline; padding: 18px 0; border-top: 1px solid var(--s-line); }
+.feat .ft { display: flex; align-items: baseline; gap: 20px; }
+.feat .n { width: 28px; flex: none; font: 500 13px var(--f-mono); letter-spacing: .06em; color: var(--s-ink-2); }
 .feat:last-child { border-bottom: 1px solid var(--s-line); }
-.feat::before { counter-increment: f; content: counter(f, decimal-leading-zero); font: 500 13px var(--f-mono); letter-spacing: .08em; color: var(--s-ink-2); }
 .feat h3 { font: 400 30px/1.1 var(--f-display); letter-spacing: 0; }
 .feat p { color: var(--s-ink-2); font-size: 18px; line-height: 1.5; }
-.feat .ic { color: var(--s-ink); align-self: center; }
-.feat .ic svg.i { width: 20px; height: 20px; stroke-width: 1.5; display: block; }
 
 /* testimonials */
 .quote-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 16px; }
@@ -481,8 +482,8 @@ body:not(.started) .frame-wrap { display: none; }
   .sec-hero h1, .sec-hero.centered h1 { font-size: 50px; }
   .feat-split, .quote-grid, .price-grid { grid-template-columns: 1fr; gap: 28px; }
   .feat-split h2 { font-size: 40px; }
-  .feat { grid-template-columns: 28px 22px 1fr; gap: 0 12px; }
-  .feat p { grid-column: 3; margin-top: 6px; }
+  .feat { grid-template-columns: 1fr; }
+  .feat p { margin: 6px 0 0 48px; }
   .feat h3 { font-size: 21px; }
   .s-head h2, .faq-grid h2, .story h2 { font-size: 40px; }
   .cta-band { padding: 40px 24px; }
@@ -617,29 +618,28 @@ body:not(.started) .chat { visibility: hidden; }
   body.started .frame-wrap { margin-top: 0; padding-top: 24px; }
   body.started .rail { display: flex; }
 }
-/* Build stage: the isometric scene appears only while Moss is building sections. */
+/* Build stage: lives in the chat panel, opens only while Moss is building sections. */
 body.started .scene {
-  position: absolute; z-index: 6; top: auto; right: 24px; bottom: 24px;
-  width: min(560px, calc(100% - var(--rail-w) - 48px)); height: 184px; overflow: hidden;
-  border-radius: var(--r3); border: 1px solid var(--line); box-shadow: var(--sh3);
-  background: var(--bg);
-  opacity: 0; pointer-events: none; transform: translateY(10px) scale(.985); transform-origin: bottom right;
-  transition: opacity var(--t3) var(--ease), transform var(--t3) var(--ease);
+  position: relative; inset: auto; z-index: auto; flex: none; height: 0; margin: 0 var(--s4); overflow: hidden;
+  border-radius: var(--r3); border: 1px solid transparent; background: var(--bg);
+  opacity: 0; pointer-events: none;
+  transition: height var(--t3) var(--ease), opacity var(--t3) var(--ease), margin var(--t3) var(--ease), border-color var(--t3);
 }
-body.started.building .scene { opacity: 1; transform: none; }
-.stage-cap { display: none; position: absolute; left: 18px; top: 14px; z-index: 1; gap: 10px; align-items: center; font: 11px var(--f-mono); color: var(--ink-3); }
+body.started.building .scene { height: 152px; opacity: 1; margin: 0 var(--s4) var(--s3); border-color: var(--line); }
+.stage-cap { display: none; position: absolute; left: 14px; top: 12px; z-index: 1; gap: 10px; align-items: center; font: 11px var(--f-mono); color: var(--ink-3); }
 body.started .stage-cap { display: flex; }
 body.started .scene-panel { display: none; }
 body.started .scene::before { display: none; }
 /* Module rail: a plain numbered list of the current page's sections. */
-.rail { display: none; position: absolute; left: 0; top: 0; bottom: 0; width: var(--rail-w); flex-direction: column; padding: 20px 12px; border-right: 1px solid var(--line); background: var(--bg); z-index: 3; }
-.rail-h { display: flex; justify-content: space-between; align-items: center; padding: 0 8px 12px; }
+.rail { display: none; position: absolute; left: 0; top: 0; bottom: 0; width: var(--rail-w); flex-direction: column; align-items: center; padding: 18px 8px; border-right: 1px solid var(--line); background: var(--bg); z-index: 3; }
+.rail-h { display: flex; justify-content: center; padding: 0 0 12px; }
+.rail-h .eyebrow { display: none; }
 .rail-h .eyebrow { color: var(--ink-3); }
 .rail-h .mono { font-size: 11px; color: var(--ink-3); }
 .rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.rail li button { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 8px 0 12px; border: 0; border-radius: var(--r1); background: transparent; color: var(--ink-2); font-size: 13.5px; text-align: left; transition: background-color var(--t1), color var(--t1); }
+.rail li button { position: relative; width: 40px; display: grid; place-items: center; height: 36px; padding: 0; border: 0; border-radius: var(--r1); background: transparent; color: var(--ink-2); font-size: 13.5px; text-align: left; transition: background-color var(--t1), color var(--t1); }
 .rail li button:hover { background: var(--surface); color: var(--ink); }
-.rail li button .n { width: 18px; font: 11px var(--f-mono); color: var(--ink-3); }
+.rail li button svg.i { width: 17px; height: 17px; }
 .rail li button[aria-current="true"] { background: var(--surface); color: var(--ink); }
 .rail li button[aria-current="true"]::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: var(--accent-glow); }
 .log-wrap { margin: 12px 0 14px; }
@@ -675,7 +675,6 @@ body.started .canvas { background: var(--bg-2); }
   body:not(.started) .scene { height: 220px; margin-top: 0; }
   .flowview { bottom: 48vh; }
   :root { --rail-w: 0px; }
-  body.started .scene { top: 8px; bottom: auto; left: 8px; right: 8px; height: 140px; width: auto; transform-origin: top center; }
   .scene-panel { display: none; }
 }
 
@@ -1315,7 +1314,7 @@ const renderer = (() => {
     hero(d) {
       const owned = d.variant !== 'centered' && d.card;
       const actions = owned
-        ? `<div class="actions"><a class="btn btn-secondary" href="#/home">${esc(d.secondary || 'Learn more')} ${icon('arrow')}</a></div>`
+        ? `<div class="actions"><a class="text-link" href="#/home">${esc(d.secondary || 'Learn more')} ${icon('arrow')}</a></div>`
         : `<div class="actions"><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(d.primary)}</a><a class="btn btn-secondary" href="#/home">${esc(d.secondary || 'Learn more')}</a></div>`;
       const logos = logoRow(d.logos);
       if (d.variant === 'centered') return `<div class="wrap"><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}${logos}</div>`;
@@ -1323,7 +1322,7 @@ const renderer = (() => {
       const card = cd ? `<div class="hero-card glass"><div class="hc-head"><span class="hc-title">${esc(cd.title)}</span><span class="hc-tag">${esc(cd.tag || '')}</span></div><dl>${cd.rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><p class="note">${esc(cd.note)}</p><a class="btn btn-primary" href="${esc(d.primaryHref || '#/booking')}">${esc(cd.cta)}</a></div>` : '';
       return `<div class="wrap"><div class="hero-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h1>${esc(d.headline)}</h1><p class="sub">${esc(d.sub)}</p>${actions}</div>${card}</div>${logos}</div>`;
     },
-    features: (d) => `<div class="wrap"><div class="feat-split"><div class="fs-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p class="lede">${esc(d.lede || '')}</p></div><ol class="feat-list">${d.items.map(([ic, t, p]) => `<li class="feat"><span class="ic">${icon(ic)}</span><h3>${esc(t)}</h3><p>${esc(p)}</p></li>`).join('')}</ol></div></div>`,
+    features: (d) => `<div class="wrap"><div class="feat-split"><div class="fs-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p class="lede">${esc(d.lede || '')}</p></div><ol class="feat-list">${d.items.map(([ic, t, p], i) => `<li class="feat"><div class="ft"><span class="n">${String(i + 1).padStart(2, '0')}</span><h3>${esc(t)}</h3></div><p>${esc(p)}</p></li>`).join('')}</ol></div></div>`,
     testimonials: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p></p></div><div class="quote-grid">${d.items.map(([q, n, r]) => `<figure class="quote" style="margin:0"><blockquote>“${esc(q)}”</blockquote><figcaption><span class="av">${esc(n.split(/\s|&/).filter(Boolean).map((w) => w[0]).slice(0, 2).join(''))}</span><span class="who"><b>${esc(n)}</b><span>${esc(r)}</span></span></figcaption></figure>`).join('')}</div>${logoRow(d.logos)}</div>`,
     pricing: (d) => `<div class="wrap"><div class="s-head"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><p>${esc(d.lede || '')}</p></div><div class="price-grid">${d.plans.map(([n, p, f, feat]) => `<article class="plan ${feat ? 'featured' : ''}"><div class="ph"><span class="pn">${esc(n)}</span>${feat ? '<span class="pill">Most loved</span>' : ''}</div><div class="pr"><b>${esc(p)}</b><span>${esc(d.unit)}</span></div><ul>${f.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><a class="btn ${feat ? 'btn-primary' : 'btn-secondary'}" href="#/booking">${esc(d.cta)}</a></article>`).join('')}</div></div>`,
     faq: (d) => `<div class="wrap"><div class="faq-grid"><div><span class="eyebrow">${esc(d.eyebrow)}</span><h2>${esc(d.title)}</h2></div><div class="faq-list">${d.items.map(([q, a], i) => `<details ${i === 0 ? 'open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div></div></div>`,
@@ -1382,7 +1381,7 @@ const renderer = (() => {
     $('#frameUrl').innerHTML = st.business ? `${esc(st.business.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))}.moss.site<b>/${esc(st.currentPage === 'home' ? '' : st.currentPage)}</b>` : '';
     $('#frameCount').textContent = page ? `${String(page.sections.length).padStart(2, '0')} SECTIONS` : '';
     const ol = $('#railList');
-    ol.innerHTML = (page ? page.sections : []).map((sec, i) => `<li><button type="button" data-id="${sec.id}" ${sec.id === ol.dataset.active ? 'aria-current="true"' : ''}><span class="n">${String(i + 1).padStart(2, '0')}</span>${esc(SECTION_META[sec.type].label)}</button></li>`).join('');
+    ol.innerHTML = (page ? page.sections : []).map((sec, i) => `<li><button type="button" data-id="${sec.id}" title="${String(i + 1).padStart(2, '0')} · ${esc(SECTION_META[sec.type].label)}" aria-label="${esc(SECTION_META[sec.type].label)}" ${sec.id === ol.dataset.active ? 'aria-current="true"' : ''}>${icon(SECTION_META[sec.type].icon)}</button></li>`).join('');
     $('#railCount').textContent = page ? String(page.sections.length) : '';
   }
   async function removeSection(id) {
@@ -1430,11 +1429,13 @@ const isoScene = (() => {
     const cx = panel ? 460 : 600;
     origin = [Math.round(cx - (minX + maxX) / 2 - (W - D) * C * G / 2), document.body.classList.contains('started') ? 104 : 128];
     if (document.body.classList.contains('started')) {
-      // Build stage: fit the viewport to the modules present (never above 1:1), keeping the card's aspect.
-      const sc = $('#scene'); const aspect = (sc.clientHeight || 184) / (sc.clientWidth || 560);
-      const vw = Math.max(maxX - minX + 2 * W * C * G + 150, sc.clientWidth || 560);
-      const vh = vw * aspect;
-      svg.setAttribute('viewBox', `${(cx - vw / 2).toFixed(1)} ${(origin[1] + 24 - vh / 2 + 8).toFixed(1)} ${vw.toFixed(1)} ${vh.toFixed(1)}`);
+      // Build stage in the chat: a fixed-scale camera that follows the newest module.
+      const sw = Math.max(240, $('#scene').clientWidth || ($('#chat').clientWidth - 32) || 312);
+      const vw = sw * 1.75, vh = 152 * 1.75;
+      const last = n ? origin[0] + L(raw[n - 1][0], raw[n - 1][1])[0] : cx;
+      const left = Math.min(last - vw * 0.66, origin[0] + minX - 70);
+      const x0 = Math.max(left, last + 150 - vw);
+      svg.setAttribute('viewBox', `${x0.toFixed(1)} ${(origin[1] + 30 - vh / 2).toFixed(1)} ${vw.toFixed(1)} ${vh.toFixed(1)}`);
     }
     return raw;
   }
@@ -1920,7 +1921,7 @@ const app = (() => {
     sound.unlock();
     if (!document.body.classList.contains('started')) {
       document.body.classList.add('started');
-      $('.canvas').insertBefore($('#scene'), $('#pageView'));
+      $('#chat').insertBefore($('#scene'), $('#suggest'));
       isoScene.render(); // clears ghosts
     }
     setBusy(true); setStatus('Thinking', true); setSuggestions([]);
@@ -1991,11 +1992,11 @@ const app = (() => {
     const pv = $('#pageView');
     const fit = () => {
       const w = pv.clientWidth; const mobile = w < 700;
-      const fw = mobile ? w - 32 : Math.min(w - 64, 900);
-      const zoom = mobile ? 1 : fw / 1120;
+      const fw = mobile ? w - 32 : Math.min(w - 64, 860);
+      const zoom = mobile ? 1 : fw / 1180;
       document.documentElement.style.setProperty('--frame-w', fw + 'px');
       document.documentElement.style.setProperty('--zoom', zoom.toFixed(4));
-      document.documentElement.style.setProperty('--site-w', (mobile ? fw - 2 : 1120) + 'px');
+      document.documentElement.style.setProperty('--site-w', (mobile ? fw - 2 : 1180) + 'px');
       if (document.body.classList.contains('started')) isoScene.render();
     };
     new ResizeObserver(fit).observe(pv); fit();
