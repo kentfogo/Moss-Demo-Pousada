@@ -26,6 +26,7 @@ function fakeSpeech() {
   }
   window.__say = (text) => { const r = window.__rec; if (!r || !r.running) return false; r.emit(text.split(' ').slice(0, 2).join(' '), false); setTimeout(() => r.emit(text, true), 30); return true; };
   window.__drop = () => window.__rec && window.__rec.end(); // Chrome ends sessions on its own after silence
+  window.__interim = (text) => window.__rec && window.__rec.emit(text, false);
   window.SpeechRecognition = FakeSR; window.webkitSpeechRecognition = FakeSR;
   window.SpeechSynthesisUtterance = function (t) { this.text = t; };
   Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speaking: false, speak: (u) => { window.__spoken.push(u.text); }, cancel: () => window.__cancels++, getVoices: () => [], addEventListener() {} } });
@@ -46,7 +47,7 @@ async function open(browser, speed) {
   const browser = await chromium.launch();
   const { ctx, page, errors } = await open(browser, 0.04);
   const idle = async () => { await page.waitForTimeout(150); await page.evaluate(() => window.moss.app.whenIdle()); };
-  const say = async (t) => { await page.evaluate((x) => window.__say(x), t); await page.waitForTimeout(1150); await idle(); }; // 900 ms of silence commits
+  const say = async (t) => { await page.evaluate((x) => window.__say(x), t); await page.waitForTimeout(1750); await idle(); }; // 1.4 s of silence commits
   const spoken = () => page.evaluate(() => window.__spoken.slice());
   const userCount = () => page.locator('.msg.user').count();
   const live = () => page.evaluate(() => window.moss.app.isLive());
@@ -70,17 +71,44 @@ async function open(browser, speed) {
 
   // 3. Moss's own voice is ignored (echo on speakers)
   await page.evaluate(() => window.moss.voice.speak('Seven sections are live on Home. Ask for any change.'));
+  await page.waitForTimeout(900); // Moss starts speaking after a quiet moment
   const u0 = await userCount(); const c0 = await page.evaluate(() => window.__cancels);
   await say('seven sections are live on home');
   check('echo of Moss\'s own words is not sent and does not cut it off', (await userCount()) === u0 && (await page.evaluate(() => window.__cancels)) === c0);
 
   // 4. barge-in: real speech cuts Moss off and becomes the next turn
   await page.evaluate(() => window.moss.voice.speak('Here is a long answer about the rooms and the garden and the beach.'));
+  await page.waitForTimeout(900);
   const c1 = await page.evaluate(() => window.__cancels);
   const h0 = await page.locator('.sec-hero h1').innerText();
   await say('make the headline punchier');
   check('talking over Moss stops its speech', (await page.evaluate(() => window.__cancels)) > c1);
   check('…and your words become the next turn', (await page.locator('.sec-hero h1').innerText()) !== h0);
+
+  // 4b. a pause after "and…" is not the end of your turn
+  const uA = await userCount();
+  await page.evaluate(() => window.__say('add a gallery section and'));
+  await page.waitForTimeout(1700);
+  const midway = await userCount();
+  await page.evaluate(() => window.__say('a pricing section too'));
+  await page.waitForTimeout(1800); await idle();
+  const lastUser = await page.locator('.msg.user').last().innerText();
+  check('a pause after "and…" waits for the rest of the sentence', midway === uA && (await userCount()) === uA + 1 && /gallery section and a pricing/i.test(lastUser), lastUser);
+
+  // 4c. Moss never starts talking while you are
+  const before = (await spoken()).length;
+  for (let i = 0; i < 6; i++) {
+    await page.evaluate((k) => window.__interim(`well I think maybe ${k}`), i);
+    if (i === 1) await page.evaluate(() => window.moss.voice.speak('Here is something I wanted to say.')); // arrives mid-sentence
+    await page.waitForTimeout(250);
+  }
+  await page.waitForTimeout(1000);
+  const after4c = await spoken();
+  check('Moss holds (then drops) a line while you are talking', after4c.length === before && !after4c.includes('Here is something I wanted to say.'));
+  await page.evaluate(() => window.moss.voice.speak('Quiet now, so I can speak.'));
+  await page.waitForTimeout(900);
+  check('…and speaks once you have been quiet', (await spoken()).includes('Quiet now, so I can speak.'));
+  await page.waitForTimeout(1600); await idle(); // let the half-heard words above settle
 
   // 5. spoken page references become @mentions
   await say('add an about page');
@@ -127,7 +155,7 @@ async function open(browser, speed) {
     await p2.evaluate(() => window.__say('a specialty coffee roaster in Lisbon'));
     await p2.waitForFunction(() => window.moss.pageModel.get().pages[0] && window.moss.pageModel.get().pages[0].sections.length >= 2, null, { timeout: 15000 });
     await p2.evaluate(() => window.__say('stop'));
-    await p2.waitForTimeout(1200); await p2.evaluate(() => window.moss.app.whenIdle());
+    await p2.waitForTimeout(1800); await p2.evaluate(() => window.moss.app.whenIdle());
     const built = await p2.evaluate(() => window.moss.pageModel.get().pages[0].sections.length);
     await p2.waitForTimeout(1500);
     const later = await p2.evaluate(() => window.moss.pageModel.get().pages[0].sections.length);
@@ -135,7 +163,7 @@ async function open(browser, speed) {
     check('the chat records where it stopped', (await p2.locator('.log .k', { hasText: 'stopped' }).count()) === 1);
     check('Moss acknowledges the stop out loud', (await p2.evaluate(() => window.__spoken)).some((t) => t.startsWith('Stopped')));
     await p2.evaluate(() => window.__say('undo'));
-    await p2.waitForTimeout(1200); await p2.evaluate(() => window.moss.app.whenIdle());
+    await p2.waitForTimeout(1800); await p2.evaluate(() => window.moss.app.whenIdle());
     check('undo after an interruption restores the earlier state', (await p2.evaluate(() => window.moss.pageModel.get().pages.length)) === 0);
     check('mic stays live through the interruption', await p2.evaluate(() => window.moss.app.isLive()));
     check('no errors during interruption', e2.length === 0, e2.slice(0, 3).join(' | '));

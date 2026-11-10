@@ -136,7 +136,7 @@ export function buildMessages({ message, state, history, directions, recentDirec
   return [
     { role: 'system', content: SYSTEM_PROMPT },
     ...turns,
-    { role: 'user', content: `${designContext(directions, recentDirections)}${live ? 'VOICE: live spoken conversation. Keep reply under 25 words and "after" under 15 words; they are read aloud.\n\n' : ''}STATE:\n${JSON.stringify(compactState(state))}\n\nMESSAGE:\n${message}` },
+    { role: 'user', content: `${designContext(directions, recentDirections)}${live ? 'VOICE: live spoken conversation. Keep reply under 20 words and "after" under 15 words; they are read aloud. Put detail in the page, not the speech.\n\n' : ''}STATE:\n${JSON.stringify(compactState(state))}\n\nMESSAGE:\n${message}` },
   ];
 }
 

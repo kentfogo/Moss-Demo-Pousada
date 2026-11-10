@@ -2099,15 +2099,20 @@ const voice = (() => {
   }
   /* Live session: the mic stays on (auto-restarting) until stopLive(). Each utterance is committed after a pause.
      Moss's own speech is filtered out by word overlap with what it is saying (echo on laptop speakers). */
-  const SILENCE = 900;
+  // End of turn: wait longer when the last word suggests you're mid-thought.
+  const SILENCE = 1400, SILENCE_LONG = 2200, QUIET_BEFORE_SPEAKING = 700;
+  const UNFINISHED = /\b(and|so|but|or|um+|uh+|er+|like|then|because|with|the|a|an|to|of|for|maybe|also|plus)$/i;
   let live = null;
   const speech = { text: '', until: 0 };
+  let lastHeardAt = 0;          // last time we heard *you* (non-echo speech)
+  const queue = [];             // Moss's lines waiting for a quiet moment
+  let flushTimer = null;
   const words = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9'à-ÿ ]+/g, ' ').split(/\s+/).filter(Boolean);
   function isEcho(heard) {
     if (!speech.text || Date.now() > speech.until + 900) return false;
     const said = new Set(words(speech.text)); const w = words(heard);
     if (!w.length) return true;
-    return w.filter((x) => said.has(x)).length / w.length >= 0.6;
+    return w.filter((x) => said.has(x)).length / w.length >= 0.7;
   }
   function openLive() {
     if (!live) return;
@@ -2121,11 +2126,13 @@ const voice = (() => {
         if (x.isFinal) { if (!isEcho(t)) live.pending += ' ' + t; } else interim += t;
       }
       const shownInterim = interim && !isEcho(interim) ? interim : '';
-      if (shownInterim && live.h.onSpeech) live.h.onSpeech(shownInterim); // barge-in signal
       const heard = `${live.pending} ${shownInterim}`.replace(/\s+/g, ' ').trim();
+      if (heard) lastHeardAt = Date.now();
+      // barge-in: two or more of your own words stop Moss and drop anything it was about to say
+      if (shownInterim && words(shownInterim).length >= 2) { queue.length = 0; if (live.h.onSpeech) live.h.onSpeech(shownInterim); }
       if (live.h.onInterim) live.h.onInterim(heard);
       clearTimeout(live.timer);
-      if (heard) live.timer = setTimeout(commitLive, SILENCE);
+      if (heard) live.timer = setTimeout(commitLive, UNFINISHED.test(heard.replace(/[.,!?…]+$/, '')) ? SILENCE_LONG : SILENCE);
     };
     r.onerror = (e) => { if (!live) return; live.h.onError && live.h.onError(e.error || 'error'); if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) stopLive(); };
     r.onend = () => { if (live && live.rec === r) { live.restarts++; setTimeout(() => { if (live && live.rec === r) openLive(); }, 150); } };
@@ -2153,9 +2160,21 @@ const voice = (() => {
   }
   function stop() { if (rec && active) { try { rec.stop(); } catch (e) {} } }       // finish and deliver what was heard
   function abort() { if (rec && active) { handlers.onEnd = null; try { rec.abort(); } catch (e) {} active = false; } } // discard
+  // Moss never starts talking while you are: lines wait for a quiet moment (live mode only).
   function speak(text) {
     const t = forSpeech(text);
     if (!synth || !t || !sound.isEnabled()) return;
+    if (!live) return say(t);
+    queue.push(t); flush();
+  }
+  function flush() {
+    clearTimeout(flushTimer);
+    if (!queue.length) return;
+    const quietFor = Date.now() - lastHeardAt;
+    if (quietFor < QUIET_BEFORE_SPEAKING || (live && live.pending)) { flushTimer = setTimeout(flush, QUIET_BEFORE_SPEAKING - Math.min(quietFor, QUIET_BEFORE_SPEAKING) + 60); return; }
+    while (queue.length) say(queue.shift());
+  }
+  function say(t) {
     const u = new SpeechSynthesisUtterance(t);
     const v = pickVoice(); if (v) u.voice = v;
     u.lang = v ? v.lang : lang(); u.rate = 1.04;
@@ -2166,8 +2185,8 @@ const voice = (() => {
     u.onend = () => { if (!synth.speaking) speech.until = Math.min(speech.until, Date.now()); };
     synth.speak(u);
   }
-  function cancelSpeech() { if (synth) synth.cancel(); speech.until = Math.min(speech.until, Date.now()); }
-  return { supported: () => !!SR, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0) };
+  function cancelSpeech() { queue.length = 0; clearTimeout(flushTimer); if (synth) synth.cancel(); speech.until = Math.min(speech.until, Date.now()); }
+  return { supported: () => !!SR, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
 })();
 
 const app = (() => {
@@ -2530,7 +2549,7 @@ const app = (() => {
     const msg = addAgent();
     const t = turn = { controller: new AbortController(), aborted: false };
     let res;
-    const ack = spoken ? setTimeout(() => { if (!t.aborted) voice.speak('On it.'); }, 1200) : null; // fill a slow Moss turn
+    const ack = spoken ? setTimeout(() => { if (!t.aborted && voice.quietFor() > 1500) voice.speak('On it.'); }, 2500) : null; // fill a slow Moss turn, quietly
     try { res = await agent.respond(text, pageModel.get(), { signal: t.controller.signal, live: isLive }); }
     catch (err) { res = { reply: 'Something went wrong on my side. Try that again?', ops: [] }; console.error(err); }
     clearTimeout(ack);
