@@ -7,7 +7,10 @@ const path = require('path');
 const out = process.argv[2] || 'screenshots/iter.png';
 const dark = process.argv.includes('--dark');
 const flow = process.argv.includes('--flow');
-const URL = 'file://' + path.resolve(__dirname, '..', 'moss-builder.html') + '?speed=0.05';
+const base = 'file://' + path.resolve(__dirname, '..', 'moss-builder.html') + '?speed=0.05';
+// From iteration 8 the isometric scene is a build stage shown only while Moss is building, so the fixed
+// state is a real mid-build frame: the first build is paused after its 3rd section (hero, features, testimonials).
+const URL = flow ? base : base + '&pauseAfter=3';
 
 (async () => {
   const browser = await chromium.launch();
@@ -16,7 +19,8 @@ const URL = 'file://' + path.resolve(__dirname, '..', 'moss-builder.html') + '?s
   await page.goto(URL);
   await page.click('#examples .chip >> nth=0');
   await page.waitForTimeout(50);
-  await page.evaluate(() => window.moss.app.whenIdle());
+  if (flow) await page.evaluate(() => window.moss.app.whenIdle());
+  else await page.waitForFunction(() => window.__mossPaused === true);
   if (flow) {
     await page.evaluate(async () => { await window.moss.app.send('Add an About page and a Booking page'); });
     await page.evaluate(async () => { await window.moss.app.send('map the booking flow'); });

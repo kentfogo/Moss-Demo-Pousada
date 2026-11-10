@@ -37,7 +37,7 @@
   --t3: calc(640ms * var(--speed));
 
   --chat-w: 344px;
-  --rail-w: 232px;
+  --rail-w: 200px;
   --top-h: 56px;
   --scene-h: 156px;
 }
@@ -237,7 +237,7 @@ body:not(.started) .scene::before { display: none; }
 @keyframes glowflash { 0%, 50% { opacity: 1; stroke-width: 6; } }
 .iso .mod.active .glow { opacity: .9; }
 .iso .mod.active polygon[fill="var(--mod-top)"] { fill: var(--surface); }
-.iso .mod-label { font: 500 14.5px var(--f-mono); letter-spacing: .1em; fill: var(--ink-2); text-transform: uppercase; transition: fill var(--t2); }
+.iso .mod-label { font: 500 12px var(--f-mono); letter-spacing: .1em; fill: var(--ink-2); text-transform: uppercase; transition: fill var(--t2); }
 .iso .mod.active .mod-label { fill: var(--ink); }
 .iso .leader { fill: none; stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 2 4; opacity: .55; }
 .iso .leader-dot { fill: var(--accent-glow); }
@@ -342,7 +342,8 @@ body:not(.started) .frame-wrap { display: none; }
 /* hero */
 .sec-hero { padding: 40px 0 32px; }
 .sec-hero + .sec-pad { padding-top: 24px; padding-bottom: 56px; }
-.hero-grid { display: grid; grid-template-columns: 1.35fr .9fr; gap: 56px; align-items: center; }
+.hero-grid { display: grid; grid-template-columns: 1.35fr .9fr; gap: 56px; align-items: start; }
+.hero-grid .hero-card { margin-top: 40px; }
 .sec-hero h1 { font-size: 76px; line-height: .98; margin: 18px 0 20px; text-wrap: balance; }
 .sec-hero .sub { font-size: 20px; line-height: 1.55; color: var(--s-ink-2); max-width: 30em; }
 .sec-hero .actions { display: flex; gap: 12px; margin-top: 32px; }
@@ -612,21 +613,42 @@ body:not(.started) .chat { visibility: hidden; }
 .flowview { background: var(--bg); z-index: 7; }
 @media (min-width: 761px) {
   body.started { --scene-h: 0px; }
-  body.started .scene { position: absolute; left: 0; top: 0; bottom: 0; width: var(--rail-w); height: auto; z-index: 4; border-right: 1px solid var(--line); overflow: hidden; }
-  body.started .scene svg.iso { overflow: hidden; }
-  body.started .scene::before { display: none; }
-  body.started .scene .layer-grid { opacity: .45; }
   body.started .pageview { left: var(--rail-w); }
   body.started .frame-wrap { margin-top: 0; padding-top: 24px; }
-  body.started .scene-panel { left: 16px; right: 16px; top: auto; bottom: 20px; width: auto; transform: translate3d(var(--ppx, 0px), var(--ppy, 0px), 0); }
-  body.started .scene-panel p { -webkit-line-clamp: 6; }
-  body.started .rail-head { display: flex; }
+  body.started .rail { display: flex; }
 }
-.rail-head { display: none; position: absolute; left: 20px; right: 16px; top: 20px; justify-content: space-between; align-items: center; z-index: 1; pointer-events: none; }
-.rail-head .mono { font-size: 11px; color: var(--ink-3); }
-.rail-head .eyebrow { color: var(--ink-3); }
+/* Build stage: the isometric scene appears only while Moss is building sections. */
+body.started .scene {
+  position: absolute; z-index: 6; top: auto; right: 24px; bottom: 24px;
+  width: min(560px, calc(100% - var(--rail-w) - 48px)); height: 184px; overflow: hidden;
+  border-radius: var(--r3); border: 1px solid var(--line); box-shadow: var(--sh3);
+  background: var(--bg);
+  opacity: 0; pointer-events: none; transform: translateY(10px) scale(.985); transform-origin: bottom right;
+  transition: opacity var(--t3) var(--ease), transform var(--t3) var(--ease);
+}
+body.started.building .scene { opacity: 1; transform: none; }
+.stage-cap { display: none; position: absolute; left: 18px; top: 14px; z-index: 1; gap: 10px; align-items: center; font: 11px var(--f-mono); color: var(--ink-3); }
+body.started .stage-cap { display: flex; }
+body.started .scene-panel { display: none; }
+body.started .scene::before { display: none; }
+/* Module rail: a plain numbered list of the current page's sections. */
+.rail { display: none; position: absolute; left: 0; top: 0; bottom: 0; width: var(--rail-w); flex-direction: column; padding: 20px 12px; border-right: 1px solid var(--line); background: var(--bg); z-index: 3; }
+.rail-h { display: flex; justify-content: space-between; align-items: center; padding: 0 8px 12px; }
+.rail-h .eyebrow { color: var(--ink-3); }
+.rail-h .mono { font-size: 11px; color: var(--ink-3); }
+.rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.rail li button { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 8px 0 12px; border: 0; border-radius: var(--r1); background: transparent; color: var(--ink-2); font-size: 13.5px; text-align: left; transition: background-color var(--t1), color var(--t1); }
+.rail li button:hover { background: var(--surface); color: var(--ink); }
+.rail li button .n { width: 18px; font: 11px var(--f-mono); color: var(--ink-3); }
+.rail li button[aria-current="true"] { background: var(--surface); color: var(--ink); }
+.rail li button[aria-current="true"]::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: var(--accent-glow); }
+.log-wrap { margin: 12px 0 14px; }
+.log-wrap summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--rp); background: var(--surface); font: 11.5px var(--f-mono); color: var(--ink-2); }
+.log-wrap summary::-webkit-details-marker { display: none; }
+.log-wrap summary svg.i { width: 14px; height: 14px; color: var(--accent); }
+.log-wrap[open] summary { margin-bottom: 8px; }
+.log-wrap .log { margin: 0; }
 body.started .canvas { background: var(--bg-2); }
-body.started .scene { background: var(--bg); }
 @media (max-width: 1100px) { :root { --chat-w: 340px; } }
 @media (max-width: 760px) {
   :root { --top-h: 52px; --scene-h: 150px; }
@@ -652,8 +674,8 @@ body.started .scene { background: var(--bg); }
   .intro h1 { font-size: 46px; }
   body:not(.started) .scene { height: 220px; margin-top: 0; }
   .flowview { bottom: 48vh; }
-  body.started .scene { position: absolute; left: 0; right: 0; top: 0; height: var(--scene-h); }
-  body.started .pageview { top: var(--scene-h); }
+  :root { --rail-w: 0px; }
+  body.started .scene { top: 8px; bottom: auto; left: 8px; right: 8px; height: 140px; width: auto; transform-origin: top center; }
   .scene-panel { display: none; }
 }
 
@@ -684,6 +706,7 @@ body.started .scene { background: var(--bg); }
 
   <main class="workspace">
     <section class="canvas" aria-label="Canvas">
+      <nav class="rail" id="rail" aria-label="Sections on this page"><div class="rail-h"><span class="eyebrow">Modules</span><span class="mono" id="railCount"></span></div><ol id="railList"></ol></nav>
       <div class="pageview" id="pageView">
         <div class="scene" id="scene">
           <svg class="iso" id="iso" viewBox="0 36 1200 214" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
@@ -704,7 +727,7 @@ body.started .scene { background: var(--bg); }
             <g class="layer-mods" id="isoMods"></g>
             <g id="isoLeader"></g>
           </svg>
-          <div class="rail-head" aria-hidden="true"><span class="eyebrow">Modules</span><span class="mono" id="railCount"></span></div>
+          <div class="stage-cap" aria-hidden="true"><span class="eyebrow">Assembling</span><span id="stageCap"></span></div>
           <div class="scene-panel glass" id="scenePanel" aria-hidden="true">
             <div class="row"><span class="eyebrow">Moss · agent</span><span class="dot"></span></div>
             <p id="scenePanelText">Ready when you are.</p>
@@ -788,6 +811,7 @@ body.started .scene { background: var(--bg); }
 /* =====================================================================
    UTILITIES
    ===================================================================== */
+const PAUSE_AFTER = parseInt(new URLSearchParams(location.search).get('pauseAfter'), 10) || 0; // screenshot hook only
 const SPEED = (() => { const n = parseFloat(new URLSearchParams(location.search).get('speed')); return isFinite(n) && n >= 0 ? n : 1; })();
 document.documentElement.style.setProperty('--speed', String(SPEED || 0.001));
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -943,7 +967,7 @@ const agent = (() => {
         return {
           name: n, kindLabel: 'boutique pousada', flow: 'booking', primary: 'Check availability',
           announce: { tag: 'New', text: 'Garden suites open for the dry season' },
-          hero: { eyebrow: `Boutique pousada · ${pl}`, headline: 'Nine rooms, a garden, and the slow tide of ' + pl + '.', punchy: ['Slow down. You’re here.', 'Salt air. Nine rooms. No rush.', 'Sea, shade, silence.'],
+          hero: { eyebrow: `Boutique pousada · ${pl}`, headline: 'The quiet side of ' + pl + '.', punchy: ['Slow down. You’re here.', 'Salt air. Nine rooms. No rush.', 'Sea, shade, silence.'],
             sub: `A nine-room guesthouse a short walk from the beach, with a breakfast garden, hammocks in the shade and hosts who remember how you take your coffee.`, subShort: 'Nine rooms, a breakfast garden, five minutes to the sand.',
             primary: 'Check availability', secondary: 'See the rooms',
             card: { title: 'Your stay', tag: '3 nights', rows: [['Check-in', 'Fri 14 Mar'], ['Check-out', 'Mon 17 Mar'], ['Guests', '2 adults']], cta: 'Check availability', note: 'From R$ 640 / night · breakfast included' },
@@ -1357,7 +1381,9 @@ const renderer = (() => {
     }
     $('#frameUrl').innerHTML = st.business ? `${esc(st.business.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))}.moss.site<b>/${esc(st.currentPage === 'home' ? '' : st.currentPage)}</b>` : '';
     $('#frameCount').textContent = page ? `${String(page.sections.length).padStart(2, '0')} SECTIONS` : '';
-    $('#railCount').textContent = page ? `${page.sections.length} / ${page.name.toLowerCase()}` : '';
+    const ol = $('#railList');
+    ol.innerHTML = (page ? page.sections : []).map((sec, i) => `<li><button type="button" data-id="${sec.id}" ${sec.id === ol.dataset.active ? 'aria-current="true"' : ''}><span class="n">${String(i + 1).padStart(2, '0')}</span>${esc(SECTION_META[sec.type].label)}</button></li>`).join('');
+    $('#railCount').textContent = page ? String(page.sections.length) : '';
   }
   async function removeSection(id) {
     const el = $(`#siteSections [data-id="${id}"]`);
@@ -1375,7 +1401,7 @@ const renderer = (() => {
    ===================================================================== */
 const isoScene = (() => {
   let G = 24; const C = 0.8660254, S = 0.5;
-  const railMode = () => document.body.classList.contains('started') && window.innerWidth > 760;
+  const railMode = () => false; // the scene is now a transient build stage; the rail is an HTML list
   const W = 2, D = 2, H = 0.75;
   const NS = 'http://www.w3.org/2000/svg';
   const L = (x, y, z = 0) => [(x - y) * C * G, (x + y) * S * G - z * G];
@@ -1400,9 +1426,16 @@ const isoScene = (() => {
     const raw = Array.from({ length: n }, (_, i) => [i * step + (i % 2), -i * step + (i % 2)]);
     const xs = raw.map(([x, y]) => L(x, y)[0]);
     const minX = Math.min(...xs, 0), maxX = Math.max(...xs, 0);
-    const panel = window.innerWidth > 1100 && document.body.classList.contains('started');
+    const panel = false; // the agent message lives in the chat; the build stage shows modules only
     const cx = panel ? 460 : 600;
     origin = [Math.round(cx - (minX + maxX) / 2 - (W - D) * C * G / 2), document.body.classList.contains('started') ? 104 : 128];
+    if (document.body.classList.contains('started')) {
+      // Build stage: fit the viewport to the modules present (never above 1:1), keeping the card's aspect.
+      const sc = $('#scene'); const aspect = (sc.clientHeight || 184) / (sc.clientWidth || 560);
+      const vw = Math.max(maxX - minX + 2 * W * C * G + 150, sc.clientWidth || 560);
+      const vh = vw * aspect;
+      svg.setAttribute('viewBox', `${(cx - vw / 2).toFixed(1)} ${(origin[1] + 24 - vh / 2 + 8).toFixed(1)} ${vw.toFixed(1)} ${vh.toFixed(1)}`);
+    }
     return raw;
   }
   const screen = ([x, y]) => { const [sx, sy] = L(x, y); return [origin[0] + sx, origin[1] + sy]; };
@@ -1490,6 +1523,8 @@ const isoScene = (() => {
   function flash(id) { const g = mods.get(id); if (!g) return; g.classList.remove('flash'); void g.getBBox(); g.classList.add('flash'); setTimeout(() => g.classList.remove('flash'), 1800 * SPEED); }
   function setActive(id) {
     mods.forEach((g, k) => g.classList.toggle('active', k === id));
+    const ol = $('#railList'); ol.dataset.active = id || '';
+    $$('button', ol).forEach((b) => (b.dataset.id === id ? b.setAttribute('aria-current', 'true') : b.removeAttribute('aria-current')));
     $('#isoMods').classList.toggle('has-active', !!id && mods.has(id));
     drawLeader(id);
   }
@@ -1793,6 +1828,7 @@ const app = (() => {
         const id = op.section.id;
         const done = logLine(msgEl, 'module', SECTION_META[op.section.type].label.toLowerCase());
         setStatus(`Building · ${SECTION_META[op.section.type].label}`, true);
+        $('#stageCap').textContent = `${String(page.sections.length).padStart(2, '0')} · ${SECTION_META[op.section.type].label.toLowerCase()}`;
         isoScene.render({ enter: id }); isoScene.setActive(id);
         await wait(430); sound.play('tick');
         await wait(260); sound.play('rise');
@@ -1800,6 +1836,7 @@ const app = (() => {
         renderTabs(); renderer.render({ animateId: id }); flowCanvas.render();
         sound.play('click'); scrollToSection(id);
         await wait(520); done();
+        if (PAUSE_AFTER && page.sections.length >= PAUSE_AFTER) { window.__mossPaused = true; await new Promise(() => {}); }
         break;
       }
       case 'updateSection': {
@@ -1895,9 +1932,21 @@ const app = (() => {
     msg.querySelector('.typing').remove();
     await stream(msg.querySelector('.text'), res.reply);
     const ops = res.ops || [];
+    const building = ops.some((o) => o.op === 'addSection');
+    if (building) document.body.classList.add('building');
     if (ops.some((o) => MUTATING.has(o.op))) pageModel.snapshot();
     for (const op of ops) await applyOp(op, msg);
     const curP = pageModel.current(); isoScene.setActive(curP && curP.sections.length ? curP.sections[curP.sections.length - 1].id : null);
+    if (building) { await wait(700); document.body.classList.remove('building'); }
+    const logEl = msg.querySelector('.log');
+    if (logEl.children.length > 3) {
+      const count = (k) => [...logEl.querySelectorAll('.k')].filter((e) => e.textContent === k).length;
+      const m = count('module'), pg = count('page');
+      const label = m ? `${m} module${m > 1 ? 's' : ''} built${pg ? ` · ${pg} page${pg > 1 ? 's' : ''}` : ''}` : `${logEl.children.length} changes`;
+      const d = document.createElement('details'); d.className = 'log-wrap';
+      d.innerHTML = `<summary>${icon('check')}<span>${esc(label)}</span></summary>`;
+      logEl.replaceWith(d); d.appendChild(logEl);
+    }
     if (res.after) await stream(msg.querySelector('.after'), res.after);
     setSuggestions(res.suggestions);
     setBusy(false);
@@ -1985,6 +2034,7 @@ const app = (() => {
     });
     ta.addEventListener('blur', () => setTimeout(() => { mm.open = false; renderMenu(); }, 120));
 
+    $('#railList').addEventListener('click', (e) => { const b = e.target.closest('button[data-id]'); if (!b) return; scrollToSection(b.dataset.id); renderer.flash(b.dataset.id); isoScene.setActive(b.dataset.id); });
     $('#viewPage').addEventListener('click', () => setView('page'));
     $('#viewFlow').addEventListener('click', () => setView('flow'));
     $('#sheetHandle').addEventListener('click', () => { const c = $('#chat').classList.toggle('collapsed'); $('#sheetHandle').setAttribute('aria-expanded', !c); });
