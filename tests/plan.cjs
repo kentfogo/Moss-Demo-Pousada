@@ -68,17 +68,29 @@ const check = (name, ok, detail = '') => { results.push(!!ok); console.log(`${ok
   check('"build the rest" finishes the plan on autopilot', JSON.stringify(built) === JSON.stringify(p.sections.map((x) => x.type)), built.join(','));
   check('the plan is marked done', (await plan()).phase === 'done' && (await page.locator('.rail li.ghost').count()) === 0);
 
-  // what's next: draft pages in Flow view
-  check('Flow view opens with suggested pages', (await page.evaluate(() => window.moss.app.view())) === 'flow' && (await page.locator('.pcard.draft').count()) === 3);
-  check('…plus a visitor journey', (await page.evaluate(() => window.moss.pageModel.get().flows.length)) === 1);
+  // what's next: stay on the finished page, suggestions in a chat card, the map on request
+  await page.waitForTimeout(900);
+  check('after the build you stay on the finished page', (await page.evaluate(() => window.moss.app.view())) === 'page' && (await page.evaluate(() => document.querySelector('#pageView').scrollTop)) < 50);
+  check('Moss asks whether to look it over or plan the next pages', /Want to look it over, or plan the next pages/.test(await page.locator('.msg.agent .after').last().innerText()));
+  check('a "What\'s next" card lists the suggested pages', (await page.locator('.next-card li').count()) === 3 && (await page.locator('.next-card [data-say="Show the map"]').count()) === 1);
+  check('…plus a visitor journey on the map', (await page.evaluate(() => window.moss.pageModel.get().flows.length)) === 1);
+  const cardName = await page.locator('.next-card li b').first().innerText();
+  await page.locator('.next-card li .chip').first().click(); await page.waitForTimeout(100); await page.evaluate(() => window.moss.app.whenIdle());
+  check('"Build" on the card builds that page', (await page.evaluate(() => window.moss.pageModel.get().pages.map((x) => x.name))).includes(cardName) && (await page.locator('.next-card li.built').count()) === 1, cardName);
+  await say('show the map');
+  check('"show the map" opens Flow with the remaining drafts', (await page.evaluate(() => window.moss.app.view())) === 'flow' && (await page.locator('.pcard.draft').count()) === 2);
   const draftName = await page.locator('.pcard.draft h3').first().innerText();
   const box = await page.locator('.pcard.draft').first().boundingBox();
   await page.mouse.click(box.x + box.width / 2, box.y + 20);
   await page.waitForTimeout(100); await page.evaluate(() => window.moss.app.whenIdle());
-  const pagesNow = await page.evaluate(() => window.moss.pageModel.get().pages.map((x) => x.name));
-  check('tapping a draft builds that page', pagesNow.includes(draftName) && (await page.locator('.pcard.draft').count()) === 2, pagesNow.join(','));
+  check('tapping a draft on the map builds that page', (await page.evaluate(() => window.moss.pageModel.get().pages.map((x) => x.name))).includes(draftName), draftName);
+  await say('show the map');
+  const home = await page.locator('.pcard[data-page="home"]').boundingBox();
+  await page.mouse.click(home.x + home.width / 2, home.y + 30); await page.waitForTimeout(300);
+  check('clicking a page card on the map opens that page', (await page.evaluate(() => window.moss.app.view())) === 'page' && (await page.evaluate(() => window.moss.pageModel.get().currentPage)) === 'home');
   await say('skip the rest');
-  check('"skip the rest" clears the remaining drafts', (await page.locator('.pcard.draft').count()) === 0);
+  check('"skip the rest" clears the remaining drafts', (await page.evaluate(() => (window.moss.pageModel.get().drafts || []).length)) === 0);
+  check('the interview opens with "Let\'s plan this out"', /Let's plan this out together/.test(await page.locator('.msg.agent .text:not(.after)').first().innerText()));
 
   // autopilot still works: example chips and "just build"
   await page.goto(URL);

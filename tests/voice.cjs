@@ -110,6 +110,24 @@ async function open(browser, speed) {
   check('…and speaks once you have been quiet', (await spoken()).includes('Quiet now, so I can speak.'));
   await page.waitForTimeout(1600); await idle(); // let the half-heard words above settle
 
+  // 4d. words Chrome never marks final still get sent (nothing sticks in the box)
+  const uI = await userCount();
+  await page.evaluate(() => window.__interim('free trial it is'));
+  await page.waitForTimeout(1800); await idle();
+  check('unconfirmed words are sent after the pause', (await userCount()) === uI + 1 && /free trial it is/i.test(await page.locator('.msg.user').last().innerText()) && (await page.inputValue('#chatInput')) === '');
+
+  // 4e. on speakers, Moss hearing its own (mis-transcribed) voice doesn't cut it off; a real "stop" still does
+  await page.evaluate(() => window.moss.voice.speak('What should the site feel like when someone lands on it today?'));
+  await page.waitForTimeout(900);
+  const cE = await page.evaluate(() => window.__cancels);
+  await page.evaluate(() => window.__interim('what should decide feel like'));
+  await page.waitForTimeout(200);
+  check('a garbled echo of Moss does not interrupt it', (await page.evaluate(() => window.__cancels)) === cE);
+  await page.evaluate(() => window.__interim('stop'));
+  await page.waitForTimeout(200);
+  check('saying "stop" while Moss talks still interrupts', (await page.evaluate(() => window.__cancels)) > cE);
+  await page.waitForTimeout(1800); await idle();
+
   // 5. spoken page references become @mentions
   await say('add an about page');
   await say('go to at home');

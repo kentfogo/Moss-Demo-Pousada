@@ -660,6 +660,18 @@ body.planning #frame { display: none; }
 .edge.draft { stroke-dasharray: 3 6; opacity: .55; }
 @media (max-width: 760px) { .pb-cols, .pb-dir-row { grid-template-columns: 1fr; } .plan-board { padding: 20px; } }
 
+.next-card { margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); }
+.next-card h4 { margin: 0 0 10px; font: 500 10.5px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.next-card ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.next-card li { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.next-card li b { display: block; font-size: 13.5px; }
+.next-card li span { display: block; font-size: 12px; color: var(--ink-3); line-height: 1.35; }
+.next-card li.built b { color: var(--ink-3); }
+.next-card .chip { min-height: 28px; padding: 3px 12px; font-size: 12px; }
+.next-card .nc-foot { display: flex; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.next-card.dismissed { opacity: .55; }
+.next-card.dismissed button { pointer-events: none; }
+
 /* Voice: mic buttons, listening state */
 .mic-btn { position: relative; flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); display: grid; place-items: center; transition: background-color var(--t1), border-color var(--t1), color var(--t1), transform var(--t1); }
 .mic-btn:hover { border-color: var(--ink-3); transform: translateY(-1px); }
@@ -1221,7 +1233,7 @@ const agent = (() => {
   }
 
 
-  /* ---------------- Plan mode: a grill-me style interview, then a plan, then a guided build ----------------
+  /* ---------------- Plan mode: an interview (one question at a time), then a plan, then a guided build ----------------
      Offline version (the live version runs on Moss with the Planner prompt in api/agent.js). */
   const PLAN_RE = /\b(plan mode|plan it( out)?|help me (build|make|create|design|plan)|let'?s (build|make|create|design|plan)|build (it|this|one) (with me|together)|work (on it |on this )?with me|can we (build|make|create))\b/;
   const AUTO_RE = /\b(just build|build it all|build everything|build the rest|skip (the )?(questions|plan|interview)|autopilot|surprise me)\b/;
@@ -1289,7 +1301,7 @@ const agent = (() => {
     const c = copyFor(kind, extractName(text), place);
     const business = { kind, name: c.name, place, prompt: text, copy: c };
     const q = QUESTIONS(kind)[0];
-    return { reply: `Let's plan ${c.name} together, one question at a time. ${q.question}`, ops: [{ op: 'setBusiness', business }, { op: 'startPlan', brief: { business: `${c.name}, a ${c.kindLabel}${place ? ' in ' + place : ''}` } }, { op: 'askQuestion', ...q }], suggestions: q.options };
+    return { reply: `Let's plan this out together, one question at a time. ${q.question}`, ops: [{ op: 'setBusiness', business }, { op: 'startPlan', brief: { business: `${c.name}, a ${c.kindLabel}${place ? ' in ' + place : ''}` } }, { op: 'askQuestion', ...q }], suggestions: q.options };
   }
   function planRespond(text, low, state, opts) {
     const plan = state.plan; if (!plan || plan.phase === 'done') return null;
@@ -1312,8 +1324,8 @@ const agent = (() => {
       if (auto) {
         ops.push({ op: 'chooseDirection', index: 0 }, { op: 'addPage', page: { id: 'home', name: 'Home', sections: [] }, navigate: true, quiet: true });
         proposal.sections.forEach((ps) => ops.push({ op: 'addSection', page: 'home', section: plannedSection(ps, c) }));
-        ops.push(suggestNextLocal(kind), { op: 'setView', view: 'flow' });
-        return { reply: `Building all ${proposal.sections.length} sections in ${names[0]}.`, ops, after: 'Home is done. Here is what usually comes next. Which should I build?', suggestions: ['Build the booking page', 'Skip the rest'] };
+        ops.push(suggestNextLocal(kind));
+        return { reply: `Building all ${proposal.sections.length} sections in ${names[0]}.`, ops, after: 'Home is done. Want to look it over, or plan the next pages?', suggestions: ['Build the booking page', 'Skip the rest'] };
       }
       return { reply: `${proposal.summary} The plan is ${proposal.sections.length} sections. Three looks: ${list(names)}. Which one?`, ops, suggestions: names.map((n) => `Go with ${n}`) };
     }
@@ -1331,7 +1343,7 @@ const agent = (() => {
       ops.push({ op: 'addPage', page: { id: 'home', name: 'Home', sections: [] }, navigate: true, quiet: true });
       const todo = auto ? plan.sections : plan.sections.slice(0, 1);
       todo.forEach((ps) => ops.push({ op: 'addSection', page: 'home', section: plannedSection(ps, c) }));
-      if (auto) { ops.push(suggestNextLocal(kind), { op: 'setView', view: 'flow' }); return { reply: 'Building the whole page now.', ops, after: 'Home is done. Here is what usually comes next. Which should I build?' }; }
+      if (auto) { ops.push(suggestNextLocal(kind)); return { reply: 'Building the whole page now.', ops, after: 'Home is done. Want to look it over, or plan the next pages?' }; }
       const nxt = plan.sections[1];
       return { reply: `The ${label(plan.sections[0].type).toLowerCase()} is in. Keep it, or change something?${nxt ? ` Say "next" for the ${label(nxt.type).toLowerCase()}.` : ''}`, ops, suggestions: ['Next', 'Make the headline punchier', 'Build the rest'] };
     }
@@ -1342,7 +1354,7 @@ const agent = (() => {
       const todo = auto ? remaining : remaining.slice(0, 1);
       const ops = todo.map((ps) => ({ op: 'addSection', page: 'home', section: plannedSection(ps, c) }));
       const left = remaining.length - todo.length;
-      if (!left) { ops.push(suggestNextLocal(kind), { op: 'setView', view: 'flow' }); return { reply: todo.length > 1 ? `Building the last ${todo.length} sections.` : `The ${label(todo[0].type).toLowerCase()} is in, and Home is done.`, ops, after: 'Here is what usually comes next. Which should I build?', suggestions: ['Build the booking page', 'Build the about page', 'Skip the rest'] }; }
+      if (!left) { ops.push(suggestNextLocal(kind)); return { reply: todo.length > 1 ? `Building the last ${todo.length} sections.` : `The ${label(todo[0].type).toLowerCase()} is in, and Home is done.`, ops, after: 'Want to look it over, or plan the next pages?', suggestions: ['Build the booking page', 'Build the about page', 'Skip the rest'] }; }
       const nxt = remaining[todo.length];
       return { reply: `The ${label(todo[todo.length - 1].type).toLowerCase()} is in. Keep it, or change something? Next up: ${label(nxt.type).toLowerCase()}.`, ops, suggestions: ['Next', 'Build the rest'] };
     }
@@ -1384,7 +1396,7 @@ const agent = (() => {
       const flow = makeFlow(`${cap(key)} flow`, FLOW_LABELS[key]);
       return { reply: `Mapping the ${key} flow on the canvas: eight steps, one decision, and the loop back when the answer is no.`, ops: [{ op: 'setView', view: 'flow' }, { op: 'addFlow', flow }], after: 'Drag any node and the connectors follow. Say “back to page view” when you’re done.', suggestions: ['Back to page view', 'Undo'] };
     }
-    if (/\b(flow view|show (me )?(the )?flow|switch to flow|open (the )?flow)\b/.test(low)) return { reply: 'Switching to Flow view.', ops: [{ op: 'setView', view: 'flow' }] };
+    if (/\b(flow view|show (me )?(the )?(flow|map)|switch to flow|open (the )?(flow|map)|see the map|what'?s next)\b/.test(low)) return { reply: (state.drafts || []).length ? 'Here is the map, with the suggested pages.' : 'Switching to Flow view.', ops: [{ op: 'setView', view: 'flow' }] };
     if (/\b(page view|back to (the )?page|show (me )?(the )?page)\b/.test(low)) return { reply: 'Back to the page.', ops: [{ op: 'setView', view: 'page' }] };
 
     const namedPages = PAGE_TYPES.filter((p) => new RegExp(`\\b${p}\\b`).test(low.replace(/@[a-z]+/g, ' ')));
@@ -1542,7 +1554,7 @@ const agent = (() => {
   const UNDO_RE = /^\s*(undo|revert)\b|\bundo\b|take that back|go back a step/;
 
   // Commands that never need the model: undo, view switches, going to an existing page.
-  const VIEW_RE = /^(show (me )?(the )?)?(flow|page) view$|^(back to|switch to|open) (the )?(flow|page)( view)?$/;
+  const VIEW_RE = /^(show (me )?(the )?)?(flow|page) view$|^(back to|switch to|open) (the )?(flow|page)( view)?$|^(show|open|see) (me )?(the )?map$|^(back to|show me|show) the page$/;
   function isLocalCommand(low, state) {
     const l = low.replace(/[.!?]/g, '').trim();
     if (UNDO_RE.test(l) || VIEW_RE.test(l)) return true;
@@ -1555,7 +1567,8 @@ const agent = (() => {
   async function respond(message, state, opts = {}) {
     const low = message.trim().toLowerCase();
     const mode = modeOf(low, state, opts);
-    if (!REMOTE || remoteDisabled || isLocalCommand(low, state)) return localRespond(message.replace(/^(go to|open|show( me)?|take me to)\s+(the\s+)?([A-Za-z])/i, (m, a, b, c, d) => `${a} @${d}`), state, { mode });
+    const asMention = (m) => m.replace(/^(go to|open|show( me)?|take me to)\s+(the\s+)?([A-Za-z][\w-]*)/i, (all, a, b, c, word) => (state.pages.some((p) => p.name.toLowerCase() === word.toLowerCase() || p.id === word.toLowerCase()) ? `${a} @${word}` : all));
+    if (!REMOTE || remoteDisabled || isLocalCommand(low, state)) return localRespond(asMention(message), state, { mode });
     try {
       const r = await fetch('/api/agent', {
         method: 'POST', headers: { 'content-type': 'application/json' }, signal: opts.signal,
@@ -2336,12 +2349,15 @@ const voice = (() => {
   const queue = [];             // Moss's lines waiting for a quiet moment
   let flushTimer = null;
   const words = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9'à-ÿ ]+/g, ' ').split(/\s+/).filter(Boolean);
+  const mossSpeaking = () => Date.now() < speech.until + 600;
   function isEcho(heard) {
     if (!speech.text || Date.now() > speech.until + 900) return false;
     const said = new Set(words(speech.text)); const w = words(heard);
     if (!w.length) return true;
-    return w.filter((x) => said.has(x)).length / w.length >= 0.7;
+    // while Moss is talking, a mis-transcribed echo of its own voice only half matches: be stricter then
+    return w.filter((x) => said.has(x)).length / w.length >= (mossSpeaking() ? 0.45 : 0.7);
   }
+  const STOP_WORDS = /^(stop|wait|hold on|hang on|pause|cancel|no stop|stop stop|stop listening|mic off)\b/;
   function openLive() {
     if (!live) return;
     const r = new SR(); live.rec = r; rec = r;
@@ -2354,28 +2370,34 @@ const voice = (() => {
         if (x.isFinal) { if (!isEcho(t)) live.pending += ' ' + t; } else interim += t;
       }
       const shownInterim = interim && !isEcho(interim) ? interim : '';
+      live.interim = shownInterim;
       const heard = `${live.pending} ${shownInterim}`.replace(/\s+/g, ' ').trim();
       if (heard) lastHeardAt = Date.now();
-      // barge-in: two or more of your own words stop Moss and drop anything it was about to say
-      if (shownInterim && words(shownInterim).length >= 2) { queue.length = 0; if (live.h.onSpeech) live.h.onSpeech(shownInterim); }
+      // barge-in: your words stop Moss. While it is talking (speakers can feed its voice back in),
+      // only a stop phrase or 4+ words of your own count; otherwise two words are enough.
+      const w = words(heard);
+      const barge = heard && (mossSpeaking() ? (STOP_WORDS.test(heard.toLowerCase().trim()) || w.length >= 4) : w.length >= 2);
+      if (barge) { queue.length = 0; if (live.h.onSpeech) live.h.onSpeech(heard); }
       if (live.h.onInterim) live.h.onInterim(heard);
       clearTimeout(live.timer);
       if (heard) live.timer = setTimeout(commitLive, UNFINISHED.test(heard.replace(/[.,!?…]+$/, '')) ? SILENCE_LONG : SILENCE);
     };
     r.onerror = (e) => { if (!live) return; live.h.onError && live.h.onError(e.error || 'error'); if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) stopLive(); };
-    r.onend = () => { if (live && live.rec === r) { live.restarts++; setTimeout(() => { if (live && live.rec === r) openLive(); }, 150); } };
+    r.onend = () => { if (live && live.rec === r) { live.restarts++; if (live.pending || live.interim) { clearTimeout(live.timer); commitLive(); } setTimeout(() => { if (live && live.rec === r) openLive(); }, 150); } };
     try { r.start(); active = true; } catch (e) { /* already started; onend will retry */ }
   }
   function commitLive() {
     if (!live) return;
-    const t = live.pending.replace(/\s+/g, ' ').trim(); live.pending = '';
+    // Chrome doesn't always mark a phrase final: send what was heard either way, so nothing sticks in the box
+    const t = `${live.pending} ${live.interim || ''}`.replace(/\s+/g, ' ').trim(); live.pending = ''; live.interim = '';
     if (t && live.h.onUtterance) live.h.onUtterance(t);
+    else if (live.h.onInterim) live.h.onInterim('');
   }
   function startLive(h = {}) {
     if (!SR) return false;
     if (live) return true;
     if (rec && active) { try { rec.abort(); } catch (e) {} }
-    live = { h, pending: '', timer: null, rec: null, restarts: 0 };
+    live = { h, pending: '', interim: '', timer: null, rec: null, restarts: 0 };
     openLive();
     return true;
   }
@@ -2466,6 +2488,15 @@ const app = (() => {
     nav.innerHTML = st.pages.map((p) => `<button class="tab ${p.id === enterId ? 'enter' : ''}" data-page="${p.id}" ${p.id === st.currentPage ? 'aria-current="page"' : ''} title="/${p.id === 'home' ? '' : p.id}">${esc(p.name)}</button>`).join('');
     $$('.tab', nav).forEach((b) => b.addEventListener('click', () => openPage(b.dataset.page)));
   }
+  /* ---- "What's next" card in the chat (mirrors the draft pages on the map) ---- */
+  function renderNextCard(msgEl) {
+    const drafts = pageModel.get().drafts || []; if (!drafts.length) return;
+    const card = document.createElement('div'); card.className = 'next-card';
+    card.innerHTML = `<h4>What's next</h4><ul>${drafts.map((d) => `<li data-draft="${esc(d.id)}"><div><b>${esc(d.name)}</b><span>${esc(d.why)}</span></div><button type="button" class="chip" data-say="Build the ${esc(d.name)} page">Build</button></li>`).join('')}</ul><div class="nc-foot"><button type="button" class="chip" data-say="Show the map">See the map</button><button type="button" class="chip" data-say="Skip the rest">Not now</button></div>`;
+    msgEl.querySelector('.body').appendChild(card); scrollChat();
+  }
+  function markDraftBuilt(id) { $$(`.next-card li[data-draft="${CSS.escape(id)}"]`).forEach((li) => { li.classList.add('built'); const b = li.querySelector('button'); if (b) { b.disabled = true; b.textContent = 'Built'; } }); }
+
   /* ---- plan board ---- */
   function renderPlanBoard(fresh = []) {
     const st = pageModel.get(); const board = $('#planBoard'); const plan = st.plan;
@@ -2511,7 +2542,7 @@ const app = (() => {
     if (changed) { isoScene.reset(); $('#pageView').scrollTo({ top: 0, behavior: 'instant' }); }
     if (location.hash !== '#/' + id) history.replaceState(null, '', '#/' + id);
     renderAll({ flip: false });
-    if (view === 'flow' && changed) setView('page');
+    if (view === 'flow') setView('page');
   }
   function setView(v) {
     view = v;
@@ -2551,6 +2582,7 @@ const app = (() => {
       case 'addPage': {
         if (!pageModel.page(op.page.id)) st.pages.push(clone(op.page));
         st.drafts = (st.drafts || []).filter((d) => d.id !== op.page.id);
+        markDraftBuilt(op.page.id);
         if (!st.pagePos[op.page.id]) st.pagePos[op.page.id] = { x: 40 + (st.pages.length - 1) * 256, y: 0 };
         const done = op.quiet ? null : logLine(msgEl, 'page', `/${op.page.id}`);
         if (!op.quiet) sound.play('chime');
@@ -2678,10 +2710,13 @@ const app = (() => {
           st.flows.push({ id: uid('flow'), name: j.name, nodes, edges, ox: 40, oy: Math.max(maxY, 260) + 60 });
         });
         logLine(msgEl, 'next', `${st.drafts.length} suggested pages`)();
-        if (view !== 'flow') setView('flow');
-        flowCanvas.render(); requestAnimationFrame(() => flowCanvas.fit()); sound.play('chime'); await wait(300); break;
+        // stay on the finished page; suggestions go into a card here, and on the map when asked
+        if (view !== 'page') setView('page');
+        $('#pageView').scrollTo({ top: 0, behavior: reducedMotion.matches ? 'instant' : 'smooth' });
+        renderNextCard(msgEl);
+        flowCanvas.render(); sound.play('chime'); await wait(300); break;
       }
-      case 'dismissDrafts': { st.drafts = []; flowCanvas.render(); break; }
+      case 'dismissDrafts': { st.drafts = []; flowCanvas.render(); $$('.next-card').forEach((c) => c.classList.add('dismissed')); break; }
       case 'setDesign': {
         st.design = MossSite.sanitizeDesign(op.design, st.design, { seed: st.business && st.business.name });
         rememberDirection(st.design.direction);
@@ -2860,6 +2895,9 @@ const app = (() => {
     clearTimeout(ack);
     msg.querySelector('.typing').remove();
     if (t.aborted || res.aborted) { finishInterrupted(msg, [], 0); turn = null; setBusy(false); return; }
+    const askedQ = (res.ops || []).find((o) => o.op === 'askQuestion');
+    const squash = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (askedQ && !squash(res.reply).includes(squash(askedQ.question).slice(0, 40))) res.reply = `${(res.reply || '').trim()} ${askedQ.question}`.trim();
     if (spoken) voice.speak(res.reply);
     await stream(msg.querySelector('.text'), res.reply, t);
     const ops = res.ops || [];
@@ -2950,6 +2988,7 @@ const app = (() => {
     $('#examples').innerHTML = EXAMPLES.map(([k, t]) => `<button class="chip" type="button" data-t="${esc(t)}"><span class="mono">${esc(k.toUpperCase())}</span>${esc(t)}</button>`).join('');
     $$('#examples .chip').forEach((b) => b.addEventListener('click', () => send(b.dataset.t, { mode: 'autopilot' })));
     $('#planBoard').addEventListener('click', (e) => { const b = e.target.closest('[data-say]'); if (b && !busy) send(b.dataset.say); });
+    $('#messages').addEventListener('click', (e) => { const b = e.target.closest('.next-card [data-say]'); if (b && !b.disabled && !busy) send(b.dataset.say); });
     const ii = $('#introInput');
     $('#introForm').addEventListener('submit', (e) => { e.preventDefault(); const v = ii.value; ii.value = ''; send(v); setTimeout(() => $('#chatInput').focus(), 50); });
     ii.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#introForm').requestSubmit(); } });
