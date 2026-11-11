@@ -92,6 +92,8 @@ const server = http.createServer((req, res) => {
   await say('redesign brokensite.com');
   check('a site that can\'t be read gets a friendly answer and changes nothing', /couldn.t read brokensite\.com/i.test(await page.locator('.msg.agent').last().innerText()) && seen.agent.length === calls && (await page.evaluate(() => window.moss.pageModel.get().business.name)) === "Joe's Plumbing");
   scrapeFail = false;
+  const n = await page.evaluate(() => window.moss.agent.normalize({ reply: 'x', ops: [{ op: 'setMocks', looks: [{ direction: 'trade', hue: 254 }, { direction: 'brutalist', hue: 254 }, { direction: 'minimal', hue: 250 }, { direction: 'trade', hue: 10 }] }] }, window.moss.pageModel.get(), 'x').ops[0]);
+  check('near-miss direction names map to real ones, and B/C get their own hues', n && n.looks.map((l) => l.direction).join() === 'trade,brutal,swiss' && n.looks[1].hue !== 254 && n.looks[2].hue !== 250, JSON.stringify(n && n.looks.map((l) => [l.direction, l.hue])));
   check('no console/page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 

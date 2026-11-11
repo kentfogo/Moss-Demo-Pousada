@@ -1834,6 +1834,13 @@ const agent = (() => {
     });
   }
 
+  // Direction ids, tolerating near-misses a model may write ("brutalist", "minimal", "dark tech")
+  const DIR_ALIASES = { brutalist: 'brutal', neobrutalist: 'brutal', minimal: 'swiss', minimalist: 'swiss', modern: 'swiss', clean: 'swiss', industrial: 'trade', bold: 'trade', tech: 'darktech', dark: 'darktech', warm: 'hospitality', friendly: 'playful', rounded: 'playful', grid: 'mono', premium: 'luxury', serif: 'editorial', magazine: 'editorial' };
+  function dirOf(x) {
+    if (!x || !window.MossSite) return null;
+    const k = String(x).toLowerCase().replace(/[^a-z]/g, '');
+    return MossSite.byId(k) || MossSite.byId(DIR_ALIASES[k]) || MossSite.DIRECTIONS.find((d) => k.includes(d.id) || d.name.toLowerCase().replace(/[^a-z]/g, '').includes(k)) || null;
+  }
   function normalize(json, state, message) {
     const sim = clone(slimState(state));
     sim.pages.forEach((pg) => (pg.sections = pg.sections.map((x) => ({ id: x.id, type: x.type, data: x.data }))));
@@ -2012,10 +2019,13 @@ const agent = (() => {
         }
         case 'setMocks': {
           const looks = (Array.isArray(raw.looks) ? raw.looks : []).map((lk) => {
-            const dir = lk && MossSite.byId(lk.direction || lk.id); if (!dir) return null;
+            const dir = lk && dirOf(lk.direction || lk.id); if (!dir) return null;
             const variants = {}; if (lk.variants && typeof lk.variants === 'object') Object.keys(MossSite.VARIANTS).forEach((k) => { if (MossSite.VARIANTS[k].includes(lk.variants[k])) variants[k] = lk.variants[k]; });
             return { direction: dir.id, name: str(lk.name, 40) || dir.name, why: str(lk.why, 140) || dir.mood, hue: Number.isFinite(Number(lk.hue)) ? ((Number(lk.hue) % 360) + 360) % 360 : MossSite.hashHue(dir.id + (sim.business && sim.business.name)), hue2: Number.isFinite(Number(lk.hue2)) ? Number(lk.hue2) : undefined, variants, motion: MossSite.MOTION.includes(lk.motion) ? lk.motion : undefined };
           }).filter(Boolean).slice(0, 3);
+          // B and C must look different from A: never the same direction, and a clearly different hue
+          looks.forEach((lk, i) => { if (!i) return; const dh = Math.abs(((lk.hue - looks[0].hue + 540) % 360) - 180); if (dh < 30) lk.hue = (looks[0].hue + (i === 1 ? 140 : 220)) % 360; });
+          for (let i = looks.length - 1; i > 0; i--) if (looks.slice(0, i).some((x) => x.direction === looks[i].direction)) looks.splice(i, 1);
           if (looks.length >= 2) ops.push({ op: 'setMocks', source: str(raw.source, 80) || '', looks });
           break;
         }
