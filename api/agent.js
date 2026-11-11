@@ -121,8 +121,9 @@ export const PHASES = {
 - "build the rest": addSection for every remaining planned section, in order.
 - After the last planned section is built, also send suggestNext (3–5 pages that fit this business, each with why and sections, and one visitor journey). Do NOT switch to flow view: the user stays on the finished page and sees the suggestions as a card. "after": "Home is done. Want to look it over, or plan the next pages?"`,
   mock: `PHASE: REDESIGN MOCKS. The user wants their existing site (SCRAPED SITE) redesigned. Build it now in one turn, with no questions:
-- setBusiness from the scraped name and kind (place if known), then addPage home, then 6–8 addSection ops on "home" written from the scraped facts: their real services, phone, area, prices, hours and testimonials. Sharpen the copy (clearer headline, benefit-led features) but never invent facts, numbers, reviews or prices; leave a field out rather than make it up.
-- Then ONE setMocks with three clearly different looks: A keeps their brand hue (SCRAPED brandHue when given) in a fitting direction, B and C use other directions and hues, with different hero and feature layouts in "variants". Do not send setDesign (the app applies look A).
+- Ops in this order: setBusiness (scraped name and kind, place if known), addPage home, ONE setMocks, then 6–8 addSection ops on "home".
+- setMocks: three clearly different looks. A keeps their brand hue (SCRAPED brandHue when given) in a fitting direction; B and C use other directions and hues, with different hero and feature layouts in "variants". Do not send setDesign (the app applies look A).
+- Sections are {"type":..., "data":{...fields...}} (fields go inside "data"), written from the scraped facts: their real services, phone, area, prices, hours and testimonials. Sharpen the copy (clearer headline, benefit-led features) but never invent facts, numbers, reviews or prices; leave a field or a section out rather than make it up.
 - "reply": one sentence naming the three looks; "after": "Say A, B or C to compare, or 'go with B'."`,
   edit: `PHASE: EDITING. Change only what was asked. Building suggested pages: addPage + sections for each page the user picks (their drafts are in STATE.drafts), and link them from Home's nav/CTA where it helps. If they ask what else to build, send suggestNext.`,
 };
@@ -183,7 +184,7 @@ function designContext(directions, recent) {
 }
 
 /** Output budget per phase: interview turns are one question; full builds need room for 8 sections. */
-export const MAX_TOKENS = { interview: 350, review: 900, edit: 900, guided: 1200, autobuild: 2500, mock: 2500 };
+export const MAX_TOKENS = { interview: 350, review: 900, edit: 900, guided: 1200, autobuild: 2500, mock: 3000 };
 const STYLE_RE = /\b(colou?rs?|palette|font|type(face)?|look|style|theme|vibe|feel|redesign|direction|darker|lighter|warmer|cooler|modern|minimal|bold|playful|elegant|luxur|retro|brand)\b/i;
 /** The design library is the biggest part of the prompt; send it only when the turn can choose or change a look. */
 export function needsLibrary(phase, message) { return ['interview', 'review', 'autobuild', 'mock'].includes(phase) || STYLE_RE.test(message || ''); }

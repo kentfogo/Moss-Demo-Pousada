@@ -1875,7 +1875,9 @@ const agent = (() => {
           if (!pg || !SECTION_META[type]) break;
           if (!copy) copy = copyFor('generic', sim.business && sim.business.name, null);
           const base = makeSection(type, copy);
-          base.data = mergeSectionData(type, base.data, sec.data);
+          // models sometimes put the fields next to "type" instead of under "data": accept both
+          const fields = sec.data && typeof sec.data === 'object' ? sec.data : Object.fromEntries(Object.entries(sec).filter(([k]) => !['type', 'id', 'data'].includes(k)));
+          base.data = mergeSectionData(type, base.data, fields);
           const index = Number.isInteger(raw.index) ? Math.max(0, Math.min(raw.index, pg.sections.length)) : null;
           pg.sections.splice(index == null ? pg.sections.length : index, 0, { id: base.id, type, data: base.data });
           ops.push({ op: 'addSection', page: pg.id, section: base, index });

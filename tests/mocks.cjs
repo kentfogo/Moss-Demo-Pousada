@@ -23,7 +23,7 @@ const MODEL = {
     { op: 'setDesign', design: { direction: 'luxury' } }, // ignored in mock mode: look A applies
     { op: 'addSection', page: 'home', section: { type: 'hero', data: { variant: 'editorial', eyebrow: 'Austin plumbers since 1998', headline: 'Leaks fixed *today*.', sub: 'Upfront prices and a one-year guarantee.', primary: 'Call 512-555-0142', secondary: 'Our services' } } },
     { op: 'addSection', page: 'home', section: { type: 'features', data: { eyebrow: 'Services', title: 'What we fix', lede: '', items: [['bolt', 'Emergency leaks', 'Day or night.'], ['clock', 'Drain cleaning', 'Same day.'], ['shield', 'Water heaters', 'Installed and guaranteed.'], ['leaf', 'Repiping', 'Done tidy.']] } } },
-    { op: 'addSection', page: 'home', section: { type: 'callStrip', data: { title: 'Burst pipe?', sub: 'Mon-Fri 8am-6pm', phone: '512-555-0142', button: 'Call now' } } },
+    { op: 'addSection', page: 'home', section: { type: 'callStrip', title: 'Burst pipe?', sub: 'Mon-Fri 8am-6pm', phone: '512-555-0142', button: 'Call now' } }, // fields not under "data", as models sometimes send
     { op: 'addSection', page: 'home', section: { type: 'footer', data: { name: "Joe's Plumbing", blurb: 'Austin', cols: [['Visit', ['Home']], ['Call', ['512-555-0142']], ['Mail', ['hi@joesplumbing.com']]], base: '© Joe' } } },
     { op: 'setMocks', source: 'joesplumbing.com', looks: [{ direction: 'trade', name: 'Trade, your blue', why: 'Bold and local', hue: 216, variants: { hero: 'editorial' } }, { direction: 'swiss', name: 'Clean grid', why: 'Calm and clear', hue: 20, variants: { hero: 'bigtype', features: 'cards' } }, { direction: 'playful', name: 'Friendly', why: 'Warm', hue: 140, motion: 'lively' }, { direction: 'made-up' }] },
   ],
@@ -66,6 +66,7 @@ const server = http.createServer((req, res) => {
   check('then asks Moss in mock mode with the scraped facts', req.mode === 'mock' && req.scraped && req.scraped.name === "Joe's Plumbing");
   const st = await page.evaluate(() => { const s = window.moss.pageModel.get(); return { name: s.business && s.business.name, secs: s.pages[0] && s.pages[0].sections.map((x) => x.type), mocks: s.mocks, dir: s.design && s.design.direction }; });
   check('builds the redesign from the real content', st.name === "Joe's Plumbing" && JSON.stringify(st.secs) === '["hero","features","callStrip","footer"]', JSON.stringify(st.secs));
+  check('section fields sent without "data" are kept, not replaced by defaults', (await page.evaluate(() => window.moss.pageModel.get().pages[0].sections.find((x) => x.type === 'callStrip').data.phone)) === '512-555-0142');
   check('three looks, unknown directions dropped, look A applied (not the stray setDesign)', st.mocks && st.mocks.looks.length === 3 && st.mocks.active === 0 && st.dir === 'trade', JSON.stringify(st.mocks && st.mocks.looks.map((x) => x.direction)));
   const bar = await page.evaluate(() => ({ hidden: document.querySelector('#mockBar').hidden, buttons: [...document.querySelectorAll('#mockBar button[data-say]')].map((b) => b.textContent), pressed: document.querySelector('#mockBar [aria-pressed="true"]').textContent }));
   check('the A/B/C switcher shows in the frame bar', !bar.hidden && bar.buttons.length === 4 && /^A/.test(bar.pressed), JSON.stringify(bar));
