@@ -4,7 +4,7 @@
   "type": "module",
   "engines": { "node": ">=18" },
   "scripts": {
-    "test": "node tests/agent-api.mjs && node tests/remote.cjs && node tests/voice.cjs && node tests/voice-deepgram.cjs && node tests/plan.cjs && node tests/variety.cjs && node tests/functional.cjs"
+    "test": "node tests/agent-api.mjs && node tests/remote.cjs && node tests/voice.cjs && node tests/voice-deepgram.cjs && node tests/plan.cjs && node tests/mocks.cjs && node tests/style.cjs && node tests/variety.cjs && node tests/functional.cjs"
   },
   "dependencies": {
     "@deepgram/sdk": "^5.18.0"

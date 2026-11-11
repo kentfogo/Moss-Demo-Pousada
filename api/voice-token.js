@@ -6,13 +6,8 @@
 
 export const DEFAULTS = { model: 'nova-3', voice: 'aura-2-thalia-en' };
 
-/** Only the site itself may use these endpoints (blocks other sites spending your Deepgram credit from a browser). */
-export function sameOrigin(req) {
-  const origin = req.headers && (req.headers.origin || req.headers.referer);
-  const host = req.headers && (req.headers['x-forwarded-host'] || req.headers.host);
-  if (!origin) return true; // same-origin GETs may omit it; browsers always send Origin cross-site
-  try { return new URL(origin).host === host; } catch { return false; }
-}
+import { sameOrigin, guard } from './_guard.js';
+export { sameOrigin };
 
 export async function grant(env = process.env, fetchImpl = fetch) {
   const key = env.DEEPGRAM_API_KEY;
@@ -26,8 +21,7 @@ export async function grant(env = process.env, fetchImpl = fetch) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET' && req.method !== 'POST') { res.setHeader('allow', 'GET, POST'); return res.status(405).json({ error: 'GET only' }); }
-  if (!sameOrigin(req)) return res.status(403).json({ error: 'forbidden' });
+  if (guard(req, res, { methods: ['GET', 'POST'], bucket: 'token' })) return;
   try {
     const out = await grant();
     res.setHeader('cache-control', 'no-store');

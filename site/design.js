@@ -75,6 +75,12 @@
     footer: ['columns', 'wordmark'],
   };
   const ART_KINDS = ['orb', 'dotgrid', 'shapes', 'pattern', 'frame', 'iso'];
+  // Motion, global button and nav styles (refine controls). Bold directions animate more by default.
+  const MOTION = ['none', 'calm', 'lively'];
+  const LIVELY = ['brutal', 'playful', 'darktech'];
+  const BTN = { style: ['auto', 'solid', 'outline', 'soft', 'ghost'], size: ['s', 'm', 'l'], hover: ['auto', 'lift', 'glow', 'fill', 'underline'] }; // auto: the direction's own look
+  const NAV = { style: ['bar', 'floating', 'minimal', 'centered'] };
+  const swatchKey = (n) => String(n || '').toLowerCase().replace(/[^a-z0-9 -]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24);
   const ENUMS = { case: ['none', 'uppercase'], button: ['pill', 'square', 'brutal', 'outline', 'accent'], border: ['none', 'hairline', 'heavy'], shadow: ['none', 'soft', 'hard'], density: ['airy', 'regular', 'compact'], texture: ['none', 'grain', 'dotgrid', 'lines'], mode: ['light', 'dark'] };
 
   /* ---------------------------------------------------------------- colour + contrast */
@@ -149,6 +155,11 @@
   /* ---------------------------------------------------------------- design normalisation */
   function sanitizeDesign(raw, current, opts = {}) {
     raw = raw && typeof raw === 'object' ? raw : {};
+    // colour roles may name a swatch ("use Ocean for the accent")
+    if (raw.colors && typeof raw.colors === 'object') {
+      const sw = Object.assign({}, (current && current.swatches) || {}, raw.swatches && typeof raw.swatches === 'object' ? raw.swatches : {});
+      raw = Object.assign({}, raw, { colors: Object.fromEntries(Object.entries(raw.colors).map(([k, v]) => [k, hex(v) || hex(sw[swatchKey(v)]) || v])) });
+    }
     const base = byId(raw.direction) || (current && byId(current.direction)) || byId('hospitality');
     const prev = current && current.direction === base.id ? current : JSON.parse(JSON.stringify(base));
     const d = { direction: base.id, name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 40) : (prev.name || base.name) };
@@ -162,7 +173,7 @@
     d.colors = guard(colors);
     d.hue = hue != null ? ((hue % 360) + 360) % 360 : (sameDir && current.hue != null ? current.hue : null);
     d.swatches = Object.assign({}, prev.swatches || {});
-    if (raw.swatches && typeof raw.swatches === 'object') Object.keys(raw.swatches).slice(0, 12).forEach((n) => { const h = hex(raw.swatches[n]); const name = String(n).toLowerCase().replace(/[^a-z0-9 -]/g, '').trim().slice(0, 24); if (h && name) d.swatches[name] = h; });
+    if (raw.swatches && typeof raw.swatches === 'object') Object.keys(raw.swatches).slice(0, 12).forEach((n) => { const h = hex(raw.swatches[n]); const name = swatchKey(n); if (h && name) d.swatches[name] = h; });
     const t = Object.assign({}, base.type, prev.type, raw.type && typeof raw.type === 'object' ? raw.type : {});
     ['display', 'body', 'mono'].forEach((k) => { if (!FONTS[t[k]]) t[k] = (prev.type && FONTS[prev.type[k]]) ? prev.type[k] : base.type[k]; });
     if (!ENUMS.case.includes(t.case)) t.case = base.type.case;
@@ -177,6 +188,11 @@
     d.variants = Object.assign({}, base.variants, prev.variants);
     if (raw.variants && typeof raw.variants === 'object') Object.keys(VARIANTS).forEach((k) => { if (VARIANTS[k].includes(raw.variants[k])) d.variants[k] = raw.variants[k]; });
     d.art = ART_KINDS.includes(raw.art) ? raw.art : (prev.art || base.art);
+    d.motion = MOTION.includes(raw.motion) ? raw.motion : (MOTION.includes(current && current.motion) ? current.motion : (LIVELY.includes(base.id) ? 'lively' : 'calm'));
+    const b = Object.assign({ style: 'auto', size: 'm', hover: 'auto' }, (current && current.button) || {}, raw.button && typeof raw.button === 'object' ? raw.button : {});
+    d.button = { style: BTN.style.includes(b.style) ? b.style : 'auto', size: BTN.size.includes(b.size) ? b.size : 'm', hover: BTN.hover.includes(b.hover) ? b.hover : 'auto' };
+    const nv = Object.assign({ style: 'bar', sticky: false }, (current && current.nav) || {}, raw.nav && typeof raw.nav === 'object' ? raw.nav : {});
+    d.nav = { style: NAV.style.includes(nv.style) ? nv.style : 'bar', sticky: nv.sticky === true || nv.sticky === 'true' };
     return d;
   }
   const fromDirection = (id, seed) => sanitizeDesign({ direction: id }, null, { seed: seed || id });
@@ -185,7 +201,7 @@
   const DENSITY = { airy: 1.2, regular: 1, compact: 0.8 };
   function apply(el, d) {
     if (!el) return;
-    if (!d) { el.removeAttribute('style'); ['button', 'border', 'shadow', 'texture', 'mode', 'direction'].forEach((k) => delete el.dataset[k]); return; }
+    if (!d) { el.removeAttribute('style'); ['button', 'border', 'shadow', 'texture', 'mode', 'direction', 'motion', 'btnStyle', 'btnSize', 'btnHover', 'nav', 'navSticky'].forEach((k) => delete el.dataset[k]); return; }
     [d.type.display, d.type.body, d.type.mono].forEach(ensureFont);
     const c = d.colors;
     const line = mix(c.bg, c.ink, d.mode === 'dark' ? 0.16 : 0.11);
@@ -199,7 +215,8 @@
     };
     Object.keys(d.swatches || {}).forEach((n) => { vars['--sw-' + n.replace(/\s+/g, '-')] = d.swatches[n]; });
     el.setAttribute('style', Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';'));
-    Object.assign(el.dataset, { button: d.shape.button, border: d.shape.border, shadow: d.shape.shadow, texture: d.texture, mode: d.mode, direction: d.direction });
+    Object.assign(el.dataset, { button: d.shape.button, border: d.shape.border, shadow: d.shape.shadow, texture: d.texture, mode: d.mode, direction: d.direction,
+      motion: d.motion || 'calm', btnStyle: (d.button || {}).style || 'auto', btnSize: (d.button || {}).size || 'm', btnHover: (d.button || {}).hover || 'auto', nav: (d.nav || {}).style || 'bar', navSticky: String(!!(d.nav || {}).sticky) });
   }
 
   /* ---------------------------------------------------------------- generated art (SVG, seeded) */
@@ -259,7 +276,9 @@
   const btn = (label, href, kind = 'primary') => `<a class="btn btn-${kind}" href="${esc(href || '#/home')}">${esc(label)}</a>`;
   const logos = (label) => label ? `<div class="logo-row"><span class="lbl">${esc(label)}</span><div class="logos">${[58, 46, 64, 52, 44].map((w, i) => `<span class="ph-logo" aria-hidden="true"><i style="width:${[16, 15, 15, 18, 7][i]}px;height:${[16, 15, 15, 9, 16][i]}px;border-radius:${['50%', '4px', '2px', '9px 9px 0 0', '2px'][i]}"></i><b style="width:${w}px"></b></span>`).join('')}</div></div>` : '';
   const head = (d, center) => `<div class="s-head ${center ? 'center' : ''}"><div><span class="eyebrow">${esc(d.eyebrow || '')}</span><h2>${rich(d.title || '')}</h2></div>${d.lede ? `<p>${esc(d.lede)}</p>` : '<p></p>'}</div>`;
-  const artOf = (dt, design, fallbackKind) => art((dt.art && dt.art.kind) || (design && design.art) || fallbackKind, (dt.art && dt.art.seed) || dt.headline || dt.title || 'moss', design, dt.art && dt.art.label);
+  /** An uploaded photo replaces the generated art in the same slot. Only data:image URLs are accepted. */
+  const photo = (src, alt) => (typeof src === 'string' && /^data:image\/(jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(src) ? `<div class="art art-photo"><img src="${src}" alt="${esc(alt || '')}"></div>` : null);
+  const artOf = (dt, design, fallbackKind) => photo(dt.image, dt.imageAlt || dt.headline || dt.title) || art((dt.art && dt.art.kind) || (design && design.art) || fallbackKind, (dt.art && dt.art.seed) || dt.headline || dt.title || 'moss', design, dt.art && dt.art.label);
   const items = (a) => (Array.isArray(a) ? a : []);
 
   const V = {
@@ -297,7 +316,7 @@
     steps: { label: 'Steps', icon: 'bars', cls: 'sec-pad', defaults: (c) => ({ eyebrow: 'How it works', title: 'Three steps, no surprises.', items: [['Tell us what you need', 'A two-minute form or a quick call.'], ['Get a clear quote', 'Fixed price before any work starts.'], ['Sit back', `${c && c.name ? c.name : 'We'} handle the rest and keep you posted.`]] }),
       render: (d) => `<div class="wrap">${head(d)}<ol class="steps">${items(d.items).slice(0, 5).map(([t, p], i) => `<li><span class="n">${String(i + 1).padStart(2, '0')}</span><h3>${esc(t)}</h3><p>${esc(p)}</p></li>`).join('')}</ol></div>` },
     gallery: { label: 'Gallery', icon: 'grid', cls: 'sec-pad', defaults: () => ({ eyebrow: 'Gallery', title: 'A closer look.', items: [['Morning', 'frame'], ['Detail', 'pattern'], ['Space', 'orb'], ['Craft', 'shapes'], ['Evening', 'frame'], ['People', 'orb']] }),
-      render: (d, ds) => `<div class="wrap">${head(d)}<div class="gal">${items(d.items).slice(0, 6).map(([cap, kind], i) => `<figure class="g-${i}">${art(ART_KINDS.includes(kind) ? kind : (ds && ds.art) || 'frame', (d.title || '') + i, ds)}<figcaption>${esc(cap)}</figcaption></figure>`).join('')}</div></div>` },
+      render: (d, ds) => `<div class="wrap">${head(d)}<div class="gal">${items(d.items).slice(0, 6).map(([cap, kind], i) => `<figure class="g-${i}">${(i === 0 && photo(d.image, cap)) || art(ART_KINDS.includes(kind) ? kind : (ds && ds.art) || 'frame', (d.title || '') + i, ds)}<figcaption>${esc(cap)}</figcaption></figure>`).join('')}</div></div>` },
     logos: { label: 'Logos', icon: 'stack', cls: 'sec-logos', defaults: () => ({ label: 'Trusted by' }), render: (d) => `<div class="wrap">${logos(d.label || 'Trusted by')}</div>` },
     callStrip: { label: 'Call strip', icon: 'bolt', cls: 'sec-call', defaults: (c) => ({ title: 'Need help today?', sub: 'Same-day appointments, seven days a week.', button: 'Call now', phone: '(555) 010-0199' }),
       render: (d) => `<div class="wrap call"><div><h2>${rich(d.title)}</h2><p>${esc(d.sub || '')}</p></div><div class="call-r"><span class="phone">${esc(d.phone || '')}</span>${btn(d.button || 'Call now', d.href || '#/home')}</div></div>` },
@@ -321,5 +340,8 @@
   // Sent to the model: colour STRATEGIES, never sample hex values, so it invents a palette per brand.
   const library = () => DIRECTIONS.map((d) => ({ id: d.id, name: d.name, mood: d.mood, fits: d.fits, palette: STRATEGY[d.id].desc, type: { display: d.type.display, body: d.type.body, case: d.type.case }, shape: d.shape, mode: d.mode, variants: d.variants, art: d.art }));
 
-  window.MossSite = { paletteFor, isSample, hashHue, STRATEGY, FONTS, DIRECTIONS, VARIANTS, ART_KINDS, NEW_TYPES, byId, fromDirection, sanitizeDesign, apply, art, render, variantOf, rich, ratio, guard, library, ensureFont };
+  /** Which layouts of a section type have an art slot that a photo can fill. */
+  const PHOTO_VARIANTS = { hero: ['editorial', 'bigtype', 'spotlight'], cta: ['split'], features: ['bento'] };
+  const hasPhotoSlot = (sec, design) => sec.type === 'gallery' || (PHOTO_VARIANTS[sec.type] || []).includes(variantOf(sec, design));
+  window.MossSite = { MOTION, BTN, NAV, swatchKey, photo, onColor, PHOTO_VARIANTS, hasPhotoSlot, paletteFor, isSample, hashHue, STRATEGY, FONTS, DIRECTIONS, VARIANTS, ART_KINDS, NEW_TYPES, byId, fromDirection, sanitizeDesign, apply, art, render, variantOf, rich, ratio, guard, library, ensureFont };
 })();

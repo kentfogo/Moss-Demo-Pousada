@@ -22,6 +22,46 @@ Building is voice-first. Tap the mic (or hold **Space** anywhere outside a text 
 - Spoken page references such as "at home" or "on the booking page" become `@Home` and `@Booking`.
 - Everything sits behind the `voice` module (`start`, `stop`, `speak`, `cancelSpeech`) in `moss-builder.html`, so a hosted or Moss speech service can replace it without touching the rest.
 
+## Redesign mocks
+
+Say or type "mock up joesplumbing.com" (or "redesign joes plumbing dot com"). `api/scrape.js` reads that one public page and returns the facts: name, headings, services, phone, email, hours, prices, real reviews and the brand colour. Moss then rebuilds the page from those facts without inventing reviews or prices, and returns three looks. Look A keeps the brand colour.
+
+The frame bar shows an **A / B / C** switcher. Saying "B" or "show me C" re-skins the same sections, and "go with B" (or **Keep**) locks a look in. Switching never calls the model.
+
+The scraper fetches only http(s) on ports 80 and 443. Every DNS answer is checked inside the socket's own lookup, so private, loopback, link-local and cloud-metadata addresses are refused, including after redirects. It times out after 8 s, caps pages at 1.5 MB, accepts HTML only and follows at most 3 redirects. Results are cached on Vercel's CDN for an hour.
+
+## Motion and refine controls
+
+- **Motion:** each design has a motion level: `none`, `calm` or `lively`. The hero headline is revealed word by word, sections rise in as you scroll, and the art drifts slowly. Say "make it lively", "add some animation", "no animations" or "replay the animation". Reduced-motion settings turn all of it off.
+- **Buttons and nav:** for example "outline buttons", "bigger buttons", "glow on hover", "floating nav", "sticky nav". Buttons can be solid, outline, soft or ghost; small, medium or large; with lift, glow, fill or underline on hover. The nav can be a bar, floating, minimal or centred.
+- **Swatches:** "save this colour as Ocean", then "use ocean for the buttons" or "ocean background on the pricing".
+- **One section:** click a section for its toolbar (dark, accent or plain fill; roomy or tight spacing; round or square corners; centred; photo), or say "dark background on the FAQ".
+- **Photos:** hover any art slot and choose **Add photo**, drop an image onto a section, or say "add a photo to the hero". Images are resized in the browser and never sent to Moss.
+- **Style drawer:** the **Style** button in the frame bar holds every control. Each control runs the same phrase you could say, so it shows in the chat and can be undone.
+
+All of these run in the browser and cost no tokens.
+
+## Costs and a public link
+
+**Moss tokens:**
+- Instant commands run locally and never call the model: undo, views, pages, motion, buttons, nav, swatches, section style, photos and mock switching.
+- The design library is sent only when a look can change: planning, building, mocks, or a style request.
+- Replies are capped per phase (`max_tokens`: 350 for interview questions, up to 2,500 for a full build).
+- History is cut to 6 turns, and state is compacted.
+
+**Deepgram listening** is billed per minute of streamed audio. The mic streams raw 16 kHz PCM from an AudioWorklet and sends audio only while someone is talking, with 400 ms of pre-roll and 1.5 s of tail. Silence sends a KeepAlive instead. A forgotten hot mic turns itself off after 2 quiet minutes.
+
+**Deepgram speech** is billed per character. Only Moss's short spoken replies are synthesised, and repeated sentences are cached in the page.
+
+**Abuse guards** (`api/_guard.js`):
+- Every function refuses other sites.
+- Each IP is rate-limited per function instance: 40 agent turns, 240 spoken sentences, 60 tokens and 10 scrapes per 10 minutes.
+- For a hard cap, add a Vercel Firewall rate-limit rule on `/api/*`.
+
+**Public link:**
+- Merging to `main` gives a production URL that is public under Vercel's default Standard Protection.
+- To make preview links public as well, go to **Settings → Deployment Protection** and turn Vercel Authentication off.
+
 ## Deploy on Vercel
 
 1. Import this repository in Vercel (framework preset: **Other**; no build command).
@@ -50,10 +90,12 @@ Building is voice-first. Tap the mic (or hold **Space** anywhere outside a text 
 npm test
 ```
 
-- `tests/agent-api.mjs`: the function against a mock OpenAI-compatible server (request shape, JSON mode, retry without JSON mode, error handling).
+- `tests/agent-api.mjs`: the agent function against a mock OpenAI-compatible server (request shape, JSON mode, retry, errors, token budgets, when the library is sent), the guards (other sites, rate limits), the Deepgram functions, and the scraper (private-address refusal, spoken domains, redirects, size and type limits, extraction).
 - `tests/remote.cjs`: the builder served over http against a mock `/api/agent` returning imperfect model output (cleaning, rendering, flow layout, fallback).
 - `tests/voice-deepgram.cjs`: the Deepgram path with fakes for the mic, the live socket and audio (token use, quick end of turn, Aura playback, barge-in, reconnect, fallbacks).
 - `tests/voice.cjs`: the voice loop with a fake recognizer and synthesizer (speak to build, spoken replies, hold Space, spoken @mentions, barge-in, mute, unsupported browsers).
+- `tests/mocks.cjs`: "mock up a site" against mock scrape and agent endpoints (scraped facts, three looks, A/B/C switching with no model calls, "go with B", undo, unreadable sites, offline mocks that invent nothing).
+- `tests/style.cjs`: motion (levels, word reveal, scroll-in, reduced motion), buttons, nav, swatches, section style, the Style drawer, the section toolbar, photo upload (never sent to Moss), undo and the phone layout.
 - `tests/functional.cjs`: the original end-to-end checks (build, edit, reorder, restyle, delete, undo, pages, @mentions, flow drag, theme, sound, 375px mobile), using the offline agent.
 
 Playwright and Chromium must be available for the browser tests.

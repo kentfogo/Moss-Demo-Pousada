@@ -9,6 +9,8 @@
 //   MOSS_BASE_URL     optional  default "https://inference.moss.dev/v1" ("/chat/completions" is appended)
 //   MOSS_TEMPERATURE  optional  default 0.4
 
+import { guard } from './_guard.js';
+
 export const config = { maxDuration: 60 };
 
 export const DEFAULT_BASE_URL = 'https://inference.moss.dev/v1';
@@ -47,10 +49,11 @@ OPS (applied in order):
 - {"op":"deletePage","page":pageId}   removes a whole page in one step. Never delete "home".
 - {"op":"resetPage","page":pageId}   clears every section of a page in one step (use for "clear/redo the home page"), then addSection the new ones.
 - {"op":"resetSite"}   clears everything (use for "start over", "redo the whole thing", "scrap it"); follow it with the full first-build sequence (setBusiness, setDesign, addPage home, sections) unless the user wants to plan first.
-- {"op":"setDesign","design":{"direction":directionId,"hue":0-359,"hue2"?:0-359,"name"?:string,"colors"?:{"bg","surface","ink","muted","accent","accent2","inverse"},"swatches"?:{name:hex},"type"?:{"display","body","mono","case":"none"|"uppercase","weight","tracking","scale"},"shape"?:{"radius","button":"pill"|"square"|"brutal"|"outline"|"accent","border":"none"|"hairline"|"heavy","shadow":"none"|"soft"|"hard"},"density"?:"airy"|"regular"|"compact","texture"?:"none"|"grain"|"dotgrid"|"lines","variants"?:{sectionType:variant},"art"?:artKind}}
-    The site's whole design system. Start from a DIRECTION (listed under DIRECTIONS) and override only what makes it right for this business: fonts from the font list, shape, layouts. Only send fields you change; the app keeps the rest and fixes contrast.
+- {"op":"setDesign","design":{"direction":directionId,"hue":0-359,"hue2"?:0-359,"name"?:string,"colors"?:{"bg","surface","ink","muted","accent","accent2","inverse"},"swatches"?:{name:hex},"type"?:{"display","body","mono","case":"none"|"uppercase","weight","tracking","scale"},"shape"?:{"radius","button":"pill"|"square"|"brutal"|"outline"|"accent","border":"none"|"hairline"|"heavy","shadow":"none"|"soft"|"hard"},"density"?:"airy"|"regular"|"compact","texture"?:"none"|"grain"|"dotgrid"|"lines","variants"?:{sectionType:variant},"art"?:artKind,"motion"?:"none"|"calm"|"lively","button"?:{"style":"solid"|"outline"|"soft"|"ghost","size":"s"|"m"|"l","hover":"lift"|"glow"|"fill"|"underline"},"nav"?:{"style":"bar"|"floating"|"minimal"|"centered","sticky":boolean}}}
+    The site's whole design system. "motion" is the home page animation level (headline reveal, sections rising in, drifting art); "colors" values may also be a swatch name. Start from a DIRECTION (listed under DIRECTIONS) and override only what makes it right for this business: fonts from the font list, shape, layouts. Only send fields you change; the app keeps the rest and fixes contrast.
     COLOUR: each direction gives a palette STRATEGY, not colours. Pick "hue" (the brand accent hue in degrees, e.g. 210 for a trustworthy blue, 15 for terracotta, 145 for green) and optionally "hue2"; the app builds the palette from the strategy. Send "colors" only when the user names colours ("navy and orange"). Never copy colours from any reference or another site.
     Use it on the first build (right after setBusiness), and for any style request: "make it bold", "navy and orange", "square buttons with a hard shadow", "uppercase headings", "use Fraunces".
+- {"op":"setSectionStyle","page":pageId,"id":sectionId,"style":{"fill"?:"bg"|"surface"|"accent"|"inverse"|swatchName,"padding"?:"tight"|"normal"|"roomy","radius"?:0-40,"align"?:"left"|"center"}}   one section's look ("make the FAQ dark", "more space around the pricing").
 - {"op":"setPalette","palette":"ice"|"warm"|"sage"|"ink"}   quick preset colours only; prefer setDesign with explicit colours.
 - {"op":"addLink","from":pageId,"section":sectionId,"to":pageId}   also send an updateSection that sets that cta's "href" to "#/<to>".
 - {"op":"addFlow","flow":{"name":string,"nodes":[{"id":string,"label":string,"kind":"start"|"step"|"decision"|"end"}],"edges":[{"from":id,"to":id,"label"?:"yes"|"no"|string}]}}
@@ -66,6 +69,7 @@ PLANNING OPS (see PHASE):
 - {"op":"chooseDirection","index":0|1|2}   the user picked a look.
 - {"op":"suggestNext","pages":[{"id":slug,"name","why","sections":[types]} ×3–5],"journeys":[{"name","steps":[short labels]}]}   what to build after Home; shown as draft pages on the Flow canvas.
 - {"op":"dismissDrafts"}   the user doesn't want the remaining suggestions.
+- {"op":"setMocks","source":string,"looks":[{"direction":directionId,"name":string,"why":string,"hue":0-359,"hue2"?:0-359,"variants"?:{sectionType:variant},"motion"?:string} ×3]}   redesign mocks of a scraped site: the same sections in three looks the user flips between (A/B/C).
 
 SECTION TYPES and their data (plain text, no markdown, no emoji). Wrap 1–3 words of a headline or title in *asterisks* to set them in the accent colour.
 Any section may carry "variant" (a layout) and visual sections may carry "art":{"kind":artKind,"seed":string,"label"?:string}. artKind ∈ orb, dotgrid, shapes, pattern, frame, iso (generated to match the palette).
@@ -116,12 +120,17 @@ export const PHASES = {
 - A change request: edit what is already built (updateSection / setDesign / setOrder…). Do not add the next section in the same turn.
 - "build the rest": addSection for every remaining planned section, in order.
 - After the last planned section is built, also send suggestNext (3–5 pages that fit this business, each with why and sections, and one visitor journey). Do NOT switch to flow view: the user stays on the finished page and sees the suggestions as a card. "after": "Home is done. Want to look it over, or plan the next pages?"`,
+  mock: `PHASE: REDESIGN MOCKS. The user wants their existing site (SCRAPED SITE) redesigned. Build it now in one turn, with no questions:
+- setBusiness from the scraped name and kind (place if known), then addPage home, then 6–8 addSection ops on "home" written from the scraped facts: their real services, phone, area, prices, hours and testimonials. Sharpen the copy (clearer headline, benefit-led features) but never invent facts, numbers, reviews or prices; leave a field out rather than make it up.
+- Then ONE setMocks with three clearly different looks: A keeps their brand hue (SCRAPED brandHue when given) in a fitting direction, B and C use other directions and hues, with different hero and feature layouts in "variants". Do not send setDesign (the app applies look A).
+- "reply": one sentence naming the three looks; "after": "Say A, B or C to compare, or 'go with B'."`,
   edit: `PHASE: EDITING. Change only what was asked. Building suggested pages: addPage + sections for each page the user picks (their drafts are in STATE.drafts), and link them from Home's nav/CTA where it helps. If they ask what else to build, send suggestNext.`,
 };
 export function phaseOf(state = {}, mode) {
   const pages = Array.isArray(state.pages) ? state.pages : [];
   const home = pages.find((p) => p.id === 'home');
   const plan = state.plan && typeof state.plan === 'object' ? state.plan : null;
+  if (mode === 'mock') return 'mock';
   if (mode === 'autopilot' && !(home && home.sections && home.sections.length) ) return 'autobuild';
   if (plan && plan.phase === 'interview') return 'interview';
   if (plan && plan.phase === 'proposed') return mode === 'autopilot' ? 'autobuild' : 'review';
@@ -173,25 +182,32 @@ function designContext(directions, recent) {
   return `DIRECTIONS:\n${JSON.stringify(list)}\nFONTS: ${FONT_LIST}\nRECENT (avoid unless asked): ${rec.join(', ') || 'none'}\n\n`;
 }
 
-export function buildMessages({ message, state, history, directions, recentDirections, live, mode }) {
-  const turns = (Array.isArray(history) ? history : []).slice(-8)
+/** Output budget per phase: interview turns are one question; full builds need room for 8 sections. */
+export const MAX_TOKENS = { interview: 350, review: 900, edit: 900, guided: 1200, autobuild: 2500, mock: 2500 };
+const STYLE_RE = /\b(colou?rs?|palette|font|type(face)?|look|style|theme|vibe|feel|redesign|direction|darker|lighter|warmer|cooler|modern|minimal|bold|playful|elegant|luxur|retro|brand)\b/i;
+/** The design library is the biggest part of the prompt; send it only when the turn can choose or change a look. */
+export function needsLibrary(phase, message) { return ['interview', 'review', 'autobuild', 'mock'].includes(phase) || STYLE_RE.test(message || ''); }
+
+export function buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped }) {
+  const phase = phaseOf(state, mode);
+  const turns = (Array.isArray(history) ? history : []).slice(-6)
     .filter((t) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string')
     .map((t) => ({ role: t.role, content: t.content.slice(0, 1500) }));
   return [
-    { role: 'system', content: `${SYSTEM_PROMPT}\n\n${PHASES[phaseOf(state, mode)]}` },
+    { role: 'system', content: `${SYSTEM_PROMPT}\n\n${PHASES[phase]}` },
     ...turns,
-    { role: 'user', content: `${designContext(directions, recentDirections)}${live ? 'VOICE: live spoken conversation. Keep reply under 20 words and "after" under 15 words; they are read aloud. Put detail in the page, not the speech.\n\n' : ''}STATE:\n${JSON.stringify(compactState(state))}\n\nMESSAGE:\n${message}` },
+    { role: 'user', content: `${needsLibrary(phase, message) ? designContext(directions, recentDirections) : ''}${scraped && phase === 'mock' ? `SCRAPED SITE (facts to use; never invent beyond them):\n${JSON.stringify(scraped).slice(0, 5000)}\n\n` : ''}${live ? 'VOICE: live spoken conversation. Keep reply under 20 words and "after" under 15 words; they are read aloud. Put detail in the page, not the speech.\n\n' : ''}STATE:\n${JSON.stringify(compactState(state))}\n\nMESSAGE:\n${message}` },
   ];
 }
 
-export async function callMoss({ message, state, history, directions, recentDirections, live, mode }, env = process.env, fetchImpl = fetch) {
+export async function callMoss({ message, state, history, directions, recentDirections, live, mode, scraped }, env = process.env, fetchImpl = fetch) {
   const { token, base, model } = mossSettings(env);
   if (!token) {
     // Names only (never values), so a misnamed or wrongly scoped variable is easy to spot.
     const seen = Object.keys(env).filter((k) => /moss/i.test(k)).sort();
     throw Object.assign(new Error(`Moss inference is not configured (set MOSS_PROJECT_ID and MOSS_PROJECT_KEY). Moss variables visible to this deployment: ${seen.length ? seen.join(', ') : 'none'}`), { status: 503 });
   }
-  const payload = { model, messages: buildMessages({ message, state, history, directions, recentDirections, live, mode }), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
+  const payload = { model, messages: buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped }), max_tokens: MAX_TOKENS[phaseOf(state, mode)] || 900, temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
   const post = (body) => fetchImpl(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
@@ -218,7 +234,7 @@ export async function callMoss({ message, state, history, directions, recentDire
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') { res.setHeader('allow', 'POST'); return res.status(405).json({ error: 'POST only' }); }
+  if (guard(req, res, { methods: ['POST'], bucket: 'agent' })) return;
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'invalid JSON' }); } }
   const message = typeof body?.message === 'string' ? body.message.trim() : '';
@@ -226,7 +242,7 @@ export default async function handler(req, res) {
   if (message.length > MAX_MESSAGE) return res.status(413).json({ error: 'message too long' });
   if (JSON.stringify(body.state || {}).length > MAX_STATE) return res.status(413).json({ error: 'state too large' });
   try {
-    const result = await callMoss({ message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live, mode: ['plan', 'autopilot'].includes(body.mode) ? body.mode : undefined });
+    const result = await callMoss({ message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live, mode: ['plan', 'autopilot', 'mock'].includes(body.mode) ? body.mode : undefined, scraped: body.mode === 'mock' && body.scraped && typeof body.scraped === 'object' ? body.scraped : undefined });
     res.setHeader('cache-control', 'no-store');
     return res.status(200).json(result);
   } catch (err) {

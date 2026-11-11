@@ -99,7 +99,71 @@ check('speak refuses other sites', rr.code === 403);
 rr = mres(); await vt.default({ method: 'GET', headers: { host: 'a.app', origin: 'https://evil.example' } }, rr);
 check('voice-token refuses other sites', rr.code === 403);
 
-// 9. helpers
+// 9. cost controls: output budget per phase, design library only when a look can change
+const { MAX_TOKENS, needsLibrary } = await import('../api/agent.js');
+const lib = [{ id: 'hospitality', name: 'Hospitality', mood: 'warm', fits: 'hotels', colors: {}, type: {}, shape: {}, variants: {}, art: 'orb' }];
+await callMoss({ message: 'add a faq', state: home, directions: lib }, env('moss-test'));
+check('edit turns skip the design library and cap output', !seen.at(-1).json.messages.at(-1).content.includes('DIRECTIONS:') && seen.at(-1).json.max_tokens === MAX_TOKENS.edit);
+await callMoss({ message: 'make it warmer colours', state: home, directions: lib }, env('moss-test'));
+check('style requests still get the library', seen.at(-1).json.messages.at(-1).content.includes('DIRECTIONS:'));
+await callMoss({ message: 'hi', state: { pages: [] }, directions: lib }, env('moss-test'));
+check('interview turns get a small budget', seen.at(-1).json.max_tokens === 350 && needsLibrary('interview', 'hi'));
+const hist = Array.from({ length: 12 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: 't' + i }));
+check('history is cut to 6 turns', bm({ message: 'x', state: home, history: hist }).length === 8);
+const mockMsgs = bm({ message: 'mock up joes.com', state: { pages: [] }, mode: 'mock', scraped: { name: 'Joe\'s Plumbing', h1: ['24/7 plumbers'] } });
+check('mock mode sends the scraped facts with the REDESIGN MOCKS phase', mockMsgs[0].content.includes('PHASE: REDESIGN MOCKS') && mockMsgs.at(-1).content.includes('SCRAPED SITE') && mockMsgs.at(-1).content.includes('Joe\'s Plumbing'));
+
+// 10. abuse guards
+const guardMod = await import('../api/_guard.js');
+guardMod.resetLimits();
+const ip = { method: 'POST', headers: { host: 'a.app', 'x-forwarded-for': '9.9.9.9' } };
+let blocked = 0; for (let i = 0; i < guardMod.LIMITS.scrape.limit + 2; i++) if (guardMod.rateLimited(ip, 'scrape')) blocked++;
+check('per-IP rate limit kicks in after the limit', blocked === 2);
+r = mockRes(); guardMod.guard({ method: 'POST', headers: { host: 'a.app', 'x-forwarded-for': '9.9.9.9' } }, r, { methods: ['POST'], bucket: 'scrape' });
+check('…and answers 429', r.code === 429);
+r = mockRes(); await handler({ method: 'POST', headers: { host: 'a.app', origin: 'https://evil.example' }, body: { message: 'hi' } }, r);
+check('agent refuses other sites', r.code === 403);
+guardMod.resetLimits();
+
+// 11. scraper: address safety, URL parsing, redirects, limits, extraction
+const sc = await import('../api/scrape.js');
+check('private / loopback / link-local / ULA / mapped addresses are refused', ['10.0.0.1', '127.0.0.1', '169.254.169.254', '172.20.1.1', '192.168.1.1', '100.64.0.1', '0.0.0.0', '::1', 'fd12::1', 'fe80::1', '::ffff:10.0.0.1'].every(sc.isPrivateAddress) && !sc.isPrivateAddress('8.8.8.8') && !sc.isPrivateAddress('2606:4700::1111'));
+check('spoken domains become URLs ("joes plumbing dot com")', String(sc.toUrl('joesplumbing dot com')) === 'https://joesplumbing.com/' && String(sc.toUrl('www.x.co.uk/about#a')) === 'https://www.x.co.uk/about');
+check('localhost, metadata IPs, odd ports, credentials and other schemes are refused', ['localhost', 'http://169.254.169.254/latest', 'x.com:8080', 'https://u:p@x.com', 'ftp://x.com', 'printer.local', 'file:///etc/passwd'].every((u) => sc.toUrl(u) === null));
+const lk = await new Promise((res2) => sc.safeLookup('localhost', {}, (e) => res2(e)));
+check('the socket lookup itself refuses hosts that resolve privately (DNS rebinding)', lk && lk.code === 'EBLOCKED');
+const fixture = `<html><head><title>Joe's Plumbing | Austin Plumbers</title><meta name="description" content="Fast, fair plumbing in Austin."><style>.btn{background:#1f6feb}.x{color:#1f6feb}.y{color:#ffffff}</style></head><body><nav><a href="/">Home</a><a href="/services">Services</a><a href="/contact">Contact</a></nav><h1>Leaks fixed &amp; drains cleared today</h1><h2>Our services</h2><ul><li>Emergency leak repair</li><li>Drain cleaning</li><li>Water heater installs</li></ul><p>Family-run since 1998, we serve all of Austin with upfront pricing and a 1-year guarantee on every job.</p><p>Drain cleaning from $89, water heaters from $1,200.</p><blockquote>Joe came out at midnight and fixed our burst pipe in an hour. Lifesavers.</blockquote><a href="tel:512-555-0142">Call</a><a href="mailto:hi@joes.example">Email</a><p>Mon-Fri 8am-6pm</p><script>var secret="x"</script></body></html>`;
+const ex = sc.extract(fixture, 'https://joes.example/');
+check('extract: name, headline, services, contact, prices, quotes, brand colour', ex.name === "Joe's Plumbing" && ex.h1[0] === 'Leaks fixed & drains cleared today' && ex.items.includes('Drain cleaning') && ex.contact.phone === '512-555-0142' && ex.contact.email === 'hi@joes.example' && ex.prices.includes('$89') && /burst pipe/.test(ex.quotes[0]) && ex.brandColor === '#1f6feb' && ex.brandHue > 200 && ex.brandHue < 230 && !JSON.stringify(ex).includes('secret'), JSON.stringify(ex).slice(0, 200));
+check('extract keeps the payload small', JSON.stringify(sc.extract(fixture.replace('<ul>', '<ul>' + '<li>Another service we really do offer</li>'.repeat(300)), 'https://joes.example/')).length <= 4000);
+// a local fixture server, reached only through an injected lookup (the handler never allows this)
+const site = http.createServer((q, s2) => {
+  if (q.url === '/') { s2.writeHead(200, { 'content-type': 'text/html' }); return s2.end(fixture); }
+  if (q.url === '/hop') { s2.writeHead(302, { location: '/' }); return s2.end(); }
+  if (q.url === '/to-private') { s2.writeHead(302, { location: 'http://169.254.169.254/latest/meta-data' }); return s2.end(); }
+  if (q.url === '/pdf') { s2.writeHead(200, { 'content-type': 'application/pdf' }); return s2.end('%PDF'); }
+  if (q.url === '/huge') { s2.writeHead(200, { 'content-type': 'text/html' }); return s2.end('x'.repeat(2e6)); }
+  s2.writeHead(404); s2.end();
+});
+await new Promise((rr2) => site.listen(0, rr2));
+const sp0 = site.address().port;
+const local = (h, o, cb) => { if (typeof o === 'function') cb = o; o && o.all ? cb(null, [{ address: '127.0.0.1', family: 4 }]) : cb(null, '127.0.0.1', 4); };
+const at = (p) => Object.assign(new URL('http://joes.example' + p), { port: String(sp0) });
+const viaTest = (p) => sc.fetchPage(at(p), { lookup: local }).then((x) => ({ ok: true, x }), (e) => ({ ok: false, e }));
+const okHop = await viaTest('/hop');
+check('follows a redirect on the same public site', okHop.ok && /Joe's Plumbing/.test(okHop.x.body));
+const toPriv = await viaTest('/to-private');
+check('a redirect into a private address is refused', !toPriv.ok && toPriv.e.status === 422, toPriv.e && toPriv.e.message);
+const pdf = await viaTest('/pdf');
+check('non-HTML is refused', !pdf.ok && pdf.e.status === 422);
+const huge = await viaTest('/huge');
+check('pages over 1.5 MB are refused', !huge.ok && huge.e.status === 413);
+site.close();
+const mr2 = () => { const x = mockRes(); x.end = () => x; return x; };
+r = mr2(); await sc.default({ method: 'GET', headers: { host: 'a.app' }, query: { url: 'localhost' } }, r);
+check('scrape handler: 400 for a non-public address', r.code === 400);
+
+// 12. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');
 check('compactState keeps flow names only', JSON.stringify(compactState({ flows: [{ name: 'Booking', nodes: [1, 2] }] }).flows) === '["Booking"]');
 

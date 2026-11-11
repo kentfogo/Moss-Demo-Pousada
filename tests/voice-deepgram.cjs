@@ -27,6 +27,7 @@ const server = http.createServer((req, res) => {
 });
 
 function fakes() {
+  if (!window.__usePcm) { window.AudioWorkletNode = undefined; } // this context exercises the MediaRecorder fallback
   window.__ws = []; window.__plays = []; window.__pauses = 0; window.__tracksStopped = 0; window.__browserSpoken = [];
   navigator.mediaDevices.getUserMedia = async (c) => { window.__constraints = c; return { getTracks: () => [{ stop: () => window.__tracksStopped++ }] }; };
   window.MediaRecorder = class { static isTypeSupported(m) { return m === 'audio/webm;codecs=opus'; } constructor(st, o) { this.opts = o; this.state = 'inactive'; } start(ms) { this.state = 'recording'; window.__recTimeslice = ms; this.t = setInterval(() => this.ondataavailable && this.ondataavailable({ data: { size: 100 } }), 100); } stop() { this.state = 'inactive'; clearInterval(this.t); } };
@@ -47,6 +48,14 @@ function fakes() {
   window.Audio = class { constructor(src) { this.src = src; } play() { window.__plays.push(this.src); this.playing = true; this.t = setTimeout(() => { this.playing = false; this.onended && this.onended(); }, 600); return Promise.resolve(); } pause() { window.__pauses++; clearTimeout(this.t); this.playing = false; } };
   window.SpeechSynthesisUtterance = function (t) { this.text = t; };
   Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speaking: false, speak: (u) => window.__browserSpoken.push(u.text), cancel() {}, getVoices: () => [], addEventListener() {} } });
+}
+
+// a fake AudioWorklet pipeline: the test feeds 100 ms PCM frames with a chosen loudness
+function fakePcm() {
+  window.__usePcm = true; window.__pcmNode = null;
+  window.AudioContext = class { constructor(o) { this.sampleRate = (o && o.sampleRate) || 48000; this.state = 'running'; this.destination = {}; this.audioWorklet = { addModule: async () => {} }; } createMediaStreamSource() { return { connect() {}, disconnect() {} }; } createGain() { return { gain: { value: 1 }, connect() {} }; } resume() { return Promise.resolve(); } close() { window.__ctxClosed = (window.__ctxClosed || 0) + 1; return Promise.resolve(); } };
+  window.AudioWorkletNode = class { constructor() { this.port = { onmessage: null }; window.__pcmNode = this; } connect() {} };
+  window.__frames = (n, rms) => { for (let i = 0; i < n; i++) { const nd = window.__pcmNode; nd && nd.port.onmessage && nd.port.onmessage({ data: { pcm: new ArrayBuffer(3200), rms } }); } };
 }
 
 (async () => {
@@ -147,6 +156,38 @@ function fakes() {
   await p3.waitForTimeout(800);
   check('token refused (403): listens with the browser but still speaks with Aura', (await p3.evaluate(() => window.moss.voice.backend())) === 'browser' && spoken.length > before && (await p3.evaluate(() => window.__browserSpoken.length)) === 0);
   await ctx3.close();
+
+  // spend controls: only speech is streamed (raw PCM through an AudioWorklet), silence sends KeepAlive, the mic stops when idle
+  const ctx4 = await browser.newContext();
+  await ctx4.addInitScript(fakePcm); await ctx4.addInitScript(fakes);
+  const p4 = await ctx4.newPage(); const err4 = []; p4.on('pageerror', (e) => err4.push(e.message));
+  await p4.goto(`${base}/?speed=0.03&liveidle=8`);
+  await p4.waitForFunction(() => document.body.dataset.voice);
+  await p4.click('#introMic'); await p4.waitForFunction(() => window.__ws.length && window.__ws[0].readyState === 1 && window.__pcmNode && window.__pcmNode.port.onmessage, null, { timeout: 3000 });
+  const url4 = await p4.evaluate(() => window.__dg.ws().url);
+  check('with an AudioWorklet, raw 16 kHz PCM is streamed (linear16)', /encoding=linear16/.test(url4) && /sample_rate=16000/.test(url4), url4.split('?')[1]);
+  const audioSent = () => p4.evaluate(() => window.__dg.ws().sent.filter((x) => x === '<audio>').length);
+  await p4.evaluate(() => window.__frames(30, 0.002)); // 3 s of a quiet room
+  check('silence is not streamed (nothing billed)', (await audioSent()) === 0);
+  await p4.evaluate(() => window.__frames(3, 0.09)); // someone speaks for 300 ms
+  const afterSpeech = await audioSent();
+  check('speech is streamed with 400 ms of pre-roll', afterSpeech === 4 + 3, String(afterSpeech));
+  await p4.evaluate(() => window.__frames(40, 0.002)); // then 4 s of silence
+  const afterTail = await audioSent();
+  check('…then 1.5 s of trailing audio so Deepgram can end the utterance, then nothing', afterTail === 7 + 15, String(afterTail));
+  const use = await p4.evaluate(() => window.moss.voice.usage());
+  check('usage counts what was skipped', use.pcm && use.skippedMs >= 4000 && use.sentMs === 2200, JSON.stringify(use));
+  await p4.waitForTimeout(6500);
+  check('KeepAlive keeps the quiet connection open', (await p4.evaluate(() => window.__dg.ws().sent.some((x) => /KeepAlive/.test(x)))));
+  await p4.waitForFunction(() => !window.moss.app.isLive(), null, { timeout: 12000 }).catch(() => {});
+  check('a forgotten hot mic turns itself off and says so', !(await p4.evaluate(() => window.moss.app.isLive())) && /Mic off after/.test(await p4.locator('#messages').textContent()));
+  // repeated lines are spoken from the cache
+  const n0s = spoken.length;
+  await p4.evaluate(() => window.moss.voice.speak('On it.')); await p4.waitForTimeout(900);
+  await p4.evaluate(() => window.moss.voice.speak('On it.')); await p4.waitForTimeout(900);
+  check('a repeated sentence is fetched once (audio cache)', spoken.length - n0s === 1 && (await p4.evaluate(() => window.moss.voice.usage().cacheHits)) >= 1, String(spoken.length - n0s));
+  check('no page errors (PCM path)', err4.length === 0, err4.join(' | '));
+  await ctx4.close();
 
   await browser.close(); server.close();
   const failed = results.filter((x) => !x).length;

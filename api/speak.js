@@ -3,7 +3,8 @@
 // The audio is played by the page itself, so the mic's echo cancellation can remove it (no self-interruption on speakers).
 //
 // Environment: DEEPGRAM_API_KEY (required), DEEPGRAM_VOICE (default aura-2-thalia-en)
-import { sameOrigin, DEFAULTS } from './voice-token.js';
+import { DEFAULTS } from './voice-token.js';
+import { guard } from './_guard.js';
 
 export const MAX_TEXT = 600;
 
@@ -19,8 +20,7 @@ export async function synthesize(text, env = process.env, fetchImpl = fetch) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') { res.setHeader('allow', 'POST'); return res.status(405).json({ error: 'POST only' }); }
-  if (!sameOrigin(req)) return res.status(403).json({ error: 'forbidden' });
+  if (guard(req, res, { methods: ['POST'], bucket: 'speak' })) return;
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'invalid JSON' }); } }
   const text = typeof body?.text === 'string' ? body.text.replace(/\s+/g, ' ').trim() : '';

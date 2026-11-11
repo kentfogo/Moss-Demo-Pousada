@@ -283,13 +283,52 @@ body.started .intro { display: none; }
 /* Frame */
 .frame-wrap { position: relative; padding: 0 var(--s6) 120px; margin-top: -8px; }
 body:not(.started) .frame-wrap { display: none; }
-.frame { position: relative; margin: 0 auto; width: var(--frame-w, 820px); border-radius: var(--r3); background: var(--surface); box-shadow: var(--sh3); border: 1px solid var(--line); overflow: hidden; }
+.frame { position: relative; margin: 0 auto; width: var(--frame-w, 820px); border-radius: var(--r3); background: var(--surface); box-shadow: var(--sh3); border: 1px solid var(--line); overflow: hidden; overflow: clip; /* clip, not a scroll box, so a sticky site nav works */ }
 .frame-bar { display: flex; align-items: center; gap: var(--s3); height: 36px; padding: 0 var(--s4); border-bottom: 1px solid var(--line); background: var(--surface-2); }
 .frame-bar .dots { display: flex; gap: 6px; }
 .frame-bar .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); }
-.frame-bar .url { flex: 1; text-align: center; font: 11px var(--f-mono); color: var(--ink-3); letter-spacing: .02em; }
+.frame-bar .url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font: 11px var(--f-mono); color: var(--ink-3); letter-spacing: .02em; }
 .frame-bar .url b { color: var(--ink-2); font-weight: 500; }
 .frame-bar .count { font: 10px var(--f-mono); color: var(--ink-3); letter-spacing: .1em; }
+/* mocks switcher, style drawer, section toolbar, photo slots (builder chrome) */
+.frame-bar .mock-bar { display: flex; align-items: center; gap: 4px; }
+.frame-bar .mock-bar[hidden] { display: none; }
+.mock-bar .mb-l { font: 10px var(--f-mono); color: var(--ink-3); margin-right: 4px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mock-bar button { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink-2); font: 600 11px var(--f-sans, inherit); cursor: pointer; }
+.mock-bar button span { font-weight: 400; color: var(--ink-3); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mock-bar button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.mock-bar button[aria-pressed="true"] span { color: inherit; opacity: .75; }
+.mock-bar button.keep { border-style: dashed; }
+.frame-bar .style-btn { height: 24px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font: 600 11px inherit; cursor: pointer; }
+.frame-bar .style-btn[aria-expanded="true"] { background: var(--ink); color: var(--surface); }
+.style-drawer { position: fixed; z-index: 40; top: 76px; right: 24px; width: 300px; max-height: calc(100vh - 110px); overflow: auto; padding: 14px 16px 16px; border-radius: 14px; font-size: 13px; }
+.style-drawer[hidden], .sec-bar[hidden] { display: none; }
+.style-drawer .sd-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.style-drawer section { padding: 10px 0; border-top: 1px solid var(--line); }
+.style-drawer h5 { margin: 0 0 8px; font: 600 10px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.style-drawer .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; align-items: center; }
+.style-drawer .chips .lbl { font-size: 11px; color: var(--ink-3); margin-right: 2px; }
+.style-drawer .chip[aria-pressed="true"], .sec-bar button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.style-drawer .sw-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.style-drawer .sw { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-2); background: none; border: 0; padding: 0; cursor: default; }
+.style-drawer button.sw { cursor: pointer; text-decoration: underline dotted; }
+.style-drawer .sw i { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-2); }
+.style-drawer .sw-save { display: flex; gap: 6px; }
+.style-drawer .sw-save input { flex: 1; min-width: 0; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font: inherit; }
+.style-drawer .sd-tip { margin: 8px 0 0; font-size: 11px; color: var(--ink-3); }
+.sec-bar { position: absolute; z-index: 8; right: 14px; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 10px; font-size: 12px; }
+.sec-bar .sb-l { padding: 0 8px; font: 600 10px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.sec-bar i { width: 1px; height: 18px; background: var(--line-2); margin: 0 3px; }
+.sec-bar button { height: 28px; padding: 0 9px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.sec-bar button:hover { background: var(--surface-2); }
+#siteSections .sec { cursor: default; }
+#siteSections .sec.picked { outline: 2px solid var(--accent-glow, #45d6e8); outline-offset: -2px; }
+#siteSections .sec.drop { outline: 2px dashed var(--accent-glow, #45d6e8); outline-offset: -6px; }
+.site .art { position: relative; }
+.site .photo-btn { position: absolute; right: 12px; bottom: 12px; z-index: 2; height: 30px; padding: 0 12px; border-radius: 999px; border: 0; background: rgba(10,12,16,.72); color: #fff; font: 600 12px var(--f-sans, inherit); cursor: pointer; opacity: 0; transition: opacity .15s; }
+.site .art:hover .photo-btn, .site .photo-btn:focus-visible { opacity: 1; }
+.chip.photo-pick { margin-top: 8px; }
+@media (max-width: 720px) { .style-drawer { left: 16px; right: 16px; width: auto; top: auto; bottom: 16px; max-height: 60vh; } .sec-bar { left: 8px; right: 8px; overflow-x: auto; } .mock-bar button span { display: none; } }
 .frame-empty { padding: 72px var(--s5); text-align: center; color: var(--ink-3); font: 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; }
 
 /* =====================================================================
@@ -835,7 +874,10 @@ body.started .canvas { background: var(--bg-2); }
         <div class="frame-wrap">
           <div class="plan-board" id="planBoard" hidden aria-live="polite"></div>
           <div class="frame" id="frame">
-            <div class="frame-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url" id="frameUrl"></span><span class="count" id="frameCount"></span></div>
+            <div class="frame-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url" id="frameUrl"></span><span class="mock-bar" id="mockBar" hidden></span><span class="count" id="frameCount"></span><button type="button" class="style-btn" id="styleBtn" hidden aria-expanded="false" aria-controls="styleDrawer">Style</button></div>
+            <div class="sec-bar glass" id="secBar" hidden role="toolbar" aria-label="Section style"></div>
+            <aside class="style-drawer glass" id="styleDrawer" hidden aria-label="Style"></aside>
+            <input type="file" id="photoInput" accept="image/*" hidden>
             <div class="site" id="site" data-palette="ice">
               <div class="s-top" id="siteTop"></div>
               <div id="siteSections"></div>
@@ -1005,7 +1047,7 @@ const sound = (() => {
    PAGE MODEL: JSON state for pages / sections / links / flows + undo
    ===================================================================== */
 const pageModel = (() => {
-  const fresh = () => ({ business: null, palette: 'ice', design: null, plan: null, drafts: [], pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
+  const fresh = () => ({ business: null, palette: 'ice', design: null, plan: null, drafts: [], mocks: null, pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
   let state = fresh();
   const history = [];
   return {
@@ -1030,6 +1072,7 @@ const agent = (() => {
     testimonials: ['testimonials', 'testimonial', 'reviews', 'quotes', 'social proof'], pricing: ['pricing', 'prices', 'plans', 'rates'],
     faq: ['faq', 'faqs', 'questions', 'q&a'], cta: ['cta', 'call to action', 'call-to-action'], footer: ['footer'],
     text: ['story', 'about text'], stats: ['stats', 'numbers'], contact: ['contact form'], booking: ['booking form', 'booking widget'],
+    steps: ['steps', 'how it works', 'process'], gallery: ['gallery', 'photos', 'portfolio'], logos: ['logos', 'logo row', 'press'], callStrip: ['call strip', 'call bar', 'phone strip'],
   };
   const PAGE_TYPES = ['about', 'pricing', 'contact', 'booking'];
 
@@ -1361,7 +1404,125 @@ const agent = (() => {
     return null;
   }
 
+  /* ---------------- Instant commands: refine controls, motion and mocks never need the model (no tokens) ---------------- */
+  const FILL_WORDS = [[/\b(dark|inverse|inverted|black)\b/, 'inverse'], [/\b(accent|brand|colou?red|bright)\b/, 'accent'], [/\b(card|surface|tinted|grey|gray)\b/, 'surface'], [/\b(plain|light|white|normal|default)\b/, 'bg']];
+  function secRef(low, state) {
+    const page = state.pages.find((pg) => pg.id === state.currentPage); if (!page) return null;
+    const t = findSections(low)[0]; const sec = t && page.sections.find((x) => x.type === t);
+    return sec ? { page: page.id, sec } : null;
+  }
+  function quickStyle(low, state) {
+    const l = low.replace(/[.!?]/g, '').replace(/\s+/g, ' ').trim();
+    const d = state.design; const sw = (d && d.swatches) || {};
+    const lbl = (sec) => (SECTION_META[sec.type] || { label: sec.type }).label;
+    // mocks
+    if (state.mocks) {
+      const go = l.match(/^(?:let'?s )?(?:go with|pick|choose|i'?ll take|use|we'?ll go with)\s+(?:mock |look |option |version |design )?([abc])$/);
+      if (go) { const i = 'abc'.indexOf(go[1]); return { reply: `Going with ${state.mocks.looks[i] ? state.mocks.looks[i].name : 'mock ' + go[1].toUpperCase()}. You can still refine anything.`, ops: [{ op: 'chooseMock', index: i }, { op: 'keepMock' }], suggestions: ['Make it lively', 'Outline buttons', 'Floating nav'] }; }
+      const see = l.match(/^(?:show(?: me)?|try|switch to|let'?s see|see|what about|how about)?\s*(?:mock|look|option|version|design)?\s*([abc])$/);
+      if (see && (l.length > 1 || /^[abc]$/.test(l))) { const i = 'abc'.indexOf(see[1]); const lk = state.mocks.looks[i]; if (lk) return { reply: `Mock ${see[1].toUpperCase()}: ${lk.name}.`, ops: [{ op: 'chooseMock', index: i }], suggestions: ['A', 'B', 'C', 'Keep this one'].filter((x) => x !== see[1].toUpperCase()) }; }
+      if (/^(keep (this|it)( one)?|this one|lock (it|this) in|that'?s the one|i like this one)$/.test(l)) return { reply: 'Keeping this one.', ops: [{ op: 'keepMock' }], suggestions: ['Make it lively', 'Outline buttons'] };
+    }
+    if (!d) return null;
+    // motion
+    if (/\b(replay|play|show me|preview)\b.*\b(animations?|motion|intro)\b/.test(l)) return { reply: d.motion === 'none' ? 'Animations are off. Say “add some animation” first.' : 'Replaying the animation.', ops: d.motion === 'none' ? [] : [{ op: 'replayMotion' }] };
+    if (/\b(no|turn off|stop|kill|remove|disable|without)\b.*\b(animations?|motion|animating)\b|^(no|stop) (the )?animations?$/.test(l)) return { reply: 'Animations off.', ops: [{ op: 'setDesign', design: { motion: 'none' } }], suggestions: ['Add some animation'] };
+    if (/\b(lively|more animations?|more motion|animate (it )?more|make it pop|bouncier|bouncy|livelier)\b/.test(l)) return { reply: 'Lively it is: the headline pops in and sections rise as you scroll.', ops: [{ op: 'setDesign', design: { motion: 'lively' } }, { op: 'replayMotion' }], suggestions: ['Calmer animation', 'No animations'] };
+    if (/\b(add|turn on|some|subtle|calm(er)?|gentle|softer|less)\b.*\b(animations?|motion)\b|^animate( it| the page)?$/.test(l)) return { reply: 'Adding calm motion: a headline reveal and sections that rise in.', ops: [{ op: 'setDesign', design: { motion: 'calm' } }, { op: 'replayMotion' }], suggestions: ['Make it lively', 'No animations'] };
+    // global buttons
+    const bs = l.match(/\b(outline[d]?|soft|ghost|text|solid|filled)\s+buttons?\b/);
+    if (bs) { const style = { outline: 'outline', outlined: 'outline', soft: 'soft', ghost: 'ghost', text: 'ghost', solid: 'solid', filled: 'solid' }[bs[1]]; return { reply: `${cap(style)} buttons across the site.`, ops: [{ op: 'setDesign', design: { button: { style } } }], suggestions: ['Bigger buttons', 'Glow on hover'] }; }
+    const bz = l.match(/\b(bigger|larger|big|smaller|small|normal|medium)( size)? buttons?\b|\bbuttons? (bigger|larger|smaller)\b/);
+    if (bz) { const w = bz[1] || bz[3]; const size = /big|larg/.test(w) ? 'l' : /small/.test(w) ? 's' : 'm'; return { reply: size === 'l' ? 'Bigger buttons.' : size === 's' ? 'Smaller buttons.' : 'Standard buttons.', ops: [{ op: 'setDesign', design: { button: { size } } }] }; }
+    const bh = l.match(/\b(glow|lift|fill|underline)\b.*\bhover\b|\bhover\b.*\b(glow|lift|fill|underline)\b/);
+    if (bh) { const hover = bh[1] || bh[2]; return { reply: `Buttons ${hover === 'fill' ? 'fill with the accent' : hover === 'underline' ? 'underline' : hover} on hover.`, ops: [{ op: 'setDesign', design: { button: { hover } } }] }; }
+    // nav
+    if (/\b(unstick|not sticky|non-?sticky|stop (the )?(nav|header|menu) (from )?sticking)\b/.test(l)) return { reply: 'The nav scrolls away again.', ops: [{ op: 'setDesign', design: { nav: { sticky: false } } }] };
+    if (/\bsticky (nav|header|menu|navigation)\b|\b(nav|header|menu|navigation)\b.*\b(sticky|stick|stay)\b/.test(l)) return { reply: 'The nav now stays at the top as you scroll.', ops: [{ op: 'setDesign', design: { nav: { sticky: true } } }] };
+    const nv = l.match(/\b(floating|pill|minimal|simple|clean|cent(?:er|re)(?:ed)?|bar|normal|standard|classic)\s+(nav|navigation|menu|header)\b|\bcent(?:er|re) the (nav|navigation|menu)\b/);
+    if (nv) { const w = nv[1] || 'centered'; const style = /float|pill/.test(w) ? 'floating' : /minimal|simple|clean/.test(w) ? 'minimal' : /cent/.test(w) ? 'centered' : 'bar'; return { reply: `${cap(style)} nav.`, ops: [{ op: 'setDesign', design: { nav: { style } } }], suggestions: ['Sticky nav'] }; }
+    // swatches: "save this colour as Ocean", "use Ocean for the accent"
+    const save = l.match(/^(?:save|name|call|keep) (?:this|the|that) (?:\w+ )?(?:colou?r|accent|shade|one)? ?as ([a-z][a-z0-9 -]{1,23})$/);
+    if (save) { const name = MossSite.swatchKey(save[1]); return { reply: `Saved the accent as “${name}”.`, ops: [{ op: 'setDesign', design: { swatches: { [name]: d.colors.accent } } }], suggestions: [`Use ${name} for the buttons`] }; }
+    const use = l.match(/^use ([a-z][a-z0-9 -]{1,23}) (?:for|as|on) (?:the )?(accent|buttons?|background|text|highlights?)$/);
+    if (use && sw[MossSite.swatchKey(use[1])]) { const role = /button|accent|highlight/.test(use[2]) ? 'accent' : use[2] === 'background' ? 'bg' : 'ink'; return { reply: `${cap(MossSite.swatchKey(use[1]))} is now the ${role === 'bg' ? 'background' : role === 'ink' ? 'text colour' : 'accent'}.`, ops: [{ op: 'setDesign', design: { colors: { [role]: MossSite.swatchKey(use[1]) } } }] }; }
+    // photos
+    if (/\b(add|upload|use|put|choose|swap|replace|change)\b.*\b(photo|picture|image|pic)s?\b(?! gallery| page| section)/.test(l)) {
+      const ref = secRef(l, state) || (() => { const pg = state.pages.find((x) => x.id === state.currentPage); const sec = pg && (pg.sections.find((x) => x.type === 'hero') || pg.sections[0]); return sec ? { page: pg.id, sec } : null; })();
+      if (ref) return { reply: `Pick a photo for the ${lbl(ref.sec).toLowerCase()}.`, ops: [{ op: 'pickPhoto', page: ref.page, id: ref.sec.id }] };
+    }
+    // one section's look
+    const ref = secRef(l, state);
+    if (ref && /\b(background|fill|colou?r|dark|darker|accent|plain|space|spacing|padding|room|roomier|tighter|corners?|rounded|round|square|cent(er|re)|left|align)\b/.test(l)) {
+      const style = {};
+      const named = Object.keys(sw).find((n) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(l));
+      if (named && /\b(background|fill)\b/.test(l)) style.fill = named;
+      else if (/\b(background|fill|dark|darker|accent|plain|colou?red|inverse)\b/.test(l)) { const f = FILL_WORDS.find(([re]) => re.test(l)); if (f) style.fill = f[1]; }
+      if (/\b(more|extra|roomier|bigger|lots of) (space|spacing|padding|room)\b|\broomier\b|\bbreathe\b/.test(l)) style.padding = 'roomy';
+      else if (/\b(less|tighter|smaller|reduce( the)?|trim( the)?) (space|spacing|padding)\b|\btighter\b/.test(l)) style.padding = 'tight';
+      else if (/\bnormal (space|spacing|padding)\b/.test(l)) style.padding = 'normal';
+      if (/\b(round|rounded|soften)\b.*\bcorners?\b|\brounded\b|\bround (the )?\w+ corners\b/.test(l)) style.radius = 28;
+      else if (/\b(square|sharp)\b.*\bcorners?\b/.test(l)) style.radius = 0;
+      if (/\bcent(er|re)(ed)?\b/.test(l)) style.align = 'center'; else if (/\bleft[- ]?align(ed)?\b|\balign (it )?left\b/.test(l)) style.align = 'left';
+      if (Object.keys(style).length) return { reply: `Restyled the ${lbl(ref.sec).toLowerCase()}.`, ops: [{ op: 'setSectionStyle', page: ref.page, id: ref.sec.id, style }], suggestions: ['Undo'] };
+    }
+    return null;
+  }
+
+  /* ---------------- Redesign mocks from a scraped site (the offline version; Moss writes the copy when connected) ---------------- */
+  const SITE_RE = /\b((?:https?:\/\/)?(?:[a-z0-9-]+(?:\.|\s+dot\s+))+(?:com|net|org|co|io|ai|app|dev|biz|info|us|uk|ca|au|de|fr|es|it|nl|br|pt|shop|store|site|online|studio|design|plumbing|services|co\.uk|com\.au|com\.br)\b(?:\/[^\s]*)?)/i;
+  const MOCK_RE = /\b(mock ?(it )?up|mocks?|redesign|re-?design|re-?do|remake|revamp|refresh|modernis\w*|moderniz\w*|rebuild|make (it )?better|better version|new version|version of|improve|scrape|copy|clone|based on|like)\b/;
+  const SPOKEN_SITE = /\b(?:mock ?(?:it )?up|redesign|re-?design|redo|remake|revamp|refresh|rebuild|improve|scrape|version of)\s+(?:of |for |the |my |our |site |website )*([a-z0-9][a-z0-9' -]{1,40}?)\s+dot\s+(com|net|org|co|io|ai|app|dev|biz|info|us|ca|shop|store|site)\b/;
+  /** "Mock up joesplumbing.com" / "redesign joes plumbing dot com" → the site, or null. */
+  function siteIn(text) {
+    const low = String(text || '').toLowerCase();
+    const spoken = low.match(SPOKEN_SITE); // "redesign joes plumbing dot com": the words before "dot com" are the name
+    if (spoken) return `${spoken[1].replace(/['\s]+/g, '')}.${spoken[2]}`;
+    const m = low.match(SITE_RE); if (!m) return null;
+    const bare = /^\s*(?:https?:\/\/)?[a-z0-9.-]+\.[a-z]{2,}\S*\s*$/.test(low);
+    if (!bare && !MOCK_RE.test(low)) return null;
+    return m[1].replace(/\s+dot\s+/g, '.').replace(/[.,!?)]+$/, '');
+  }
+  function mockLooks(kind, brandHue, name) {
+    const ids = { pousada: ['hospitality', 'editorial', 'luxury'], coffee: ['editorial', 'playful', 'mono'], saas: ['darktech', 'swiss', 'playful'] }[kind] || ['trade', 'swiss', 'playful'];
+    const hues = [brandHue != null ? brandHue : MossSite.hashHue(name + ids[0]), MossSite.hashHue(name + ids[1]), MossSite.hashHue(name + ids[2])];
+    const variants = [{ hero: 'editorial', features: 'cards' }, { hero: 'bigtype', features: 'list' }, { hero: 'spotlight', features: 'bento' }];
+    return ids.map((id, i) => { const dir = MossSite.byId(id); return { direction: id, name: i === 0 && brandHue != null ? `${dir.name}, your colours` : dir.name, why: dir.mood, hue: hues[i], variants: variants[i], motion: i === 2 ? 'lively' : 'calm' }; });
+  }
+  function mockFromScrape(sc, state) {
+    const facts = [sc.name, sc.title, sc.description, ...(sc.h1 || []), ...(sc.headings || []), ...(sc.items || [])].join(' ').toLowerCase();
+    const kind = detectKind(facts);
+    const c = copyFor(kind, sc.name || 'Your business', null);
+    c.name = sc.name || c.name; c.announce = null; // a redesign shows only what the real site says
+    const phone = sc.contact && sc.contact.phone;
+    if (phone) c.primary = 'Call ' + phone.replace(/^\+1\s?/, '');
+    const services = (sc.items || []).filter((x) => x.split(' ').length <= 8).slice(0, 4);
+    const para = (word) => (sc.paragraphs || []).find((pp) => pp.toLowerCase().includes(word.toLowerCase().split(' ')[0])) || '';
+    const ICONS = ['bolt', 'shield', 'clock', 'leaf'];
+    const sections = [];
+    const hero = makeSection('hero', c, { headline: (sc.h1 && sc.h1[0]) || c.hero.headline, sub: sc.description || (sc.paragraphs || [])[0] || c.hero.sub, eyebrow: (sc.headings || [])[0] || c.hero.eyebrow, primary: c.primary });
+    delete hero.data.card; hero.data.variant = undefined; sections.push(hero);
+    if (services.length >= 2) sections.push({ id: uid('fea'), type: 'features', data: { eyebrow: 'What we do', title: (sc.headings || []).find((h) => /service|what we|offer/i.test(h)) || 'Our *services*', lede: (sc.paragraphs || [])[0] || '', items: services.map((t, i) => [ICONS[i % 4], t, para(t).slice(0, 140)]) } });
+    if ((sc.paragraphs || []).length > 1) sections.push({ id: uid('tex'), type: 'text', data: { eyebrow: 'About', title: `About *${c.name}*`, body: sc.paragraphs.slice(1, 3) } });
+    if ((sc.quotes || []).length) sections.push({ id: uid('tes'), type: 'testimonials', data: { eyebrow: 'Reviews', title: 'What customers *say*', items: sc.quotes.slice(0, 3).map((q) => [q, 'Customer', 'Review']) } });
+    if (phone) sections.push({ id: uid('cal'), type: 'callStrip', data: { title: 'Talk to us *today*', sub: (sc.hours || [])[0] || '', phone, button: 'Call now', href: '#/home' } });
+    sections.push({ id: uid('cta'), type: 'cta', data: { eyebrow: c.name, title: (sc.headings || []).slice(-1)[0] || 'Ready when *you* are', sub: [sc.contact && sc.contact.email, sc.contact && sc.contact.address].filter(Boolean).join(' · '), button: c.primary, href: '#/home' } });
+    const navCol = (sc.nav || []).slice(0, 4);
+    sections.push({ id: uid('foo'), type: 'footer', data: { name: c.name, blurb: sc.description || '', cols: [['Pages', navCol.length ? navCol : ['Home']], ['Contact', [phone, sc.contact && sc.contact.email].filter(Boolean).slice(0, 3)]], base: `© ${new Date().getFullYear()} ${c.name}` } });
+    const looks = mockLooks(kind, sc.brandHue, c.name);
+    const host = (() => { try { return new URL(sc.url).hostname.replace(/^www\./, ''); } catch (e) { return sc.name; } })();
+    const ops = [];
+    if (state.pages.length) ops.push({ op: 'resetSite' });
+    ops.push({ op: 'setBusiness', business: { kind, name: c.name, place: null, prompt: `Redesign of ${host}`, copy: c } });
+    ops.push({ op: 'addPage', page: { id: 'home', name: 'Home', sections: [] }, navigate: true, quiet: true });
+    ops.push({ op: 'setMocks', source: host, looks });
+    sections.forEach((sec) => ops.push({ op: 'addSection', page: 'home', section: sec }));
+    return { reply: `Here's ${c.name}, rebuilt from ${host} in three looks: ${list(looks.map((x, i) => `${'ABC'[i]}, ${x.name}`))}.`, ops, after: 'Say A, B or C to compare, or “go with B”.', suggestions: ['Show me B', 'Show me C', 'Go with A'] };
+  }
+
   async function localRespond(message, state, opts = {}) {
+    if (opts.mode === 'mock' && opts.scraped) { await wait(200); return mockFromScrape(opts.scraped, state); }
+    { const q = quickStyle(message.trim().toLowerCase(), state); if (q) { await wait(120); return q; } }
     await wait(260);
     const text = message.trim();
     const low = text.toLowerCase();
@@ -1558,6 +1719,7 @@ const agent = (() => {
   function isLocalCommand(low, state) {
     const l = low.replace(/[.!?]/g, '').trim();
     if (UNDO_RE.test(l) || VIEW_RE.test(l)) return true;
+    if (quickStyle(l, state)) return true;
     const del = l.match(/^(delete|remove|get rid of|drop)\s+(the\s+)?@?([a-z][\w-]*)\s+page$/);
     if (del && del[3] !== 'home' && state.pages.find((p) => p.id === del[3])) return true;
     if (/^(clear|wipe|empty)\s+(the\s+)?@?[a-z][\w-]*\s+page$/.test(l)) return true;
@@ -1568,30 +1730,47 @@ const agent = (() => {
     const low = message.trim().toLowerCase();
     const mode = modeOf(low, state, opts);
     const asMention = (m) => m.replace(/^(go to|open|show( me)?|take me to)\s+(the\s+)?([A-Za-z][\w-]*)/i, (all, a, b, c, word) => (state.pages.some((p) => p.name.toLowerCase() === word.toLowerCase() || p.id === word.toLowerCase()) ? `${a} @${word}` : all));
-    if (!REMOTE || remoteDisabled || isLocalCommand(low, state)) return localRespond(asMention(message), state, { mode });
+    if (!REMOTE || remoteDisabled || (mode !== 'mock' && isLocalCommand(low, state))) return localRespond(asMention(message), state, { mode, scraped: opts.scraped });
     try {
       const r = await fetch('/api/agent', {
         method: 'POST', headers: { 'content-type': 'application/json' }, signal: opts.signal,
-        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-8), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections(), live: !!opts.live, mode }),
+        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-6), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections(), live: !!opts.live, mode, ...(mode === 'mock' && opts.scraped ? { scraped: opts.scraped } : {}) }),
       });
       const json = await r.json().catch(() => ({}));
       if (!r.ok) { if (r.status === 503 || r.status === 404) remoteDisabled = true; throw new Error(json.error || `HTTP ${r.status}`); }
+      if (mode === 'mock') prepareMock(json, state, opts.scraped);
       const res = normalize(json, state, message);
+      if (mode === 'mock') { // the looks go on before the sections, so the page is built in look A
+        const sb = res.ops.find((o) => o.op === 'setBusiness'); const rawB = (json.ops.find((o) => o.op === 'setBusiness') || {}).business || {};
+        if (sb && !(rawB.announce && rawB.announce.text)) sb.business.copy.announce = null;
+        const i = res.ops.findIndex((o) => o.op === 'setMocks'); const home = res.ops.findIndex((o) => o.op === 'addPage');
+        if (i > home && home >= 0) res.ops.splice(home + 1, 0, res.ops.splice(i, 1)[0]);
+      }
       turns.push({ role: 'user', content: message }, { role: 'assistant', content: res.reply });
       return res;
     } catch (err) {
       if (err && err.name === 'AbortError') return { reply: '', ops: [], aborted: true };
       console.warn('Moss inference unavailable, using the offline agent:', err.message);
-      const res = await localRespond(message, state, { mode });
+      const res = await localRespond(message, state, { mode, scraped: opts.scraped });
       if (!warned) { warned = true; res.reply = `Moss inference isn’t reachable (${err.message}), so the offline demo agent answered. ${res.reply}`; }
       return res;
     }
   }
 
+  /** Mock turns start from a blank site, always have a Home page, and always end up with three looks. */
+  function prepareMock(json, state, sc) {
+    const ops = Array.isArray(json.ops) ? json.ops.filter((o) => o && o.op !== 'setDesign' && o.op !== 'resetSite') : [];
+    if (!ops.some((o) => o.op === 'addPage')) { const b = ops.findIndex((o) => o.op === 'setBusiness'); ops.splice(b + 1, 0, { op: 'addPage', page: { id: 'home', name: 'Home' }, navigate: true }); }
+    if (!ops.some((o) => o.op === 'setMocks')) { const kindOp = ops.find((o) => o.op === 'setBusiness'); const kind = detectKind(String(kindOp && kindOp.business && kindOp.business.kind || (sc && sc.name) || '').toLowerCase()); ops.push({ op: 'setMocks', source: sc && sc.url, looks: mockLooks(kind, sc && sc.brandHue, (sc && sc.name) || 'site') }); }
+    if (state.pages.length) ops.unshift({ op: 'resetSite' });
+    json.ops = ops;
+  }
   function slimState(state) {
     const s = clone(state);
+    delete s.mocks;
+    (s.pages || []).forEach((pg) => (pg.sections || []).forEach((x) => { if (x.data && x.data.image) x.data.image = 'uploaded'; }));
     if (s.business) s.business = { name: s.business.name, kind: s.business.kind, place: s.business.place };
-    if (s.design) s.design = { direction: s.design.direction, name: s.design.name, colors: s.design.colors, swatches: s.design.swatches, type: s.design.type, shape: s.design.shape, variants: s.design.variants, art: s.design.art };
+    if (s.design) s.design = { direction: s.design.direction, name: s.design.name, colors: s.design.colors, swatches: s.design.swatches, type: s.design.type, shape: s.design.shape, variants: s.design.variants, art: s.design.art, motion: s.design.motion, button: s.design.button, nav: s.design.nav };
     return s;
   }
   function recentDirections() { try { return JSON.parse(localStorage.getItem('moss-recent-directions') || '[]'); } catch (e) { return []; } }
@@ -1704,6 +1883,7 @@ const agent = (() => {
         }
         case 'updateSection': {
           const target = findSec(pageId, raw.id ?? raw.type); if (!target) break;
+          if (raw.patch && typeof raw.patch === 'object') { raw.patch = Object.assign({}, raw.patch); delete raw.patch.image; }
           const merged = mergeSectionData(target.type, target.data, raw.patch);
           if (merged === target.data) break;
           const patch = {}; Object.keys(merged).forEach((k) => { if (JSON.stringify(merged[k]) !== JSON.stringify(target.data[k])) patch[k] = merged[k]; });
@@ -1816,6 +1996,33 @@ const agent = (() => {
           break;
         }
         case 'dismissDrafts': ops.push({ op: 'dismissDrafts' }); break;
+        case 'setSectionStyle': {
+          const target = findSec(pageId, raw.id ?? raw.section ?? raw.type); if (!target) break;
+          const st0 = raw.style && typeof raw.style === 'object' ? raw.style : {}; const style = {};
+          const sw = (state.design && state.design.swatches) || {};
+          const fill = MossSite.swatchKey(st0.fill);
+          if (['bg', 'surface', 'accent', 'inverse'].includes(fill) || sw[fill]) style.fill = fill; else if (fill === 'none' || fill === 'default') style.fill = null;
+          if (['tight', 'normal', 'roomy'].includes(st0.padding)) style.padding = st0.padding;
+          if (st0.radius != null && Number.isFinite(Number(st0.radius))) style.radius = Math.max(0, Math.min(40, Math.round(Number(st0.radius))));
+          if (['left', 'center'].includes(st0.align)) style.align = st0.align;
+          if (Object.keys(style).length) ops.push({ op: 'setSectionStyle', page: pageId, id: target.id, style });
+          break;
+        }
+        case 'setMocks': {
+          const looks = (Array.isArray(raw.looks) ? raw.looks : []).map((lk) => {
+            const dir = lk && MossSite.byId(lk.direction || lk.id); if (!dir) return null;
+            const variants = {}; if (lk.variants && typeof lk.variants === 'object') Object.keys(MossSite.VARIANTS).forEach((k) => { if (MossSite.VARIANTS[k].includes(lk.variants[k])) variants[k] = lk.variants[k]; });
+            return { direction: dir.id, name: str(lk.name, 40) || dir.name, why: str(lk.why, 140) || dir.mood, hue: Number.isFinite(Number(lk.hue)) ? ((Number(lk.hue) % 360) + 360) % 360 : MossSite.hashHue(dir.id + (sim.business && sim.business.name)), hue2: Number.isFinite(Number(lk.hue2)) ? Number(lk.hue2) : undefined, variants, motion: MossSite.MOTION.includes(lk.motion) ? lk.motion : undefined };
+          }).filter(Boolean).slice(0, 3);
+          if (looks.length >= 2) ops.push({ op: 'setMocks', source: str(raw.source, 80) || '', looks });
+          break;
+        }
+        case 'chooseMock': {
+          const n = typeof raw.index === 'string' ? 'abc'.indexOf(raw.index.toLowerCase()) : Number(raw.index);
+          if (Number.isInteger(n) && n >= 0 && n < 3) ops.push({ op: 'chooseMock', index: n });
+          break;
+        }
+        case 'keepMock': ops.push({ op: 'keepMock' }); break;
       }
     }
     // Deleting every section of a page one by one becomes a single step: deletePage (or resetPage for Home).
@@ -1843,7 +2050,7 @@ const agent = (() => {
 
   // Append a note (e.g. an interruption) to the last assistant turn so the model knows what really happened.
   function note(text) { const last = turns[turns.length - 1]; if (last && last.role === 'assistant') last.content += ' ' + text; else turns.push({ role: 'assistant', content: text }); }
-  return { BRIEF_KEYS, modeOf, respond, localRespond, normalize, layoutFlow, parseMentions, findSections, note, isRemote: () => REMOTE && !remoteDisabled };
+  return { BRIEF_KEYS, modeOf, respond, localRespond, normalize, layoutFlow, parseMentions, findSections, note, siteIn, quickStyle, slimState, isRemote: () => REMOTE && !remoteDisabled };
 })();
 
 /* =====================================================================
@@ -1899,14 +2106,63 @@ const renderer = (() => {
     const r = resolved(sec); const nt = window.MossSite && MossSite.NEW_TYPES[sec.type];
     el.className = `sec sec-${sec.type} ${nt ? nt.cls : CLS[sec.type] ? CLS[sec.type](r.data) : ''} ${r.data.variant ? 'v-' + r.data.variant : ''}`;
     el.dataset.id = sec.id; el.dataset.type = sec.type; el.setAttribute('aria-label', SECTION_META[sec.type].label);
-    el.innerHTML = sectionHTML(sec); el.dataset.hash = JSON.stringify(sec.data) + JSON.stringify(pageModel.get().design || null);
+    el.innerHTML = sectionHTML(sec); el.dataset.hash = hashOf(sec, JSON.stringify(pageModel.get().design || null));
+    styleSection(el, sec.style);
+    if (sec.type === 'hero') el.querySelectorAll('h1').forEach(splitWords);
+    el.querySelectorAll('.art').forEach((a) => a.insertAdjacentHTML('beforeend', `<button type="button" class="photo-btn" data-photo="${sec.id}">${a.classList.contains('art-photo') ? 'Replace photo' : 'Add photo'}</button>`));
     return el;
+  }
+  const hashOf = (sec, designKey) => JSON.stringify(sec.data) + JSON.stringify(sec.style || null) + designKey;
+  // Per-section look (setSectionStyle): fill, padding, radius, alignment
+  function styleSection(el, st) {
+    if (!st) return;
+    const d = pageModel.get().design; const sw = (d && d.swatches) || {};
+    if (st.fill) {
+      if (['bg', 'surface', 'accent', 'inverse'].includes(st.fill)) el.dataset.fill = st.fill;
+      else if (sw[st.fill]) { el.dataset.fill = 'swatch'; el.style.setProperty('--fill-bg', sw[st.fill]); el.style.setProperty('--fill-ink', MossSite.onColor(sw[st.fill])); }
+    }
+    if (st.padding && st.padding !== 'normal') el.dataset.pad = st.padding;
+    if (st.radius != null) { el.dataset.radius = ''; el.style.setProperty('--sec-radius', st.radius + 'px'); }
+    if (st.align) el.dataset.align = st.align;
+  }
+  // Wrap headline words in spans (keeping the accent <em>) so the motion CSS can reveal them one by one
+  function splitWords(node) {
+    let i = 0;
+    const walk = (n) => [...n.childNodes].forEach((c) => {
+      if (c.nodeType === 3) {
+        const frag = document.createDocumentFragment();
+        c.textContent.split(/(\s+)/).forEach((w) => { if (!w) return; if (/^\s+$/.test(w)) frag.appendChild(document.createTextNode(w)); else { const sp = document.createElement('span'); sp.className = 'hl-w'; sp.style.setProperty('--i', i++); sp.textContent = w; frag.appendChild(sp); } });
+        c.replaceWith(frag);
+      } else if (c.nodeType === 1) walk(c);
+    });
+    walk(node);
+  }
+  /* Motion: sections that appear on a page you open rise in as they scroll into view; the hero headline plays.
+     Sections being built right now have their own unfold animation, and edited sections never re-animate. */
+  let io = null;
+  const motionOn = () => { const d = pageModel.get().design; return !reducedMotion.matches && !!d && d.motion !== 'none'; };
+  function observer() {
+    if (io || !window.IntersectionObserver) return io;
+    io = new IntersectionObserver((entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.remove('m-pre'); e.target.classList.add('m-in'); io.unobserve(e.target); } }), { root: $('#pageView'), rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+    return io;
+  }
+  function prime(els) {
+    if (!motionOn() || !observer()) return;
+    els.forEach((el) => {
+      if (el.classList.contains('sec-hero')) { el.classList.remove('m-play'); void el.offsetWidth; el.classList.add('m-play'); return; }
+      el.classList.remove('m-in'); el.classList.add('m-pre'); io.observe(el);
+    });
+  }
+  function replay() {
+    const els = [...$$('#siteSections .sec')]; if (!els.length) return false;
+    $('#pageView').scrollTo({ top: 0, behavior: 'instant' });
+    prime(els); return motionOn();
   }
   function renderTop() {
     const st = pageModel.get(); const b = st.business;
     if (!b) { $('#siteTop').innerHTML = ''; return; }
     const c = b.copy;
-    $('#siteTop').innerHTML = `<div class="s-announce"><span class="pill">${esc(c.announce.tag)}</span><span>${esc(c.announce.text)}</span><span class="arr">→</span></div><div class="wrap"><nav class="s-nav"><a class="s-brand" href="#/home"><i></i>${esc(b.name)}</a><div class="s-links">${st.pages.map((p) => `<a href="#/${p.id}" ${p.id === st.currentPage ? 'aria-current="page"' : ''}>${esc(p.name)}</a>`).join('')}</div><a class="btn btn-primary btn-sm" href="#/booking">${esc(c.primary)}</a></nav></div>`;
+    $('#siteTop').innerHTML = `${c.announce && c.announce.text ? `<div class="s-announce"><span class="pill">${esc(c.announce.tag)}</span><span>${esc(c.announce.text)}</span><span class="arr">→</span></div>` : ''}<div class="wrap"><nav class="s-nav"><a class="s-brand" href="#/home"><i></i>${esc(b.name)}</a><div class="s-links">${st.pages.map((p) => `<a href="#/${p.id}" ${p.id === st.currentPage ? 'aria-current="page"' : ''}>${esc(p.name)}</a>`).join('')}</div><a class="btn btn-primary btn-sm" href="#/booking">${esc(c.primary)}</a></nav></div>`;
   }
   function render({ animateId = null, flip = true } = {}) {
     const st = pageModel.get(); const page = pageModel.current();
@@ -1921,11 +2177,12 @@ const renderer = (() => {
     if (flip) [...box.children].forEach((el) => before.set(el.dataset.id, el.getBoundingClientRect().top));
     const existing = new Map([...box.children].map((el) => [el.dataset.id, el]));
     const wanted = page ? page.sections : [];
+    const arrived = [];
     box.querySelector('.frame-empty') && box.querySelector('.frame-empty').remove();
     wanted.forEach((sec, i) => {
       let el = existing.get(sec.id);
-      const hash = JSON.stringify(sec.data) + designKey;
-      if (!el) { el = makeEl(sec); if (sec.id === animateId) el.classList.add('unfold'); }
+      const hash = hashOf(sec, designKey);
+      if (!el) { el = makeEl(sec); if (sec.id === animateId) el.classList.add('unfold'); else if (!document.body.classList.contains('building')) arrived.push(el); }
       else if (el.dataset.hash !== hash) {
         const fresh = makeEl(sec); fresh.classList.add('refresh'); el.replaceWith(fresh); el = fresh;
       }
@@ -1933,6 +2190,7 @@ const renderer = (() => {
       if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null);
     });
     existing.forEach((el) => { if (!el.classList.contains('frame-empty')) el.remove(); });
+    if (arrived.length) requestAnimationFrame(() => prime(arrived));
     if (!wanted.length && document.body.classList.contains('started')) box.insertAdjacentHTML('beforeend', '<div class="frame-empty">Blank canvas · tell Moss what to build</div>');
     if (flip && !reducedMotion.matches) {
       [...box.children].forEach((el) => {
@@ -1959,7 +2217,7 @@ const renderer = (() => {
   function flash(id) { const el = $(`#siteSections [data-id="${id}"]`); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1800 * SPEED); }
   // Used to vet model-written section data: it must render without throwing.
   function validate(type, data) { try { const sec = { type, data }; const html = sectionHTML(sec); return typeof html === 'string' && html.length > 0; } catch (e) { return false; } }
-  return { render, removeSection, flash, validate };
+  return { render, removeSection, flash, validate, replay, motionOn };
 })();
 
 /* =====================================================================
@@ -2406,22 +2664,63 @@ const voice = (() => {
     } catch (e) { return false; }
   }
   async function freshToken() { const r = await fetch('/api/voice-token', { cache: 'no-store' }); if (!r.ok) throw new Error('token ' + r.status); return r.json(); }
-  function closeDg(l) { try { l.mr && l.mr.state !== 'inactive' && l.mr.stop(); } catch (e) {} clearInterval(l.keep); l.mr = null; l.ws = null; }
+  function closeDg(l) {
+    try { l.mr && l.mr.state !== 'inactive' && l.mr.stop(); } catch (e) {}
+    if (l.pcm) { try { l.pcm.node.port.onmessage = null; l.pcm.src.disconnect(); l.pcm.ctx.close(); } catch (e) {} l.pcm = null; }
+    clearInterval(l.keep); l.mr = null; l.ws = null;
+  }
+  /* Spend control: Deepgram bills streamed audio, so the mic is gated on the device. Raw 16 kHz PCM comes from an
+     AudioWorklet in 100 ms chunks; only speech is sent (with 400 ms of pre-roll so first words are not clipped, and
+     1.5 s of trailing audio so Deepgram can find the end of the utterance). Silence sends a KeepAlive instead. */
+  const PCM_WORKLET = `class P extends AudioWorkletProcessor{constructor(o){super();this.size=(o.processorOptions&&o.processorOptions.size)||1600;this.b=new Float32Array(this.size);this.n=0}process(i){const ch=i[0]&&i[0][0];if(ch){for(let k=0;k<ch.length;k++){this.b[this.n++]=ch[k];if(this.n===this.size){let s=0;const o=new Int16Array(this.size);for(let j=0;j<this.size;j++){const v=Math.max(-1,Math.min(1,this.b[j]));s+=v*v;o[j]=v<0?v*32768:v*32767}this.port.postMessage({pcm:o.buffer,rms:Math.sqrt(s/this.size)},[o.buffer]);this.n=0}}}return true}}registerProcessor('moss-pcm',P);`;
+  const GATE = { preroll: 4, hang: 15, minRms: 0.012 };
+  dg.sentMs = 0; dg.skippedMs = 0;
+  async function setupPcm(stream) {
+    if (!window.AudioContext || !window.AudioWorkletNode) return null;
+    let ctx;
+    try {
+      ctx = new AudioContext({ sampleRate: 16000 });
+      const url = URL.createObjectURL(new Blob([PCM_WORKLET], { type: 'application/javascript' }));
+      try { await ctx.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
+      const src = ctx.createMediaStreamSource(stream);
+      const node = new AudioWorkletNode(ctx, 'moss-pcm', { processorOptions: { size: Math.round(ctx.sampleRate / 10) } });
+      const mute = ctx.createGain(); mute.gain.value = 0; // keeps the graph running without playing the mic back
+      src.connect(node); node.connect(mute); mute.connect(ctx.destination);
+      if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+      return { ctx, node, src, rate: ctx.sampleRate };
+    } catch (e) { try { ctx && ctx.close(); } catch (x) {} return null; }
+  }
+  function gatePcm(l, ws) {
+    const pre = []; let hang = 0; let floor = 0.006;
+    l.pcm.node.port.onmessage = (e) => {
+      if (live !== l || ws.readyState !== 1) return;
+      const { pcm, rms } = e.data;
+      const loud = rms > Math.max(GATE.minRms, floor * 3);
+      if (!loud) floor = floor * 0.95 + rms * 0.05; // adapt to the room's noise
+      if (loud) { if (hang <= 0) { pre.forEach((b) => { ws.send(b); dg.sentMs += 100; }); pre.length = 0; } hang = GATE.hang; ws.send(pcm); dg.sentMs += 100; l.voiceAt = Date.now(); }
+      else if (hang > 0) { hang--; ws.send(pcm); dg.sentMs += 100; }
+      else { pre.push(pcm); if (pre.length > GATE.preroll) pre.shift(); dg.skippedMs += 100; }
+    };
+  }
   async function openDeepgram() {
     const l = live; if (!l) return;
     try {
       if (!dg.stream) dg.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
       const cfg = await freshToken();
       if (live !== l) return;
-      const q = new URLSearchParams({ model: cfg.model || 'nova-3', interim_results: 'true', smart_format: 'true', punctuate: 'true', endpointing: '300', utterance_end_ms: '1000', vad_events: 'true', language: lang().toLowerCase().startsWith('en') ? 'en' : 'multi' });
+      const pcm = await setupPcm(dg.stream);
+      if (live !== l) { if (pcm) try { pcm.ctx.close(); } catch (e) {} return; }
+      l.pcm = pcm;
+      const q = new URLSearchParams({ ...(pcm ? { encoding: 'linear16', sample_rate: String(pcm.rate), channels: '1' } : {}), model: cfg.model || 'nova-3', interim_results: 'true', smart_format: 'true', punctuate: 'true', endpointing: '300', utterance_end_ms: '1000', vad_events: 'true', language: lang().toLowerCase().startsWith('en') ? 'en' : 'multi' });
       const ws = new WebSocket(`${cfg.listenUrl || 'wss://api.deepgram.com/v1/listen'}?${q}`, ['bearer', cfg.token]);
       l.ws = ws; active = true;
       ws.onopen = () => {
+        l.keep = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'KeepAlive' })); }, 5000);
+        if (l.pcm) return gatePcm(l, ws);
         const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find((m) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
         const mr = new MediaRecorder(dg.stream, mime ? { mimeType: mime } : undefined); l.mr = mr;
         mr.ondataavailable = (e) => { if (e.data && e.data.size && ws.readyState === 1) ws.send(e.data); };
         mr.start(250);
-        l.keep = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'KeepAlive' })); }, 8000);
       };
       ws.onmessage = (ev) => {
         if (live !== l) return;
@@ -2449,7 +2748,15 @@ const voice = (() => {
     }
   }
   const sentences = (t) => (String(t).match(/[^.!?…]+[.!?…]+["”’)]*\s*|[^.!?…]+$/g) || [t]).map((x) => x.trim()).filter(Boolean);
-  function fetchAudio(text) { return fetch('/api/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) }).then((r) => { if (!r.ok) throw new Error('speak ' + r.status); return r.blob(); }); }
+  const audioCache = new Map(); // sentence → Promise<Blob>: repeated lines ("On it.", the same question) cost nothing
+  function fetchAudio(text) {
+    const k = text.toLowerCase();
+    if (audioCache.has(k)) { const p = audioCache.get(k); audioCache.delete(k); audioCache.set(k, p); dg.cacheHits = (dg.cacheHits || 0) + 1; return p; }
+    const p = fetchSpeech(text); audioCache.set(k, p); p.catch(() => audioCache.delete(k));
+    if (audioCache.size > 40) audioCache.delete(audioCache.keys().next().value);
+    return p;
+  }
+  function fetchSpeech(text) { return fetch('/api/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) }).then((r) => { if (!r.ok) throw new Error('speak ' + r.status); return r.blob(); }); }
   function sayDeepgram(t) { sentences(t).forEach((x) => { const audio = fetchAudio(x); audio.catch(() => {}); dg.tq.push({ text: x, audio, gen: dg.gen }); }); pump(); } // prefetch every sentence; skipped ones may fail quietly
   async function pump() {
     if (dg.playing || !dg.tq.length) return;
@@ -2476,14 +2783,23 @@ const voice = (() => {
     if (!SR && !dg.ready) return false;
     if (live) return true;
     if (rec && active) { try { rec.abort(); } catch (e) {} }
-    live = { h, pending: '', interim: '', timer: null, rec: null, ws: null, mr: null, keep: null, restarts: 0 };
-    if (dg.ready) openDeepgram(); else openLive();
+    live = { h, pending: '', interim: '', timer: null, rec: null, ws: null, mr: null, keep: null, pcm: null, restarts: 0, startedAt: Date.now(), voiceAt: 0 };
+    if (dg.ready) { openDeepgram(); watchIdle(live); } else openLive();
     return true;
+  }
+  // Spend control: a forgotten hot mic turns itself off after a couple of quiet minutes (Deepgram only; ?liveidle=<s> to tune)
+  const IDLE_MS = (Number(new URLSearchParams(location.search).get('liveidle')) || 120) * 1000;
+  function watchIdle(l) {
+    l.idle = setInterval(() => {
+      if (live !== l) return clearInterval(l.idle);
+      const last = Math.max(l.startedAt, l.voiceAt, lastHeardAt, speech.until);
+      if (Date.now() - last > IDLE_MS && !dg.playing && !queue.length) { const h = l.h; stopLive(); h.onIdle && h.onIdle(); }
+    }, Math.min(5000, IDLE_MS / 4));
   }
   function stopLive() {
     if (!live) return;
     const l = live; live = null; active = false;
-    clearTimeout(l.timer);
+    clearTimeout(l.timer); clearInterval(l.idle);
     try { l.rec && l.rec.abort(); } catch (e) {}
     const ws = l.ws; closeDg(l);
     try { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'CloseStream' })); ws && ws.close(); } catch (e) {}
@@ -2528,7 +2844,7 @@ const voice = (() => {
     if (synth) synth.cancel();
     speech.until = Math.min(speech.until, Date.now());
   }
-  return { init, backend: () => (dg.ready ? 'deepgram' : 'browser'), canPushToTalk: () => !!SR, supported: () => !!SR || dg.ready, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
+  return { init, backend: () => (dg.ready ? 'deepgram' : 'browser'), canPushToTalk: () => !!SR, supported: () => !!SR || dg.ready, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), usage: () => ({ sentMs: dg.sentMs, skippedMs: dg.skippedMs, cacheHits: dg.cacheHits || 0, pcm: !!(live && live.pcm) }), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
 })();
 
 const app = (() => {
@@ -2541,7 +2857,7 @@ const app = (() => {
   ];
 
   function setStatus(text, isBusy) { const s = $('#status'); s.classList.toggle('busy', !!isBusy); s.querySelector('span').textContent = text; }
-  function setBusy(v) { busy = v; $$('.send-btn').forEach((b) => (b.disabled = v)); if (!v) { if (typeof isLive !== 'undefined' && isLive) setStatus(`Live${voice.backend() === 'deepgram' ? ' · Deepgram' : ''} · say “stop listening”`, true); else setStatus('Ready', false); idleWaiters.splice(0).forEach((r) => r()); } }
+  function setBusy(v) { busy = v; $$('.send-btn').forEach((b) => (b.disabled = v)); if (!v) { renderStyleDrawer(); if (typeof isLive !== 'undefined' && isLive) setStatus(`Live${voice.backend() === 'deepgram' ? ' · Deepgram' : ''} · say “stop listening”`, true); else setStatus('Ready', false); idleWaiters.splice(0).forEach((r) => r()); } }
 
   function formatText(text) {
     const st = pageModel.get();
@@ -2616,7 +2932,7 @@ const app = (() => {
       ${plan.directions.length ? `<section class="pb-dirs"><h3>Pick a look</h3><div class="pb-dir-row">${plan.directions.map(dirCard).join('')}</div><div class="pb-go">${plan.chosen != null ? `<button type="button" class="btn btn-primary" data-say="Let's start">Let's start</button><button type="button" class="btn btn-secondary" data-say="Build the rest">Build it all</button>` : ''}<span>${plan.chosen != null ? 'Moss builds one section at a time and checks in.' : 'Tap a look or say “the second one”.'}</span></div></section>` : ''}`;
   }
   function renderAll(opts = {}) {
-    renderTabs(opts.enterTab);
+    renderTabs(opts.enterTab); renderMockBar(); renderStyleDrawer();
     renderPlanBoard();
     renderer.render({ animateId: opts.animateId, flip: opts.flip !== false });
     isoScene.render({ enter: opts.enterModule });
@@ -2663,10 +2979,94 @@ const app = (() => {
     await wait(440);
     box.getAnimations().forEach((a) => a.cancel());
   }
+  /* ---- Style drawer (Framer-style global controls) and the section toolbar.
+     Every control sends the same phrase you could say, which runs locally: logged, undoable, no tokens. ---- */
+  function renderStyleDrawer() {
+    const dr = $('#styleDrawer'); const d = pageModel.get().design;
+    $('#styleBtn').hidden = !d;
+    if (!d) { dr.hidden = true; return; }
+    if (dr.hidden) return;
+    const b = d.button || {}, n = d.nav || {};
+    const chip = (label, say, on) => `<button type="button" class="chip" data-say="${esc(say)}" aria-pressed="${!!on}">${esc(label)}</button>`;
+    const sw = d.swatches || {};
+    const roles = [['accent', 'Accent'], ['accent2', 'Second'], ['ink', 'Text'], ['bg', 'Background'], ['inverse', 'Dark']];
+    dr.innerHTML = `<div class="sd-h"><b>Style</b><button type="button" class="icon-btn sd-x" aria-label="Close style">×</button></div>
+      <section><h5>Colours</h5><div class="sw-row">${roles.map(([k, l]) => `<span class="sw" title="${l} ${esc(d.colors[k])}"><i style="background:${esc(d.colors[k])}"></i>${l}</span>`).join('')}</div>
+        ${Object.keys(sw).length ? `<div class="sw-row named">${Object.keys(sw).map((k) => `<button type="button" class="sw" data-say="Use ${esc(k)} for the accent" title="Use ${esc(k)} as the accent"><i style="background:${esc(sw[k])}"></i>${esc(k)}</button>`).join('')}</div>` : ''}
+        <form class="sw-save"><input id="swName" maxlength="24" placeholder="Name the accent, e.g. Ocean" aria-label="Swatch name"><button type="submit" class="chip">Save</button></form></section>
+      <section><h5>Motion</h5><div class="chips">${chip('None', 'No animations', d.motion === 'none')}${chip('Calm', 'Add some animation', d.motion === 'calm')}${chip('Lively', 'Make it lively', d.motion === 'lively')}${chip('Replay', 'Replay the animation', false)}</div></section>
+      <section><h5>Buttons</h5><div class="chips">${['solid', 'outline', 'soft', 'ghost'].map((x) => chip(cap(x), `${cap(x)} buttons`, b.style === x)).join('')}</div>
+        <div class="chips">${[['s', 'Small', 'Smaller buttons'], ['m', 'Medium', 'Normal buttons'], ['l', 'Large', 'Bigger buttons']].map(([k, l, say]) => chip(l, say, b.size === k)).join('')}</div>
+        <div class="chips"><span class="lbl">Hover</span>${['lift', 'glow', 'fill', 'underline'].map((x) => chip(cap(x), `${cap(x)} on hover`, b.hover === x)).join('')}</div></section>
+      <section><h5>Navigation</h5><div class="chips">${['bar', 'floating', 'minimal', 'centered'].map((x) => chip(cap(x), `${cap(x)} nav`, n.style === x)).join('')}${chip('Sticky', n.sticky ? 'Unstick the nav' : 'Sticky nav', n.sticky)}</div></section>
+      <p class="sd-tip">Or just say it: “glow on hover”, “floating nav”, “dark background on the FAQ”.</p>`;
+  }
+  function toggleStyleDrawer(open) {
+    const dr = $('#styleDrawer'); dr.hidden = open == null ? !dr.hidden : !open;
+    $('#styleBtn').setAttribute('aria-expanded', String(!dr.hidden));
+    // sit at the canvas's right edge, never over the chat (phones use the bottom sheet from CSS)
+    dr.style.right = innerWidth > 720 ? Math.max(16, innerWidth - $('.canvas').getBoundingClientRect().right + 16) + 'px' : '';
+    renderStyleDrawer();
+  }
+  function showSectionBar(secEl) {
+    const bar = $('#secBar');
+    if (!secEl) { bar.hidden = true; $$('#siteSections .sec.picked').forEach((x) => x.classList.remove('picked')); return; }
+    const sec = pageModel.section(pageModel.get().currentPage, secEl.dataset.id); if (!sec) return;
+    $$('#siteSections .sec.picked').forEach((x) => x.classList.remove('picked')); secEl.classList.add('picked');
+    const L = SECTION_META[sec.type].label; const st = sec.style || {};
+    const photoOk = MossSite.hasPhotoSlot(sec, pageModel.get().design) || PHOTO_SLOT[sec.type];
+    const b = (label, say, on) => `<button type="button" data-say="${esc(say)}" aria-pressed="${!!on}">${esc(label)}</button>`;
+    bar.innerHTML = `<span class="sb-l">${esc(L)}</span>${b('Dark', `Dark background on the ${L}`, st.fill === 'inverse')}${b('Accent', `Accent background on the ${L}`, st.fill === 'accent')}${b('Plain', `Plain background on the ${L}`, !st.fill || st.fill === 'bg')}<i></i>${b('Roomy', `More space around the ${L}`, st.padding === 'roomy')}${b('Tight', `Less space around the ${L}`, st.padding === 'tight')}<i></i>${b('Round', `Round the ${L} corners`, st.radius > 0)}${b('Square', `Square the ${L} corners`, st.radius === 0)}${b('Center', `Center the ${L}`, st.align === 'center')}${photoOk ? `<i></i><button type="button" data-photo="${sec.id}">Photo</button>` : ''}`;
+    bar.hidden = false;
+    const fr = $('#frame').getBoundingClientRect(), r = secEl.getBoundingClientRect();
+    bar.style.top = Math.max(44, r.top - fr.top + 10) + 'px';
+  }
+  /* ---- A/B/C mock switcher in the frame bar (clicks go through the chat, so they're logged and undoable; no tokens) ---- */
+  function renderMockBar() {
+    const bar = $('#mockBar'); const m = pageModel.get().mocks;
+    bar.hidden = !m;
+    if (!m) { bar.innerHTML = ''; return; }
+    bar.innerHTML = `<span class="mb-l">${esc(m.source || 'Mocks')}</span>${m.looks.map((lk, i) => `<button type="button" data-say="Show me ${'ABC'[i]}" aria-pressed="${i === m.active}" title="${esc(lk.name)}: ${esc(lk.why)}">${'ABC'[i]}<span>${esc(lk.name)}</span></button>`).join('')}<button type="button" class="keep" data-say="Keep this one">Keep</button>`;
+  }
+  /* ---- photos: resized on the device; never sent to Moss ---- */
+  let photoTarget = null;
+  function readPhoto(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !/^image\/(jpeg|png|webp|gif|heic|heif|avif)/.test(file.type)) return reject(new Error('not an image'));
+      const url = URL.createObjectURL(file); const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(img.naturalWidth * k)); cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+        resolve(cv.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unreadable image')); };
+      img.src = url;
+    });
+  }
+  const PHOTO_SLOT = { hero: 'editorial', cta: 'split', features: 'bento' };
+  async function placePhoto(target, file) {
+    if (!target || busy) return;
+    const sec = pageModel.section(target.page, target.id); if (!sec) return;
+    let image; try { image = await readPhoto(file); } catch (e) { setStatus('That file is not a photo', false); return; }
+    const variant = MossSite.hasPhotoSlot(sec, pageModel.get().design) ? undefined : PHOTO_SLOT[sec.type];
+    if (!MossSite.hasPhotoSlot(sec, pageModel.get().design) && !variant) { setStatus('This section has no photo slot', false); return; }
+    await runLocal(`Photo added to the ${SECTION_META[sec.type].label.toLowerCase()}.`, [{ op: 'setPhoto', page: target.page, id: target.id, image, variant }]);
+  }
+  /** Apply ops straight from a control (no chat turn, no tokens), with undo. */
+  async function runLocal(reply, ops) {
+    if (busy) return;
+    setBusy(true);
+    const msg = addAgent(); msg.querySelector('.typing').remove();
+    msg.querySelector('.text').textContent = reply;
+    pageModel.snapshot();
+    for (const op of ops) await applyOp(op, msg);
+    setBusy(false);
+  }
   function rememberDirection(id) {
     try { const k = 'moss-recent-directions'; const list = JSON.parse(localStorage.getItem(k) || '[]').filter((x) => x !== id); list.unshift(id); localStorage.setItem(k, JSON.stringify(list.slice(0, 4))); } catch (e) {}
   }
-  const MUTATING = new Set(['startPlan', 'askQuestion', 'setBrief', 'setPlan', 'chooseDirection', 'suggestNext', 'dismissDrafts', 'resetPage', 'resetSite', 'setBusiness', 'setDesign', 'addPage', 'addSection', 'updateSection', 'setOrder', 'deleteSection', 'deletePage', 'setPalette', 'addLink', 'addFlow']);
+  const MUTATING = new Set(['setSectionStyle', 'setMocks', 'chooseMock', 'keepMock', 'setPhoto', 'startPlan', 'askQuestion', 'setBrief', 'setPlan', 'chooseDirection', 'suggestNext', 'dismissDrafts', 'resetPage', 'resetSite', 'setBusiness', 'setDesign', 'addPage', 'addSection', 'updateSection', 'setOrder', 'deleteSection', 'deletePage', 'setPalette', 'addLink', 'addFlow']);
   async function applyOp(op, msgEl) {
     const st = pageModel.get();
     switch (op.op) {
@@ -2756,7 +3156,8 @@ const app = (() => {
       case 'resetSite': {
         const done = logLine(msgEl, 'site', 'cleared everything');
         await fadePage();
-        Object.assign(st, { business: null, design: null, plan: null, drafts: [], palette: 'ice', pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
+        Object.assign(st, { business: null, design: null, plan: null, drafts: [], mocks: null, palette: 'ice', pages: [], currentPage: 'home', links: [], flows: [], pagePos: {} });
+        renderMockBar();
         history.replaceState(null, '', '#/home');
         $('#siteSections').dataset.page = '';
         isoScene.reset(); renderAll({ flip: false }); sound.play('click');
@@ -2808,11 +3209,57 @@ const app = (() => {
         renderNextCard(msgEl);
         flowCanvas.render(); sound.play('chime'); await wait(300); break;
       }
+      case 'setSectionStyle': {
+        const sec = pageModel.section(op.page, op.id); if (!sec) break;
+        if (st.currentPage !== op.page) navigate(op.page);
+        sec.style = Object.assign({}, sec.style || {}, op.style);
+        Object.keys(sec.style).forEach((k) => { if (sec.style[k] == null) delete sec.style[k]; });
+        const done = logLine(msgEl, 'style', `${SECTION_META[sec.type].label.toLowerCase()} · ${Object.entries(op.style).map(([k, v]) => `${k} ${v == null ? 'reset' : v}`).join(', ')}`);
+        renderer.render({ flip: false }); scrollToSection(op.id); sound.play('click'); await wait(450); renderer.flash(op.id); done(); break;
+      }
+      case 'pickPhoto': {
+        const sec = pageModel.section(op.page, op.id); if (!sec) break;
+        photoTarget = { page: op.page, id: op.id };
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'chip photo-pick'; b.textContent = 'Choose a photo';
+        b.addEventListener('click', () => { photoTarget = { page: op.page, id: op.id }; $('#photoInput').click(); });
+        msgEl.querySelector('.body').appendChild(b);
+        try { $('#photoInput').click(); } catch (e) { /* needs a tap: the button above does it */ }
+        break;
+      }
+      case 'setPhoto': {
+        const sec = pageModel.section(op.page, op.id); if (!sec) break;
+        if (st.currentPage !== op.page) navigate(op.page);
+        sec.data.image = op.image;
+        if (op.variant) sec.data.variant = op.variant;
+        const done = logLine(msgEl, 'photo', SECTION_META[sec.type].label.toLowerCase());
+        renderer.render({ flip: false }); scrollToSection(op.id); sound.play('rise'); await wait(400); renderer.flash(op.id); done(); break;
+      }
+      case 'replayMotion': { await wait(150); renderer.replay(); break; }
+      case 'setMocks': {
+        st.mocks = { source: op.source, looks: op.looks, active: 0 };
+        st.design = MossSite.sanitizeDesign(op.looks[0], null, { seed: st.business && st.business.name });
+        rememberDirection(st.design.direction);
+        logLine(msgEl, 'mocks', `${op.looks.length} looks · ${op.looks.map((x) => x.name.toLowerCase()).join(' / ')}`)();
+        renderMockBar(); renderer.render({ flip: false }); isoScene.render(); break;
+      }
+      case 'chooseMock': {
+        const lk = st.mocks && st.mocks.looks[op.index]; if (!lk) break;
+        st.mocks.active = op.index;
+        // keep refinements the user already made (buttons, nav, motion) when flipping looks
+        const keep = st.design ? { button: st.design.button, nav: st.design.nav, swatches: st.design.swatches } : {};
+        st.design = MossSite.sanitizeDesign(lk, keep.button ? { button: keep.button, nav: keep.nav, swatches: keep.swatches } : null, { seed: st.business && st.business.name });
+        const done = logLine(msgEl, 'mock', `${'ABC'[op.index]} · ${lk.name.toLowerCase()}`);
+        renderMockBar(); renderer.render({ flip: false }); isoScene.render(); renderer.replay(); sound.play('rise'); await wait(450); done(); break;
+      }
+      case 'keepMock': { if (st.mocks) { st.mocks = null; renderMockBar(); logLine(msgEl, 'mock', 'kept')(); } break; }
       case 'dismissDrafts': { st.drafts = []; flowCanvas.render(); $$('.next-card').forEach((c) => c.classList.add('dismissed')); break; }
       case 'setDesign': {
         st.design = MossSite.sanitizeDesign(op.design, st.design, { seed: st.business && st.business.name });
         rememberDirection(st.design.direction);
-        const done = logLine(msgEl, 'style', `${st.design.name.toLowerCase()} · ${st.design.type.display.toLowerCase()}`);
+        // a whole look names itself; a tweak (motion, buttons, nav, a swatch) says what changed
+        const tweak = !op.design.direction && Object.keys(op.design).every((k) => ['motion', 'button', 'nav', 'swatches', 'colors'].includes(k));
+        const what = tweak ? Object.entries(op.design).map(([k, v]) => (v && typeof v === 'object' ? Object.entries(v).map(([k2, v2]) => `${k === 'colors' ? k2 : k + ' ' + k2} ${v2}`).join(', ') : `${k} ${v}`)).join(', ') : `${st.design.name.toLowerCase()} · ${st.design.type.display.toLowerCase()}`;
+        const done = logLine(msgEl, 'style', what);
         renderer.render({ flip: false }); isoScene.render(); sound.play('rise'); await wait(500); done(); break;
       }
       case 'setPalette': {
@@ -2913,6 +3360,7 @@ const app = (() => {
       onUtterance: (heard) => { handleUtterance(heard); },
       onError: (err) => { if (/not-allowed|service-not-allowed/.test(err)) setStatus('Mic blocked', false); },
       onStop: () => { setLive(false); sound.play('click'); },
+      onIdle: () => { const m = addAgent(); m.querySelector('.typing').remove(); m.querySelector('.text').textContent = 'Mic off after a quiet couple of minutes. Tap the mic to pick up again.'; setStatus('Ready', false); },
     });
     if (ok) { setLive(true); sound.play('click'); }
   }
@@ -2984,7 +3432,22 @@ const app = (() => {
     const t = turn = { controller: new AbortController(), aborted: false };
     let res;
     const ack = spoken ? setTimeout(() => { if (!t.aborted && voice.quietFor() > 1500) voice.speak('On it.'); }, 2500) : null; // fill a slow Moss turn, quietly
-    try { res = await agent.respond(text, pageModel.get(), { signal: t.controller.signal, live: isLive, mode: opts.mode }); }
+    // "Mock up joesplumbing.com": read the site first, then Moss redesigns it from the facts
+    const site = agent.siteIn(text); let scraped = null, scrapeErr = null;
+    if (site) {
+      setStatus(`Reading ${site}`, true);
+      const done = logLine(msg, 'read', site);
+      try {
+        const r = await fetch('/api/scrape?url=' + encodeURIComponent(site), { signal: t.controller.signal });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+        scraped = j; done(); setStatus('Designing three looks', true);
+      } catch (e) { if (e.name !== 'AbortError') scrapeErr = /^HTTP|Failed to fetch|NetworkError|Load failed/.test(e.message) ? 'reading sites only works on the deployed builder' : e.message; }
+    }
+    try {
+      if (scrapeErr) res = { reply: `I couldn't read ${site}: ${scrapeErr.replace(/\.$/, '')}. Tell me about the business instead, or try another address.`, ops: [], suggestions: ['Let\'s plan it out together'] };
+      else res = await agent.respond(text, pageModel.get(), { signal: t.controller.signal, live: isLive, mode: scraped ? 'mock' : opts.mode, scraped });
+    }
     catch (err) { res = { reply: 'Something went wrong on my side. Try that again?', ops: [] }; console.error(err); }
     clearTimeout(ack);
     msg.querySelector('.typing').remove();
@@ -3082,6 +3545,23 @@ const app = (() => {
     $('#examples').innerHTML = EXAMPLES.map(([k, t]) => `<button class="chip" type="button" data-t="${esc(t)}"><span class="mono">${esc(k.toUpperCase())}</span>${esc(t)}</button>`).join('');
     $$('#examples .chip').forEach((b) => b.addEventListener('click', () => send(b.dataset.t, { mode: 'autopilot' })));
     $('#planBoard').addEventListener('click', (e) => { const b = e.target.closest('[data-say]'); if (b && !busy) send(b.dataset.say); });
+    // mocks, style drawer and section toolbar: their buttons say a phrase that runs locally
+    ['#mockBar', '#styleDrawer', '#secBar'].forEach((sel) => $(sel).addEventListener('click', (e) => {
+      if (e.target.closest('.sd-x')) return toggleStyleDrawer(false);
+      const ph = e.target.closest('[data-photo]'); if (ph) { photoTarget = { page: pageModel.get().currentPage, id: ph.dataset.photo }; return $('#photoInput').click(); }
+      const b = e.target.closest('[data-say]'); if (b && !busy) send(b.dataset.say);
+    }));
+    $('#styleDrawer').addEventListener('submit', (e) => { e.preventDefault(); const v = $('#swName').value.trim(); if (v && !busy) send(`Save this colour as ${v}`); });
+    $('#styleBtn').addEventListener('click', () => toggleStyleDrawer());
+    $('#photoInput').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; const tgt = photoTarget; e.target.value = ''; if (f) placePhoto(tgt, f); });
+    $('#siteSections').addEventListener('click', (e) => {
+      const ph = e.target.closest('.photo-btn'); if (ph) { e.preventDefault(); photoTarget = { page: pageModel.get().currentPage, id: ph.dataset.photo }; return $('#photoInput').click(); }
+      if (e.target.closest('a, button, summary, details')) return;
+      const sec = e.target.closest('.sec'); showSectionBar(sec && !sec.classList.contains('picked') ? sec : null);
+    });
+    $('#siteSections').addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); const sec = e.target.closest('.sec'); $$('#siteSections .sec.drop').forEach((x) => x !== sec && x.classList.remove('drop')); sec && sec.classList.add('drop'); } });
+    $('#siteSections').addEventListener('dragleave', (e) => { const sec = e.target.closest('.sec'); if (sec && !sec.contains(e.relatedTarget)) sec.classList.remove('drop'); });
+    $('#siteSections').addEventListener('drop', (e) => { const sec = e.target.closest('.sec'); $$('#siteSections .sec.drop').forEach((x) => x.classList.remove('drop')); const f = e.dataTransfer && e.dataTransfer.files[0]; if (!sec || !f) return; e.preventDefault(); placePhoto({ page: pageModel.get().currentPage, id: sec.dataset.id }, f); });
     $('#messages').addEventListener('click', (e) => { const b = e.target.closest('.next-card [data-say]'); if (b && !b.disabled && !busy) send(b.dataset.say); });
     const ii = $('#introInput');
     $('#introForm').addEventListener('submit', (e) => { e.preventDefault(); const v = ii.value; ii.value = ''; send(v); setTimeout(() => $('#chatInput').focus(), 50); });
