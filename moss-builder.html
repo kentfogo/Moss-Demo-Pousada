@@ -3038,7 +3038,8 @@ const app = (() => {
     const bar = $('#mockBar'); const m = pageModel.get().mocks;
     bar.hidden = !m;
     if (!m) { bar.innerHTML = ''; return; }
-    bar.innerHTML = `<span class="mb-l">${esc(m.source || 'Mocks')}</span>${m.looks.map((lk, i) => `<button type="button" data-say="Show me ${'ABC'[i]}" aria-pressed="${i === m.active}" title="${esc(lk.name)}: ${esc(lk.why)}">${'ABC'[i]}<span>${esc(lk.name)}</span></button>`).join('')}<button type="button" class="keep" data-say="Keep this one">Keep</button>`;
+    const host = String(m.source || 'Mocks').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+    bar.innerHTML = `<span class="mb-l">${esc(host)}</span>${m.looks.map((lk, i) => `<button type="button" data-say="Show me ${'ABC'[i]}" aria-pressed="${i === m.active}" title="${esc(lk.name)}: ${esc(lk.why)}">${'ABC'[i]}<span>${esc(lk.name)}</span></button>`).join('')}<button type="button" class="keep" data-say="Keep this one">Keep</button>`;
   }
   /* ---- photos: resized on the device; never sent to Moss ---- */
   let photoTarget = null;
@@ -3481,6 +3482,8 @@ const app = (() => {
       turn = null; setBusy(false); return;
     }
     turn = null;
+    // a fresh set of mocks: show it from the top, with its entrance
+    if (ops.some((o) => o.op === 'setMocks')) { $('#pageView').scrollTo({ top: 0, behavior: 'instant' }); renderer.replay(); }
     const curP = pageModel.current(); isoScene.setActive(curP && curP.sections.length ? curP.sections[curP.sections.length - 1].id : null);
     if (building) { await wait(700); document.body.classList.remove('building'); }
     const logEl = msg.querySelector('.log');
