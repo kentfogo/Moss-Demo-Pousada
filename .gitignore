@@ -4,3 +4,4 @@
 .DS_Store
 screenshots/test-*.png
 screenshots/variety/
+node_modules/
