@@ -2400,8 +2400,8 @@ const voice = (() => {
     if (!/^https?:$/.test(location.protocol) || new URLSearchParams(location.search).has('browservoice') || !navigator.mediaDevices || !window.MediaRecorder) return false;
     try {
       const r = await fetch('/api/voice-token', { cache: 'no-store' });
-      if (!r.ok) return false;
-      const j = await r.json(); if (!j.token) return false;
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.token) { dg.speakOnly = !!j.speak; return false; } // key set but can't mint tokens: browser listening, Aura speaking
       dg.cfg = j; dg.ready = true; return true;
     } catch (e) { return false; }
   }
@@ -2511,7 +2511,7 @@ const voice = (() => {
     speech.text = (now < speech.until ? speech.text + ' ' : '') + t;
     speech.until = Math.max(speech.until, now) + est;
   }
-  function say(t) { if (dg.ready && dg.tts) sayDeepgram(t); else sayBrowser(t); }
+  function say(t) { if ((dg.ready || dg.speakOnly) && dg.tts) sayDeepgram(t); else sayBrowser(t); }
   function sayBrowser(t) {
     if (!synth) return;
     const u = new SpeechSynthesisUtterance(t);

@@ -136,6 +136,18 @@ function fakes() {
   check('no Deepgram key: browser speech is used', (await p2.evaluate(() => window.moss.voice.backend())) === 'browser');
   await ctx2.close();
 
+  // key set but its role can't mint tokens: browser listening, Aura still speaks
+  const ctx3 = await browser.newContext();
+  await ctx3.addInitScript(fakes);
+  await ctx3.route('**/api/voice-token', (r) => r.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"Deepgram token request failed (403)","speak":true}' }));
+  const p3 = await ctx3.newPage(); await p3.goto(`${base}/?speed=0.03`);
+  await p3.waitForFunction(() => document.body.dataset.voice);
+  const before = spoken.length;
+  await p3.evaluate(() => window.moss.voice.speak('Still my own voice.'));
+  await p3.waitForTimeout(800);
+  check('token refused (403): listens with the browser but still speaks with Aura', (await p3.evaluate(() => window.moss.voice.backend())) === 'browser' && spoken.length > before && (await p3.evaluate(() => window.__browserSpoken.length)) === 0);
+  await ctx3.close();
+
   await browser.close(); server.close();
   const failed = results.filter((x) => !x).length;
   console.log(`\n${results.length - failed}/${results.length} passed`);
