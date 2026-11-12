@@ -48,6 +48,13 @@ const SCRIPTS = {
     [450, 'op', { op: sec('faq', { eyebrow: 'FAQ', title: 'Good to know', items: [['Open Sunday?', 'Yes.'], ['Delivery?', 'Leeds only.'], ['Pre-order?', 'Yes.'], ['Cash?', 'Card only.']] }) }],
     [460, 'done', { streamed: true, split: true }],
   ],
+  // a planning question streamed from the worker: the first sentence is spoken before the rest has been written
+  planspeak: [
+    [0, 'replyPart', { text: 'Let\'s plan' }],
+    [20, 'replyPart', { text: 'Let\'s plan this out together. Who' }],
+    [700, 'reply', { reply: 'Let\'s plan this out together. Who is it for?' }],
+    [710, 'done', { streamed: true }],
+  ],
   // a parallel build: the writers' sections land together
   burst: [
     [0, 'reply', { reply: 'Building Crumb.' }],
@@ -76,7 +83,7 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       const body = JSON.parse(b); if (body.warm) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"warm":false}'); }
       seen.push({ body, accept: req.headers.accept });
-      const key = body.mode === 'mock' ? 'mock' : /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' :  /explode/.test(body.message) ? 'fail' :  /burst/.test(body.message) ? 'burst' : /brokeoff/.test(body.message) ? 'brokeoff' : /dropit/.test(body.message) ? 'drop' : /notset/.test(body.message) ? 'notset' : /streamy/.test(body.message) ? 'parts' : 'build';
+      const key = body.mode === 'mock' ? 'mock' : /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' :  /explode/.test(body.message) ? 'fail' :  /burst/.test(body.message) ? 'burst' : /planspeak/.test(body.message) ? 'planspeak' : /brokeoff/.test(body.message) ? 'brokeoff' : /dropit/.test(body.message) ? 'drop' : /notset/.test(body.message) ? 'notset' : /streamy/.test(body.message) ? 'parts' : 'build';
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const t0 = Date.now(); const send = (ev, data) => res.write(`event: ${ev}\ndata: ${JSON.stringify({ ...data, t: Date.now() - t0 })}\n\n`);
       send('hello', {});
@@ -219,6 +226,18 @@ const server = http.createServer((req, res) => {
   const report = await pv.evaluate(() => window.moss.latency.voiceReport());
   check('voice report: p50/p95 per stage and each turn, ready to paste', /Voice to voice/.test(report) && /hearing you finish/.test(report) && /speech synthesis/.test(report) && /mic level \(true end\)/.test(report) && /^- \d/m.test(report), report.split('\n').slice(0, 3).join(' | '));
   await pv.close();
+
+  // spoken replies start with the first finished sentence, not the whole reply
+  const ps = await browser.newPage(); await ps.goto(`${base}/?speed=0.03`);
+  await ps.evaluate(() => { window.__said = []; const S = window.speechSynthesis; S.speak = (u) => { window.__said.push({ t: u.text, at: performance.now() }); setTimeout(() => u.onend && u.onend(), 20); }; });
+  const tS = await ps.evaluate(() => { window.moss.app.send('planspeak a bakery', { voice: true }); return performance.now(); });
+  await ps.waitForTimeout(400);
+  const saidEarly = await ps.evaluate(() => window.__said.map((x) => x.t));
+  await ps.evaluate(() => window.moss.app.whenIdle()); await ps.waitForTimeout(300);
+  const saidAll = await ps.evaluate(() => window.__said.map((x) => x.t));
+  check('voice: the first finished sentence is spoken before the full reply arrives', saidEarly.includes('Let\'s plan this out together.') && !saidEarly.some((x) => /Who is it for/.test(x)), JSON.stringify(saidEarly));
+  check('voice: the rest follows, and nothing is said twice', saidAll.join(' ') === 'Let\'s plan this out together. Who is it for?', JSON.stringify(saidAll));
+  await ps.close();
 
   // fallback notices say what actually happened
   const pf = await browser.newPage(); await pf.goto(`${base}/?speed=0.03`);

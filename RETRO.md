@@ -57,6 +57,8 @@ For the next session. The work started on branch `claude/relaxed-fermat-rr1j2j` 
 - **Degenerate generations:** one worker reply ran to 900 tokens without ever forming JSON (15,910 characters), and the turn failed after 11.6 s. One writer per ~6 builds also fails (it falls back to a default section). Idea: if the first ~200 characters contain no `{`, stop the stream and retry once.
 - **Simpler waterfall (done):** headline tiles (Retrieval, Moss first token, Inference, Reply on screen) and a few plain rows; raw spans under "All steps".
 
+- **Planning questions stream (done):** the stream scanner (`api/_jsonScan.js`) sends the worker's reply words as they're written (`replyPart`), for turns without a talker (planning). On voice turns, each finished sentence is spoken as soon as it's complete. Live: first words ~30 ms after Moss's first token. That first token varied 107–500 ms on planning prompts with 5,600 tokens cached.
+- **Echo fix (done):** on speakers, Chrome's recognizer delivered Moss's own sentence 1–2 s after Moss stopped, so Moss answered itself. The page now remembers 6 s of Moss's speech and cuts a leading run of her words (in order) from what was heard.
 - **Degenerate-stream retry (done):** `degenerate()` in `api/agent.js` flags a worker reply that shows no JSON in 200 characters, runs 200+ whitespace characters, or loops a short pattern 40+ times. The stream is cancelled at once (so Moss stops generating) and retried once if no op has reached the page yet. If some have, the turn ends with what was applied. `MOSS_DEGENERATE_RETRY=off` disables the retry. No false positives across 5 live turns and 4 builds. Section writers aren't streamed; they keep their per-type caps and fall back to a default section.
 
 **Next:**

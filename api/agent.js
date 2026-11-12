@@ -379,6 +379,7 @@ export async function callMoss({ message, state, history, directions, recentDire
         content += d;
         for (const ev of scan.push(d)) {
           if (ev.type === 'reply') { sent.reply = true; emit('reply', { reply: ev.text }); }
+          else if (ev.type === 'replyPart') emit('replyPart', { text: ev.text }); // the reply's words as they are written
           else { sent.ops++; emit('op', { op: ev.op }); }
         }
         if ((broken = degenerate(content))) break; // stops the stream (and Moss) right away
@@ -614,6 +615,7 @@ export default async function handler(req, res) {
       }) : null;
       const onEvent = (ev, data) => {
         if (ev === 'reply') { if (replied || (split && !data.reply)) return; replied = true; }
+        if (ev === 'replyPart' && (replied || split)) return; // with a talker, its words are the reply
         if (ev === 'op' && fan) return fan.push(data.op);
         send(ev, data);
       };

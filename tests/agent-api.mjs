@@ -211,7 +211,10 @@ const { createScanner } = await import('../api/_jsonScan.js');
 const sc2 = createScanner(); const evs = [];
 const whole = 'Sure!\n```json\n' + JSON.stringify({ reply: 'He said "hi" \\ {ok}', ops: [{ op: 'a', x: '} ] {' }, { op: 'b', y: [1, { z: 2 }] }], after: 'x' }) + '\n``` trailing { "reply": "no" }';
 for (const ch of whole) evs.push(...sc2.push(ch));
-check('scanner: reply as soon as its string closes, each op as it closes, braces in strings ignored', evs.length === 3 && evs[0].type === 'reply' && evs[0].text === 'He said "hi" \\ {ok}' && evs[1].op.x === '} ] {' && evs[2].op.y[1].z === 2, JSON.stringify(evs));
+const partsS = evs.filter((e) => e.type === 'replyPart').map((e) => e.text);
+check('scanner: while the reply is written, its words so far (whole words, decoded), each longer, all before the reply', partsS.length >= 3 && partsS.every((p, i) => 'He said "hi" \\ {ok}'.startsWith(p) && (i === 0 || p.length > partsS[i - 1].length)) && evs.findIndex((e) => e.type === 'reply') > evs.findIndex((e) => e.type === 'replyPart') && !evs.slice(evs.findIndex((e) => e.type === 'reply')).some((e) => e.type === 'replyPart'), JSON.stringify(partsS));
+const evMain = evs.filter((e) => e.type !== 'replyPart');
+check('scanner: reply as soon as its string closes, each op as it closes, braces in strings ignored', evMain.length === 3 && evMain[0].type === 'reply' && evMain[0].text === 'He said "hi" \\ {ok}' && evMain[1].op.x === '} ] {' && evMain[2].op.y[1].z === 2, JSON.stringify(evMain));
 const sseRes = () => { const r = { code: 0, headers: {}, chunks: [], ended: false }; r.status = (c) => ((r.code = c), r); r.json = (b) => ((r.body = b), r); r.setHeader = (k, v) => (r.headers[k.toLowerCase()] = v); r.write = (c) => r.chunks.push(c); r.end = () => (r.ended = true); r.flushHeaders = () => {}; return r; };
 const parseSSE = (chunks) => chunks.join('').split('\n\n').filter(Boolean).map((b) => ({ event: (b.match(/^event: (.*)$/m) || [])[1], data: JSON.parse((b.match(/^data: (.*)$/m) || [])[1]) }));
 Object.assign(process.env, env('moss-test'));
@@ -234,6 +237,8 @@ check('talker and worker both show in the waterfall, with token usage incl. cach
 const tCalls = seen.filter((x) => /^You are the voice/.test(x.json.messages[0].content)).length;
 sr = sseRes(); await handler({ method: 'POST', headers: { host: 'a.app', accept: 'text/event-stream' }, body: { message: 'I run a bakery', state: { pages: [] } } }, sr);
 check('talker: not used while planning (the reply carries the question)', seen.filter((x) => /^You are the voice/.test(x.json.messages[0].content)).length === tCalls && parseSSE(sr.chunks).filter((e) => e.event === 'reply').length === 1);
+{ const evP = parseSSE(sr.chunks); const pNames = evP.map((e) => e.event); const pParts = evP.filter((e) => e.event === 'replyPart').map((e) => e.data.text); const fin = evP.find((e) => e.event === 'reply').data.reply;
+  check('planning: the question streams to the page as Moss writes it (replyPart from the worker)', pParts.length >= 2 && pParts.every((p) => fin.startsWith(p)) && pNames.indexOf('replyPart') < pNames.indexOf('reply'), JSON.stringify(pParts)); }
 process.env.MOSS_MODEL = 'nostream';
 sr = sseRes(); await handler({ method: 'POST', headers: { host: 'a.app', accept: 'text/event-stream' }, body: { message: 'add a faq', state: home } }, sr);
 ev = parseSSE(sr.chunks);

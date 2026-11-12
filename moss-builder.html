@@ -3965,22 +3965,31 @@ const app = (() => {
     const squash = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const queue = []; let wake = null, ended = false, replyText = null, replyShown = null, snap = false, building = false, total = 0;
     const doneOps = []; let oneShot = false; // one-shot answers (offline agent, non-streamed) keep the full build animation
-    let partShown = ''; // the talker's words shown so far, as they streamed in
+    let partShown = ''; // the reply's words shown so far, as they streamed in (talker or worker)
+    // spoken turns: each sentence is spoken as soon as it is complete, not when the whole reply has arrived
+    let spokenUpTo = 0;
+    const speakReady = (text, all) => {
+      if (!spoken || t.aborted) return;
+      const rest = text.slice(spokenUpTo);
+      const ready = all ? rest : (rest.match(/^[\s\S]*?[.!?…]["”’)]*(?=\s)/) || [''])[0];
+      if (ready.trim()) { voice.speak(ready.trim()); spokenUpTo += ready.length; }
+    };
     const onReplyPart = (part) => {
       if (replyText != null || t.aborted || !part || !part.trim()) return;
       clearTimeout(ack);
       const typing = msg.querySelector('.typing'); if (typing) typing.remove();
       if (!partShown) L.mark('reply shown', 'apply', performance.now());
       partShown = part; const el = msg.querySelector('.text'); el.textContent = part; setPanel(part);
+      speakReady(part, false);
     };
     const onReply = (r) => {
       if (replyText != null || t.aborted) return;
       clearTimeout(ack);
       replyText = r || '';
       const typing = msg.querySelector('.typing'); if (typing) typing.remove();
-      if (spoken && replyText) voice.speak(replyText);
       // carry on from the streamed words when they are the start of the final reply
       const from = partShown && replyText.startsWith(partShown.trimEnd()) ? partShown.trimEnd().length : 0;
+      if (spoken && replyText) speakReady(replyText, true); // say what's left (never a sentence twice)
       replyShown = stream(msg.querySelector('.text'), replyText, t, from);
       if (!partShown) L.mark('reply shown', 'apply', performance.now());
     };
