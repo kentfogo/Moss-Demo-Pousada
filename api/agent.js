@@ -396,7 +396,10 @@ export function usageMeta(u) {
    ops) is still being written. Tiny fixed prompt → short time to first token, and its prefix is always cached. */
 export const TALKER_PROMPT = `You are the voice of Moss, a website builder working live with the user on their landing page. Reply with ONE short spoken sentence, under 14 words, saying what you are about to do for their request, like "Sure, adding a FAQ to your home page." or "On it, making the headline punchier." Plain words only: no questions, no lists, no markdown, no emoji, no promises of details you don't know. If the request is unclear, say "Let me take a look at that."`;
 export const SPLIT_PHASES = ['edit', 'guided', 'autobuild', 'mock'];
-export async function talk({ message, state, mode }, env = process.env, fetchImpl = fetch, tr) {
+/** The talker's text as far as it has come: plain, one line, without wrapping quotes. */
+export const cleanTalk = (t) => String(t || '').replace(/\s+/g, ' ').replace(/^\s*["'“]/, '').replace(/["'”]\s*$/, '').trimStart().slice(0, 160);
+/** onPart(textSoFar): called as the talker's words arrive (the page shows them at once). */
+export async function talk({ message, state, mode }, env = process.env, fetchImpl = fetch, tr, onPart) {
   const { token, base, model } = mossSettings(env);
   const site = state && state.business && state.business.name ? `Site: ${state.business.name}${state.business.kind ? ` (${state.business.kind})` : ''}.` : 'Site: a new one.';
   const body = { model: env.MOSS_TALKER_MODEL || model, messages: [{ role: 'system', content: TALKER_PROMPT }, { role: 'user', content: `${site}${mode === 'mock' ? ' They asked for a redesign of their existing site.' : ''} Request: ${message}` }], max_tokens: 40, temperature: 0.3, stream: true };
@@ -409,9 +412,10 @@ export async function talk({ message, state, mode }, env = process.env, fetchImp
       if (typeof d !== 'string') { usage = d.usage; continue; }
       if (first && tr) { tr.add('talker.ttft', t0, tr.now()); first = false; }
       text += d;
+      if (onPart) { const part = cleanTalk(text); if (part.trim()) onPart(part); }
     }
   } else { const j = await r.json(); text = j?.choices?.[0]?.message?.content || ''; usage = j && j.usage; }
-  text = text.replace(/\s+/g, ' ').replace(/^["'“]|["'”]$/g, '').trim().slice(0, 160);
+  text = cleanTalk(text).trim();
   if (tr) tr.add('talker.total', t0, tr.now(), { chars: text.length, ...usageMeta(usage) });
   return text;
 }
@@ -581,7 +585,9 @@ export default async function handler(req, res) {
         if (ev === 'op' && fan) return fan.push(data.op);
         send(ev, data);
       };
-      const talker = split ? talk(args, process.env, fetch, tr).then((text) => { if (text && !replied) { replied = true; send('reply', { reply: text, talker: true }); } }).catch((e) => tr.add('talker.error', tr.now(), tr.now(), { error: String(e.message).slice(0, 120) })) : null;
+      // the talker's words go to the page as they arrive (replyPart); the full sentence follows as the reply
+      const onPart = (text) => { if (!replied) send('replyPart', { text }); };
+      const talker = split ? talk(args, process.env, fetch, tr, onPart).then((text) => { if (text && !replied) { replied = true; send('reply', { reply: text, talker: true }); } }).catch((e) => tr.add('talker.error', tr.now(), tr.now(), { error: String(e.message).slice(0, 120) })) : null;
       // Moss batches concurrent requests, so a tiny talker sent alongside the worker waits for the worker's prompt to be
       // read (measured: talker alone 95 ms, together 150 ms). A 30 ms head start gives it 105 ms; the worker loses ~10.
       const lead = talker ? Number(process.env.MOSS_TALKER_LEAD_MS ?? 30) : 0;

@@ -37,6 +37,14 @@ const SCRIPTS = {
     [12, 'done', { streamed: false, routed: true }],
   ],
   fail: [[0, 'error', { error: 'Moss inference returned 500', status: 502 }]],
+  // the talker's words stream in (replyPart) well before the full reply
+  parts: [
+    [0, 'replyPart', { text: 'Sure,' }],
+    [20, 'replyPart', { text: 'Sure, adding' }],
+    [400, 'reply', { reply: 'Sure, adding a FAQ to @Home.', talker: true }],
+    [450, 'op', { op: sec('faq', { eyebrow: 'FAQ', title: 'Good to know', items: [['Open Sunday?', 'Yes.'], ['Delivery?', 'Leeds only.'], ['Pre-order?', 'Yes.'], ['Cash?', 'Card only.']] }) }],
+    [460, 'done', { streamed: true, split: true }],
+  ],
   // a parallel build: the writers' sections land together
   burst: [
     [0, 'reply', { reply: 'Building Crumb.' }],
@@ -65,7 +73,7 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       const body = JSON.parse(b); if (body.warm) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"warm":false}'); }
       seen.push({ body, accept: req.headers.accept });
-      const key = body.mode === 'mock' ? 'mock' : /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' :  /explode/.test(body.message) ? 'fail' : /burst/.test(body.message) ? 'burst' : 'build';
+      const key = body.mode === 'mock' ? 'mock' : /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' :  /explode/.test(body.message) ? 'fail' :  /burst/.test(body.message) ? 'burst' : /streamy/.test(body.message) ? 'parts' : 'build';
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const t0 = Date.now(); const send = (ev, data) => res.write(`event: ${ev}\ndata: ${JSON.stringify({ ...data, t: Date.now() - t0 })}\n\n`);
       send('hello', {});
@@ -193,6 +201,19 @@ const server = http.createServer((req, res) => {
   check('the switch remembers the choice', (await pk.evaluate(() => localStorage.getItem('moss-voice'))) === 'browser' && (await pk.evaluate(() => window.moss.voice.engine())) === 'browser');
   check('no page errors (Kokoro)', errK.length === 0, errK.join(' | '));
   await ctxK.close();
+
+  // the reply's first words show while the rest is still on its way
+  const pp = await browser.newPage(); await pp.goto(`${base}/?speed=0.03&debug`);
+  await pp.fill('#introInput', 'streamy one please'); await pp.press('#introInput', 'Enter');
+  await pp.waitForFunction(() => /Sure, adding/.test((document.querySelector('.msg.agent .text') || {}).textContent || ''), null, { timeout: 5000 });
+  const earlyText = await pp.evaluate(() => document.querySelector('.msg.agent .text').textContent);
+  await pp.evaluate(() => window.moss.app.whenIdle());
+  const final = await pp.evaluate(() => document.querySelector('.msg.agent .text').innerText);
+  const shownAt = await pp.evaluate(() => { const t = window.moss.latency.turns().at(-1); const m = t.marks.find((x) => x.name === 'reply shown'); const r = t.marks.find((x) => x.name === 'reply received'); return { shown: m && m.at - t.t0, received: r && r.at - t.t0 }; });
+  check('streamed reply: the first words show before the full reply arrives', /^Sure, adding$/.test(earlyText.trim()), earlyText);
+  check('streamed reply: the full reply ends up once, intact', final.trim() === 'Sure, adding a FAQ to Home.' || final.trim() === 'Sure, adding a FAQ to @Home.', final);
+  check('streamed reply: "reply shown" is when the first words appeared', shownAt.shown != null && shownAt.received != null && shownAt.shown < shownAt.received - 200, JSON.stringify(shownAt));
+  await pp.close();
 
   // a burst of sections (parallel build) at normal speed: the entrances shorten so the page keeps up
   const pb = await browser.newPage(); await pb.goto(`${base}/?debug`);

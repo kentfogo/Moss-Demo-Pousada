@@ -1843,6 +1843,7 @@ const agent = (() => {
       const now = performance.now();
       if (serverStart == null && typeof data.t === 'number') serverStart = Math.max(opts.sentAt || 0, now - data.t); // the server can't start before the request was sent
       if (event === 'span') { if (L) L.server([data.span], serverStart); }
+      else if (event === 'replyPart') { if (reply == null && opts.onReplyPart && typeof data.text === 'string') opts.onReplyPart(n.replyText(data.text)); }
       else if (event === 'reply') { if (reply == null) { reply = n.replyText(data.reply); if (L) L.mark('reply received', 'inference', now); opts.onReply(reply); } }
       else if (event === 'op') {
         const raw = data.op;
@@ -3283,8 +3284,8 @@ const app = (() => {
     el.innerHTML = `<span class="agent-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3l7.5 4.3v9.4L12 21l-7.5-4.3V7.3z M4.5 7.3L12 11.6l7.5-4.3M12 11.6V21"/></svg></span><div class="body"><span class="typing" aria-label="Moss is typing"><i></i><i></i><i></i></span><div class="text"></div><ul class="log"></ul><div class="text after"></div></div>`;
     $('#messages').appendChild(el); scrollChat(); return el;
   }
-  async function stream(el, text, t) {
-    const parts = text.split(/(\s+)/); let acc = '';
+  async function stream(el, text, t, from = 0) {
+    const parts = text.slice(from).split(/(\s+)/); let acc = text.slice(0, from);
     for (const w of parts) { if (t && t.aborted) break; acc += w; el.textContent = acc; if (w.trim()) { setPanel(acc); await wait(26); } }
     if (t && t.aborted) { el.textContent = acc.trim() + (acc.trim() ? '…' : ''); return; }
     el.innerHTML = formatText(text); setPanel(text); scrollChat();
@@ -3849,14 +3850,24 @@ const app = (() => {
     const squash = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const queue = []; let wake = null, ended = false, replyText = null, replyShown = null, snap = false, building = false, total = 0;
     const doneOps = []; let oneShot = false; // one-shot answers (offline agent, non-streamed) keep the full build animation
+    let partShown = ''; // the talker's words shown so far, as they streamed in
+    const onReplyPart = (part) => {
+      if (replyText != null || t.aborted || !part || !part.trim()) return;
+      clearTimeout(ack);
+      const typing = msg.querySelector('.typing'); if (typing) typing.remove();
+      if (!partShown) L.mark('reply shown', 'apply', performance.now());
+      partShown = part; const el = msg.querySelector('.text'); el.textContent = part; setPanel(part);
+    };
     const onReply = (r) => {
       if (replyText != null || t.aborted) return;
       clearTimeout(ack);
       replyText = r || '';
       const typing = msg.querySelector('.typing'); if (typing) typing.remove();
       if (spoken && replyText) voice.speak(replyText);
-      replyShown = stream(msg.querySelector('.text'), replyText, t);
-      L.mark('reply shown', 'apply', performance.now());
+      // carry on from the streamed words when they are the start of the final reply
+      const from = partShown && replyText.startsWith(partShown.trimEnd()) ? partShown.trimEnd().length : 0;
+      replyShown = stream(msg.querySelector('.text'), replyText, t, from);
+      if (!partShown) L.mark('reply shown', 'apply', performance.now());
     };
     const onOp = (op) => { queue.push(op); total++; if (wake) { wake(); wake = null; } };
     const consumer = (async () => {
@@ -3896,7 +3907,7 @@ const app = (() => {
     }
     try {
       if (scrapeErr) res = { reply: `I couldn't read ${site}: ${scrapeErr.replace(/\.$/, '')}. Tell me about the business instead, or try another address.`, ops: [], suggestions: ['Let\'s plan it out together'] };
-      else res = await agent.respond(text, pageModel.get(), { signal: t.controller.signal, live: isLive, mode: scraped ? 'mock' : opts.mode, scraped, lat: L, onReply, onOp });
+      else res = await agent.respond(text, pageModel.get(), { signal: t.controller.signal, live: isLive, mode: scraped ? 'mock' : opts.mode, scraped, lat: L, onReply, onReplyPart, onOp });
     }
     catch (err) { res = { reply: 'Something went wrong on my side. Try that again?', ops: [] }; console.error(err); }
     clearTimeout(ack);

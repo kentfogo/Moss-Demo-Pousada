@@ -49,12 +49,19 @@ For the next session. The work started on branch `claude/relaxed-fermat-rr1j2j` 
 - **Retries:** Moss's SDKs retry twice, waiting for `Retry-After` when it's 60 s or less, and never retry a started stream.
 - **What it means for us:** a parallel build sends about 12 requests in about 3 s (talker, planner, look, next pages, 8 sections). That fits the burst plus refill, and the one retry covers the edges. More than one simultaneous build per project will hit 429s.
 
+**Later the same day:**
+- **Streamed reply (done):** the talker's words go to the page as `replyPart` events, and the page shows them at once; the full reply then finishes typing from there. Reply on screen: **133–157 ms**, down from ~250–300 ms (recordings, reply cache off).
+- **Hero first (tried, reverted):** starting the hero writer as soon as the planner names the business (~0.6 s) instead of at its brief.
+  - **A/B, 6 builds each:** hero median ~2.6 s either way, and whole builds no faster.
+  - **Why:** while the planner, look writer and hero writer run at once, Moss generates each stream more slowly (hero at ~78 tokens/s against ~130 alone), so starting earlier didn't land earlier. Deferring the next-pages writer helped the hero by ~0.3 s but made builds ~0.5 s longer.
+- **Degenerate generations:** one worker reply ran to 900 tokens without ever forming JSON (15,910 characters), and the turn failed after 11.6 s. One writer per ~6 builds also fails (it falls back to a default section). Idea: if the first ~200 characters contain no `{`, stop the stream and retry once.
+- **Simpler waterfall (done):** headline tiles (Retrieval, Moss first token, Inference, Reply on screen) and a few plain rows; raw spans under "All steps".
+
 **Next:**
-1. **Stream the talker's reply to the page.** The reply appears only when the talker has finished its sentence (on screen ~250 ms, talker first token ~95 ms). Sending the first words at once would save about 90–150 ms on every turn.
-2. **Hero first.** In a parallel build the hero lands about 0.4 s later than serially. Let the planner write the hero in full (it passes straight through) and brief only the rest, or start a hero writer from setBusiness.
-3. **Going public** (the user decides): a new public repository with clean history; decide about `references/`, `PROMPT.md`, `Critic prompt.md`, `design-log.md` and `RETRO.md`; add a LICENSE (`@inferedge/moss` is PolyForm Shield); enable Pages.
-4. **Voice to voice:** measure in a real browser. Then start turns on interim transcripts, stream TTS and cache the openers (see the speed plan in the chat).
-5. **Ask Moss** the questions below.
+1. **Stop and retry degenerate streams** early (above).
+2. **Going public** (the user decides): a new public repository with clean history; decide about `references/`, `PROMPT.md`, `Critic prompt.md`, `design-log.md` and `RETRO.md`; add a LICENSE (`@inferedge/moss` is PolyForm Shield); enable Pages.
+3. **Voice to voice:** measure in a real browser. Then start turns on interim transcripts, stream TTS and cache the openers (see the speed plan in the chat).
+4. **Ask Moss** the questions below.
 
 ## Earlier: the "replace Vercel" session (done)
 **Decisions:** Vercel is gone. The app is one Node server (`npm start`, `server.mjs`). Sharing happens through a **replay link** (free to watch) plus a **public repository** people can clone and run with their own Moss keys. No hosted live server for now.
@@ -193,7 +200,7 @@ With 1 and 2, the expected server-side times on Vercel are a talker first token 
 ## Questions for Moss
 - Which region? (Pin the Vercel function next to it.)
 - The prefix cache works in 800-token blocks (confirmed by experiment), and only whole matching blocks are reused. Is that documented, and will it stay 800? Can a prefix be pinned or warmed explicitly? (Ours stays cached for at least 10 minutes.)
-- Concurrent requests are batched: a 250-token request sent with a 6,000-token one waits for the large prompt (95 → 150 ms). Is there a priority or latency tier for small requests?
+- Concurrent requests are batched: a 250-token request sent with a 6,000-token one waits for the large prompt (95 → 150 ms), and per-stream output drops from ~130 to ~80 tokens/s with several streams at once. Is there a priority or latency tier for small requests, and what's the per-project concurrency model?
 - Can the burst limit (10) be raised for a project that fans one turn out to about 12 parallel calls?
 - What keep-alive timeout does the edge allow, and is HTTP/2 to the API recommended for reuse?
 - Are short-lived browser tokens planned?

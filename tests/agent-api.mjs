@@ -210,6 +210,8 @@ const spanNames = ev.filter((e) => e.event === 'span').map((e) => e.data.span.na
 check('SSE: inference spans (request, time to first token, total) with server times', ['inference.request', 'inference.ttft', 'inference.total'].every((n) => spanNames.includes(n)) && ev.every((e) => typeof e.data.t === 'number') && ev.find((e) => e.event === 'done').data.streamed === true, spanNames.join());
 const replies = ev.filter((e) => e.event === 'reply');
 check('talker: an edit gets one spoken reply from the tiny call, before the ops', replies.length === 1 && replies[0].data.talker === true && replies[0].data.reply === 'Sure, adding two sections now.' && names.indexOf('reply') < names.indexOf('op'), JSON.stringify(replies.map((r) => r.data.reply)));
+const parts = ev.filter((e) => e.event === 'replyPart').map((e) => e.data.text);
+check('talker: its words stream to the page as they arrive (replyPart), growing, before the full reply', parts.length >= 2 && parts.every((p, i) => i === 0 || p.startsWith(parts[i - 1])) && 'Sure, adding two sections now.'.startsWith(parts.at(-1).trimEnd()) && names.indexOf('replyPart') < names.indexOf('reply'), JSON.stringify(parts));
 const workerReq = seen.filter((x) => x.json.stream && !/^You are the voice/.test(x.json.messages[0].content)).at(-1).json;
 check('talker: the worker is told the acknowledgement was spoken (reply left empty)', workerReq.messages.at(-1).content.includes('SPOKEN ALREADY') && ev.find((e) => e.event === 'done').data.split === true);
 const talkerReq = seen.filter((x) => /^You are the voice/.test(x.json.messages[0].content)).at(-1).json;
