@@ -48,10 +48,13 @@ export async function build(host, passages, summary, tr, env = process.env) {
   const job = c.createIndex(name, docs, { onProgress: (p) => { phase = p && (p.currentPhase || p.status); if (p && p.status && p.status !== 'pending_upload' && p.status !== 'uploading') uploaded = true; } })
     .then(() => { done = true; ready.set(name, true); }, (e) => { error = String(e && e.message).slice(0, 200); });
   // keep the build going after the response is sent (Vercel would otherwise freeze the function)
-  try { const { waitUntil } = await import('@vercel/functions'); waitUntil(job); } catch {}
-  const t0 = Date.now();
-  while (!done && !error && !uploaded && Date.now() - t0 < KNOWLEDGE.uploadWaitMs) { await new Promise((r) => setTimeout(r, 100)); }
-  if (end) end({ ready: done, uploaded: uploaded || done, phase, ...(error ? { error } : {}) });
+  let background = false;
+  try { const { waitUntil } = await import('@vercel/functions'); waitUntil(job); background = !!process.env.VERCEL; } catch {}
+  // on Vercel the build carries on after the response: don't make the first mock wait for it (it uses the passages
+  // directly; later edits use the index). Elsewhere, wait until the upload is done.
+  const t0 = Date.now(); const waitMs = background ? 300 : KNOWLEDGE.uploadWaitMs;
+  while (!done && !error && !uploaded && Date.now() - t0 < waitMs) { await new Promise((r) => setTimeout(r, 50)); }
+  if (end) end({ ready: done, uploaded: uploaded || done, phase, background, ...(error ? { error } : {}) });
   if (error) throw new Error(error);
   return { name, ready: done, passages: passages.length };
 }
