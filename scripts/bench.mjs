@@ -73,6 +73,8 @@ function parse(out) {
 const chat = (messages, extra = {}) => ({ url: `${base}/chat/completions`, body: { model, messages, temperature: 0.4, stream: true, stream_options: { include_usage: true }, ...extra } });
 const talkerMessages = [{ role: 'system', content: TALKER_PROMPT }, { role: 'user', content: `Site: ${sample.state.business?.name || 'a new one'}. Request: ${EDIT.message}` }];
 const newEdit = () => buildMessages(EDIT);
+// a real turn: the history right after the system prompt is new every time (here, a random previous exchange)
+const realTurn = (align) => buildMessages({ ...EDIT, align, history: [{ role: 'user', content: `add a gallery (${Math.random().toString(36).slice(2, 8)})` }, { role: 'assistant', content: 'Added a gallery under the hero.' }] });
 const json = { response_format: { type: 'json_object' } };
 const editTokens = MAX_TOKENS[phase] || 900;
 const nonce = () => `[run ${Math.random().toString(36).slice(2)}]\n`;
@@ -84,6 +86,8 @@ const VARIANTS = [
   { id: 'talker-nostream', label: 'Talker, not streamed', req: () => ({ ...chat(talkerMessages, { max_tokens: 40, temperature: 0.3 }), body: { model, messages: talkerMessages, max_tokens: 40, temperature: 0.3 } }) },
   { id: 'edit-cold', label: 'Edit, new layout, cold prefix', req: () => chat(coldify(newEdit()), { max_tokens: editTokens, ...json }) },
   { id: 'edit-warm', label: 'Edit, new layout, warm prefix', prime: true, req: () => chat(newEdit(), { max_tokens: editTokens, ...json }) },
+  { id: 'edit-turn', label: 'Edit, real turn (new history), cache-aligned', prime: true, req: () => chat(realTurn(true), { max_tokens: editTokens, ...json }) },
+  { id: 'edit-turn-nopad', label: 'Edit, real turn (new history), not aligned', prime: true, req: () => chat(realTurn(false), { max_tokens: editTokens, ...json }) },
   { id: 'edit-old', label: 'Edit, old layout (320a90f), warm', prime: true, req: () => chat(oldAgent.buildMessages(EDIT), { max_tokens: editTokens, ...json }) },
   { id: 'edit-nojson', label: 'Edit, new layout, JSON mode off', prime: true, req: () => chat(newEdit(), { max_tokens: editTokens }) },
   { id: 'edit-cap200', label: 'Edit, new layout, max_tokens 200', prime: true, req: () => chat(newEdit(), { max_tokens: 200, ...json }) },

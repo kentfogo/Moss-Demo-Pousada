@@ -1,7 +1,7 @@
 // Tests for api/agent.js against a mock OpenAI-compatible Moss server. No real credentials needed.
 // Run: node tests/agent-api.mjs
 import http from 'node:http';
-import handler, { callMoss, extractJSON, compactState, mossSettings, buildMessages } from '../api/agent.js';
+import handler, { callMoss, extractJSON, compactState, mossSettings, buildMessages, postMoss, talk } from '../api/agent.js';
 
 const results = [];
 const check = (name, ok, detail = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); };
@@ -334,6 +334,33 @@ process.env = saved;
   await handler({ method: 'POST', headers: { host: 'a.app' }, body: { warm: true } }, mockRes());
   check('warm-up: MOSS_PRIME=off skips the priming call', seen.length === n1);
   process.env = saved2;
+}
+
+// 14c. 429 / 503 with Retry-After: wait and retry once (talker and worker)
+{
+  const reply = (status, ra) => ({ status, ok: status < 300, headers: new Headers(ra == null ? {} : { 'retry-after': String(ra) }), body: null, json: async () => ({}), text: async () => '' });
+  const seq = (...rs) => { const f = async () => { f.calls++; return rs.shift() || reply(200); }; f.calls = 0; return f; };
+  let f = seq(reply(429, 0), reply(200)); let r = await postMoss(f, 'x', {});
+  check('retry: a 429 with Retry-After is retried once, then succeeds', r.status === 200 && f.calls === 2);
+  f = seq(reply(429, 0), reply(429, 0)); r = await postMoss(f, 'x', {});
+  check('retry: only once (a second 429 is returned)', r.status === 429 && f.calls === 2);
+  f = seq(reply(429)); r = await postMoss(f, 'x', {});
+  check('retry: no Retry-After, no retry', r.status === 429 && f.calls === 1);
+  f = seq(reply(429, 30)); r = await postMoss(f, 'x', {});
+  check('retry: a Retry-After longer than 3 s is not waited out', r.status === 429 && f.calls === 1);
+  f = seq(reply(503, 0), reply(200)); r = await postMoss(f, 'x', {});
+  check('retry: 503 capacity with Retry-After is retried too', r.status === 200 && f.calls === 2);
+  f = seq(reply(500)); r = await postMoss(f, 'x', {});
+  check('retry: other errors are not retried here', r.status === 500 && f.calls === 1);
+  const t1 = Date.now(); f = seq(reply(429, 1), reply(200)); const trR = (await import('../api/_trace.js')).trace(); await postMoss(f, 'x', {}, trR, 'talker');
+  check('retry: waits the Retry-After seconds and records a span', Date.now() - t1 >= 950 && trR.spans.some((x) => x.name === 'talker.retry' && x.meta.retryAfter === 1));
+  // through the real callers: the worker (callMoss) and the talker (talk)
+  const ok = { status: 200, ok: true, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ choices: [{ message: { content: '{"reply":"ok","ops":[]}' } }] }) };
+  f = seq(reply(429, 0), ok); const w = await callMoss({ message: 'hi', state: home }, env('moss-test'), f);
+  check('retry: the worker retries a 429', w.reply === 'ok' && f.calls === 2);
+  const okT = { status: 200, ok: true, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ choices: [{ message: { content: 'Sure, on it.' } }] }) };
+  f = seq(reply(429, 0), okT); const said = await talk({ message: 'hi', state: home }, env('moss-test'), f);
+  check('retry: the talker retries a 429', said === 'Sure, on it.' && f.calls === 2);
 }
 
 // 15. helpers

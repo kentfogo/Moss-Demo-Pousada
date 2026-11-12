@@ -25,6 +25,12 @@ if (existsSync(path.join(ROOT, '.env'))) {
 const keep = { keepAliveTimeout: 60_000, keepAliveMaxTimeout: 600_000, connections: 32 };
 setGlobalDispatcher(process.env.HTTPS_PROXY || process.env.https_proxy ? new EnvHttpProxyAgent(keep) : new Agent(keep));
 
+// MOSS_DEBUG=connections logs every new outgoing connection (each one costs a TCP + TLS handshake)
+if (process.env.MOSS_DEBUG === 'connections') {
+  const dc = await import('node:diagnostics_channel');
+  dc.subscribe('undici:client:connected', ({ connectParams }) => console.log(`${new Date().toISOString().slice(11, 23)} new connection to ${connectParams.host}`));
+}
+
 const API = ['agent', 'scrape', 'speak', 'voice-token', 'router-eval'];
 const handlers = {};
 for (const name of API) handlers[name] = (await import(pathToFileURL(path.join(ROOT, 'api', `${name}.js`)).href)).default;

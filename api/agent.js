@@ -14,6 +14,20 @@ import { trace } from './_trace.js';
 import { createScanner } from './_jsonScan.js';
 import { route, warm } from './_moss.js';
 import * as knowledge from './_knowledge.js';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
+/* Cache alignment. Moss caches prompts in 800-token blocks, and only whole blocks that match an earlier prompt.
+   Real turns change right after the system prompt (history, then state), so the system prompt's last partial
+   block is re-read every turn. Padding the system prompt to end on a block boundary caches all of it.
+   scripts/cache-align.mjs measures the padding against Moss and writes api/_cache-align.json, keyed by a hash
+   of the unpadded system prompt: any prompt edit turns the padding off until the script is run again. */
+let ALIGN = null;
+try { ALIGN = JSON.parse(readFileSync(new URL('./_cache-align.json', import.meta.url), 'utf8')); } catch { ALIGN = null; }
+export const promptHash = (text) => createHash('sha256').update(text).digest('hex').slice(0, 16);
+export function setCacheAlign(a) { ALIGN = a; }
+const PAD_INTRO = '\n\n(End of instructions. Cache padding follows; ignore it.)\n';
+export const cachePad = (n) => (n > 0 ? PAD_INTRO + ' .'.repeat(n) : '');
 
 export const config = { maxDuration: 60 };
 
@@ -30,6 +44,26 @@ export function mossSettings(env = process.env) {
 }
 
 const MAX_MESSAGE = 2000;
+/** Longest Retry-After we wait out inside a turn; anything longer fails the call instead of stalling the user. */
+export const MAX_RETRY_WAIT_MS = 3000;
+
+/**
+ * POST to Moss, and when Moss says when to come back (429 rate limit or 503 capacity with Retry-After, per
+ * docs.moss.dev errors-and-limits), wait that long and retry once. Never retries a started stream: the status
+ * arrives before any body. A Retry-After over MAX_RETRY_WAIT_MS returns the refusal as is.
+ */
+export async function postMoss(fetchImpl, url, init, tr, label = 'inference') {
+  const r = await fetchImpl(url, init);
+  if (r.status !== 429 && r.status !== 503) return r;
+  const ra = r.headers && r.headers.get ? r.headers.get('retry-after') : null;
+  const secs = ra != null && /^\d+(\.\d+)?$/.test(String(ra).trim()) ? Number(ra) : null;
+  if (secs == null || secs * 1000 > MAX_RETRY_WAIT_MS) return r;
+  try { await r.body?.cancel?.(); } catch {}
+  const t0 = tr ? tr.now() : 0;
+  await new Promise((res) => setTimeout(res, secs * 1000));
+  if (tr) tr.add(`${label}.retry`, t0, tr.now(), { status: r.status, retryAfter: secs });
+  return fetchImpl(url, init);
+}
 const MAX_STATE = 80_000;
 
 export const SYSTEM_PROMPT = `You are Moss, an agent that builds a landing page live while the user chats with you.
@@ -224,13 +258,18 @@ export function needsLibrary(phase, message) { return ['interview', 'review', 'a
  * The fixed system message: the rules, every phase and the design library. It is identical on every call, so Moss's
  * prefix cache (moss/fastlane-1 keeps "a repeated system prompt") can skip re-reading it; only the short tail is new.
  */
-export function systemPrompt(directions) {
+export function systemPrompt(directions, { align = process.env.MOSS_CACHE_ALIGN !== 'off' } = {}) {
+  const text = basePrompt(directions);
+  return align && ALIGN && ALIGN.hash === promptHash(text) && ALIGN.pad > 0 ? text + cachePad(ALIGN.pad) : text;
+}
+/** The system prompt without cache padding. */
+export function basePrompt(directions) {
   const lib = (Array.isArray(directions) ? directions : []).slice(0, 12).map((d) => ({ id: d.id, name: d.name, mood: d.mood, fits: d.fits, palette: d.palette, colors: d.colors, type: d.type, shape: d.shape, variants: d.variants, art: d.art }));
   const phases = Object.entries(PHASES).map(([k, v]) => `### ${k}\n${v}`).join('\n\n');
   return `${SYSTEM_PROMPT}\n\nPHASES (the last message names the current one; follow only that phase):\n${phases}${lib.length ? `\n\nDIRECTIONS:\n${JSON.stringify(lib)}\nFONTS: ${FONT_LIST}` : ''}`;
 }
 
-export function buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped, spoken }) {
+export function buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped, spoken, align }) {
   const phase = phaseOf(state, mode);
   const turns = (Array.isArray(history) ? history : []).slice(-6)
     .filter((t) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string')
@@ -245,7 +284,7 @@ export function buildMessages({ message, state, history, directions, recentDirec
     `STATE:\n${JSON.stringify(compactState(state, message))}`,
     `MESSAGE:\n${message}`,
   ].filter(Boolean).join('\n\n');
-  return [{ role: 'system', content: systemPrompt(directions) }, ...turns, { role: 'user', content: tail }];
+  return [{ role: 'system', content: systemPrompt(directions, align == null ? undefined : { align }) }, ...turns, { role: 'user', content: tail }];
 }
 
 /** Read an OpenAI-style SSE stream and yield the text deltas (and, last, a { usage } object when the server sends one). */
@@ -285,11 +324,11 @@ export async function callMoss({ message, state, history, directions, recentDire
   const messages = buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped, spoken: !!opts.spoken });
   if (opts.extra) messages[messages.length - 1].content = opts.extra + messages[messages.length - 1].content;
   const payload = { model, messages, max_tokens: MAX_TOKENS[phaseOf(state, mode)] || 900, temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' }, ...(opts.stream ? { stream: true, stream_options: { include_usage: true } } : {}) };
-  const post = (body) => fetchImpl(`${base}/chat/completions`, {
+  const post = (body) => postMoss(fetchImpl, `${base}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(opts.stream ? { accept: 'text/event-stream' } : {}) },
     body: JSON.stringify(body),
-  });
+  }, tr, 'inference');
   const endReq = tr ? tr.start('inference.request', { model, promptChars: JSON.stringify(messages).length }) : null;
   const tInf = tr ? tr.now() : 0;
   let r = await post(payload);
@@ -356,7 +395,7 @@ export async function talk({ message, state, mode }, env = process.env, fetchImp
   const site = state && state.business && state.business.name ? `Site: ${state.business.name}${state.business.kind ? ` (${state.business.kind})` : ''}.` : 'Site: a new one.';
   const body = { model: env.MOSS_TALKER_MODEL || model, messages: [{ role: 'system', content: TALKER_PROMPT }, { role: 'user', content: `${site}${mode === 'mock' ? ' They asked for a redesign of their existing site.' : ''} Request: ${message}` }], max_tokens: 40, temperature: 0.3, stream: true };
   const t0 = tr ? tr.now() : 0;
-  const r = await fetchImpl(`${base}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, accept: 'text/event-stream' }, body: JSON.stringify(body) });
+  const r = await postMoss(fetchImpl, `${base}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, accept: 'text/event-stream' }, body: JSON.stringify(body) }, tr, 'talker');
   if (!r.ok) throw Object.assign(new Error(`talker ${r.status}`), { status: r.status });
   let text = '', first = true, usage = null;
   if (/text\/event-stream/i.test(r.headers?.get?.('content-type') || '') && r.body) {
