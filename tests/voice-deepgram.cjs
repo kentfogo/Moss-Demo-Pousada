@@ -13,9 +13,10 @@ const spoken = []; let speakFail = false;
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
   if (url === '/api/voice-token') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ token: 'jwt-test', model: 'nova-3', voice: 'aura-2-thalia-en', listenUrl: 'wss://deepgram.test/v1/listen' })); }
-  if (url === '/api/speak') {
-    let body = ''; req.on('data', (c) => (body += c));
-    req.on('end', () => { spoken.push(JSON.parse(body).text); if (speakFail) { res.writeHead(500); return res.end('{}'); } res.writeHead(200, { 'content-type': 'audio/mpeg' }); res.end(Buffer.from([0xff, 0xfb, 0x90, 0x00])); });
+  if (url === '/api/speak') { // GET ?text= (streamed, cacheable) or POST {text}
+    const reply = (text) => { spoken.push(text); if (speakFail) { res.writeHead(500); return res.end('{}'); } res.writeHead(200, { 'content-type': 'audio/mpeg', 'cache-control': 'private, max-age=86400' }); res.end(Buffer.from([0xff, 0xfb, 0x90, 0x00])); };
+    if (req.method === 'GET') return reply(new URLSearchParams(req.url.split('?')[1] || '').get('text'));
+    let body = ''; req.on('data', (c) => (body += c)); req.on('end', () => reply(JSON.parse(body).text));
     return;
   }
   if (url === '/api/agent') { res.writeHead(404); return res.end(); } // no Moss here: the offline agent answers
@@ -45,7 +46,11 @@ function fakes() {
     end: () => window.__dg.send({ type: 'UtteranceEnd' }),
     drop: () => { const w = window.__dg.ws(); w.readyState = 3; w.onclose && w.onclose(); },
   };
-  window.Audio = class { constructor(src) { this.src = src; } play() { window.__plays.push(this.src); this.playing = true; this.t = setTimeout(() => { this.playing = false; this.onended && this.onended(); }, 600); return Promise.resolve(); } pause() { window.__pauses++; clearTimeout(this.t); this.playing = false; } };
+  window.Audio = class { constructor(src) { this.src = src; } removeAttribute() { this.src = ''; } load() {}
+    play() { const go = () => { window.__plays.push(this.src); this.playing = true; this.t = setTimeout(() => { this.playing = false; this.onended && this.onended(); }, 600); };
+      if (/^\/api\/speak/.test(this.src)) return fetch(this.src).then((r) => { if (!r.ok) { const e = new Error('media error'); e.name = 'NotSupportedError'; throw e; } go(); });
+      go(); return Promise.resolve(); }
+    pause() { window.__pauses++; clearTimeout(this.t); this.playing = false; } };
   window.SpeechSynthesisUtterance = function (t) { this.text = t; };
   Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speaking: false, speak: (u) => window.__browserSpoken.push(u.text), cancel() {}, getVoices: () => [], addEventListener() {} } });
 }
@@ -185,7 +190,7 @@ function fakePcm() {
   const n0s = spoken.length;
   await p4.evaluate(() => window.moss.voice.speak('On it.')); await p4.waitForTimeout(900);
   await p4.evaluate(() => window.moss.voice.speak('On it.')); await p4.waitForTimeout(900);
-  check('a repeated sentence is fetched once (audio cache)', spoken.length - n0s === 1 && (await p4.evaluate(() => window.moss.voice.usage().cacheHits)) >= 1, String(spoken.length - n0s));
+  check('a repeated sentence is fetched once (the browser caches streamed speech)', spoken.length - n0s === 1, String(spoken.length - n0s));
   check('no page errors (PCM path)', err4.length === 0, err4.join(' | '));
   await ctx4.close();
 

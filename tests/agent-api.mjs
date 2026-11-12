@@ -103,6 +103,11 @@ let rr = mres(); await sp.default({ method: 'POST', headers: { host: 'a.app' }, 
 check('speak refuses very long text', rr.code === 413);
 rr = mres(); await sp.default({ method: 'POST', headers: { host: 'a.app', origin: 'https://evil.example' }, body: { text: 'hi' } }, rr);
 check('speak refuses other sites', rr.code === 403);
+const streamFetch = async () => ({ ok: true, status: 200, body: (async function* () { yield new Uint8Array([1, 2]); yield new Uint8Array([3]); })() });
+const sr0 = await sp.synthesizeStream('Hi.', { DEEPGRAM_API_KEY: 'k' }, streamFetch); const parts0 = []; for await (const c of sr0.body) parts0.push(c.length);
+check('speak (GET) streams Aura through chunk by chunk', parts0.join() === '2,1');
+rr = mres(); rr.headersSent = false; await sp.default({ method: 'GET', headers: { host: 'a.app', referer: 'https://evil.example/x' }, query: { text: 'hi' } }, rr);
+check('speak (GET) refuses other sites by referer', rr.code === 403);
 rr = mres(); await vt.default({ method: 'GET', headers: { host: 'a.app', origin: 'https://evil.example' } }, rr);
 check('voice-token refuses other sites', rr.code === 403);
 

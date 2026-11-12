@@ -8,7 +8,7 @@
   ],
   "headers": [
     {
-      "source": "/api/((?!scrape).*)",
+      "source": "/api/((?!scrape|speak).*)",
       "headers": [
         {
           "key": "Cache-Control",

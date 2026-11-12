@@ -1777,14 +1777,14 @@ const agent = (() => {
     }
     try {
       // streaming: the reply and each op arrive as server-sent events (mock turns stay one response: they get reordered)
-      const streaming = !!opts.onReply && mode !== 'mock' && !!window.ReadableStream && !new URLSearchParams(location.search).has('nostream');
+      const streaming = !!opts.onReply && !!window.ReadableStream && !new URLSearchParams(location.search).has('nostream');
       const tReq = performance.now();
       const r = await fetch('/api/agent', {
         method: 'POST', headers: { 'content-type': 'application/json', ...(streaming ? { accept: 'text/event-stream' } : {}) }, signal: opts.signal,
         body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-6), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections(), live: !!opts.live, mode, ...(opts.noRoute ? { noRoute: true } : {}), ...(state.business && state.business.siteIndex ? { siteIndex: state.business.siteIndex } : {}), ...(mode === 'mock' && opts.scraped ? { scraped: opts.scraped } : {}) }),
       });
       if (L) L.span('request → first byte', 'network', tReq, performance.now(), { status: r.status });
-      if (r.ok && streaming && /event-stream/.test(r.headers.get('content-type') || '')) return await readStream(r, message, state, Object.assign({}, opts, { sentAt: tReq }), L);
+      if (r.ok && streaming && /event-stream/.test(r.headers.get('content-type') || '')) return await readStream(r, message, state, Object.assign({}, opts, { sentAt: tReq, mockMode: mode === 'mock' }), L);
       const json = await r.json().catch(() => ({}));
       if (L && json.timing) L.server(json.timing, Math.max(tReq, performance.now() - (json.serverMs || 0)));
       if (!r.ok) { if (r.status === 503 || r.status === 404) remoteDisabled = true; throw new Error(json.error || `HTTP ${r.status}`); }
@@ -1812,12 +1812,21 @@ const agent = (() => {
   async function readStream(r, message, state, opts, L) {
     const n = createNormalizer(state, message);
     let reply = null, done = null, route = null, err = null, serverStart = null, anyOp = false, meta = null;
+    // mock turns: start from a blank site, ignore stray design ops (look A applies), keep only real announcements
+    const isMock = !!opts.mockMode; let sawMocks = false;
+    if (isMock && state.pages.length) n.push({ op: 'resetSite' }).forEach((o) => opts.onOp(o));
     const handle = (event, data) => {
       const now = performance.now();
       if (serverStart == null && typeof data.t === 'number') serverStart = Math.max(opts.sentAt || 0, now - data.t); // the server can't start before the request was sent
       if (event === 'span') { if (L) L.server([data.span], serverStart); }
       else if (event === 'reply') { if (reply == null) { reply = n.replyText(data.reply); if (L) L.mark('reply received', 'inference', now); opts.onReply(reply); } }
-      else if (event === 'op') { const clean = n.push(data.op); if (clean.length) { anyOp = true; clean.forEach((o) => opts.onOp(o)); } }
+      else if (event === 'op') {
+        const raw = data.op;
+        if (isMock && (!raw || raw.op === 'setDesign' || raw.op === 'resetSite')) return;
+        if (isMock && raw.op === 'setMocks') sawMocks = true;
+        const clean = n.push(raw);
+        if (clean.length) { anyOp = true; clean.forEach((o) => { if (isMock && o.op === 'setBusiness' && !(raw.business && raw.business.announce && raw.business.announce.text)) o.business.copy.announce = null; opts.onOp(o); }); }
+      }
       else if (event === 'route') route = data;
       else if (event === 'meta') meta = data;
       else if (event === 'done') done = data;
@@ -1843,6 +1852,7 @@ const agent = (() => {
     if (L && done) L.note({ streamed: done.streamed !== false, routed: !!done.routed });
     if (route) return await routed(route, message, state, opts);
     if (err && reply == null && !anyOp) { if (err.status === 503) remoteDisabled = true; throw new Error(err.error); }
+    if (isMock && !sawMocks && anyOp) { const sc = opts.scraped || {}; n.push({ op: 'setMocks', source: sc.url, looks: mockLooks(detectKind(`${sc.name || ''} ${sc.title || ''} ${sc.description || ''}`.toLowerCase()), sc.brandHue, sc.name || 'site') }).forEach((o) => opts.onOp(o)); }
     const fin = n.finish({ reply: reply || '', after: done && done.after, suggestions: done && done.suggestions });
     fin.rest.forEach((o) => opts.onOp(o));
     if (reply == null) { reply = fin.reply; opts.onReply(reply); }
@@ -2968,10 +2978,24 @@ const voice = (() => {
     return p;
   }
   function fetchSpeech(text) { return fetch('/api/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) }).then((r) => { if (!r.ok) throw new Error('speak ' + r.status); return r.blob(); }); }
-  function sayDeepgram(t, at) { sentences(t).forEach((x) => { const audio = fetchAudio(x); audio.catch(() => {}); dg.tq.push({ text: x, audio, gen: dg.gen, at }); }); pump(); } // prefetch every sentence; skipped ones may fail quietly
+  // Aura streams: each sentence is an <audio> on GET /api/speak?text=… that starts playing on the first bytes; the
+  // next sentences preload while the first plays, and the browser's cache makes repeated lines free.
+  function sayDeepgram(t, at) {
+    sentences(t).forEach((x) => { const el = new Audio('/api/speak?text=' + encodeURIComponent(x)); el.preload = 'auto'; dg.tq.push({ text: x, el, gen: dg.gen, at, engine: 'aura' }); });
+    pump();
+  }
   async function pump() {
     if (dg.playing || !dg.tq.length) return;
     const item = dg.tq.shift(); if (item.gen !== dg.gen) return pump();
+    if (item.el) { // streamed Aura
+      const a = item.el; dg.playing = a; markSpeaking(item.text);
+      let over = false;
+      const done = () => { if (over) return; over = true; if (dg.playing === a) { dg.playing = null; speech.until = Math.min(speech.until, Date.now() + 200); } pump(); };
+      const fail = () => { if (over) return; over = true; if (dg.playing === a) dg.playing = null; if (++dg.fails >= 2) dg.tts = false; if (item.gen === dg.gen) sayBrowser(item.text, item.at); pump(); };
+      a.onended = done; a.onerror = fail;
+      try { await a.play(); if (!over) { dg.fails = 0; timing({ engine: 'aura', text: item.text, requestedAt: item.at || performance.now(), startedAt: performance.now() }); } } catch (e) { if (e && e.name === 'AbortError') done(); else fail(); }
+      return;
+    }
     let blob;
     try { blob = await item.audio; dg.fails = 0; }
     catch (e) {
@@ -3057,7 +3081,7 @@ const voice = (() => {
   }
   function cancelSpeech() {
     queue.length = 0; clearTimeout(flushTimer);
-    dg.gen++; dg.tq.length = 0; if (dg.playing) { try { dg.playing.pause(); } catch (e) {} dg.playing = null; }
+    dg.gen++; dg.tq.forEach((i) => { if (i.el) { try { i.el.removeAttribute('src'); i.el.load && i.el.load(); } catch (e) {} } }); dg.tq.length = 0; if (dg.playing) { try { dg.playing.pause(); } catch (e) {} dg.playing = null; }
     if (synth) synth.cancel();
     speech.until = Math.min(speech.until, Date.now());
   }

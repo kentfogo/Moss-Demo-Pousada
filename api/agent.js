@@ -355,7 +355,7 @@ export default async function handler(req, res) {
   if (JSON.stringify(body.state || {}).length > MAX_STATE) return res.status(413).json({ error: 'state too large' });
   if (!mossSettings().token) { try { await callMoss(argsOf(body, message)); } catch (err) { return res.status(err.status || 500).json({ error: err.message }); } }
   const args = argsOf(body, message);
-  const wantsStream = /text\/event-stream/i.test((req.headers && req.headers.accept) || '') && args.mode !== 'mock';
+  const wantsStream = /text\/event-stream/i.test((req.headers && req.headers.accept) || '');
   res.setHeader('cache-control', 'no-store');
   if (!wantsStream) {
     try {

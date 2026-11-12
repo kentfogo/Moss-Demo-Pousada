@@ -37,17 +37,27 @@ const SCRIPTS = {
     [12, 'done', { streamed: false, routed: true }],
   ],
   fail: [[0, 'error', { error: 'Moss inference returned 500', status: 502 }]],
+  mock: [
+    [0, 'reply', { reply: 'Three looks for Crumb.' }],
+    [50, 'op', { op: { op: 'setBusiness', business: { name: 'Crumb Bakery', kind: 'bakery', place: 'Leeds' } } }],
+    [60, 'op', { op: { op: 'setDesign', design: { direction: 'luxury' } } }],
+    [70, 'op', { op: { op: 'addPage', page: { id: 'home', name: 'Home' }, navigate: true } }],
+    [200, 'op', { op: sec('hero', { headline: 'Real bread, *Leeds*.', sub: 'Since 1998.', primary: 'Order', eyebrow: 'Bakery' }) }],
+    [900, 'op', { op: sec('footer', { name: 'Crumb Bakery', blurb: 'Leeds', cols: [['Visit', ['Shop']], ['Order', ['Online']], ['Follow', ['Instagram']]], base: '© Crumb' }) }],
+    [950, 'done', { after: 'Say A, B or C.', streamed: true }],
+  ],
 };
 const seen = [];
 const server = http.createServer((req, res) => {
   const url = req.url.split('?')[0];
   if (url === '/api/voice-token') { res.writeHead(503); return res.end('{}'); }
+  if (url === '/api/scrape') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ url: 'https://crumb.example/', name: 'Crumb Bakery', title: 'Crumb Bakery', brandHue: 30, passages: [], index: null, timing: [{ name: 'crawl.page', start: 1, end: 40 }], serverMs: 45 })); }
   if (url === '/api/agent') {
     let b = ''; req.on('data', (c) => (b += c));
     req.on('end', async () => {
       const body = JSON.parse(b); if (body.warm) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"warm":false}'); }
       seen.push({ body, accept: req.headers.accept });
-      const key = /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' : /explode/.test(body.message) ? 'fail' : 'build';
+      const key = body.mode === 'mock' ? 'mock' : /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' : /explode/.test(body.message) ? 'fail' : 'build';
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const t0 = Date.now(); const send = (ev, data) => res.write(`event: ${ev}\ndata: ${JSON.stringify({ ...data, t: Date.now() - t0 })}\n\n`);
       send('hello', {});
@@ -129,6 +139,12 @@ const server = http.createServer((req, res) => {
   await page.evaluate(() => window.moss.app.send('explode the hero')); await idle();
   check('an error before the reply falls back to the offline agent', /offline demo agent/.test(await page.locator('.msg.agent').last().innerText()));
 
+  // a streamed mock: the old site is cleared first, the stray setDesign is ignored, looks are added when Moss leaves them out
+  await page.evaluate(() => window.moss.app.send('Mock up crumbbakery.co')); await idle();
+  const ms = await page.evaluate(() => { const s = window.moss.pageModel.get(); return { name: s.business.name, types: s.pages[0].sections.map((x) => x.type).join(), looks: s.mocks && s.mocks.looks.length, dir: s.design.direction, announce: s.business.copy.announce }; });
+  check('mock turns stream too: old site cleared, stray look ignored, three looks added', ms.name === 'Crumb Bakery' && ms.types === 'hero,footer' && ms.looks === 3 && ms.dir !== 'luxury' && ms.announce === null, JSON.stringify(ms));
+  const mt = JSON.parse(await page.evaluate(() => window.moss.latency.json())).at(-1);
+  check('…with the scrape and its crawl spans in the waterfall', mt.spans.some((x) => x.name === 'scrape site') && mt.spans.some((x) => x.name === 'crawl.page'));
   const stats = await page.evaluate(() => window.moss.latency.stats());
   const total = stats.find((s) => s.name === 'turn total');
   check('p50 / p95 over the kept turns', total && total.n >= 5 && total.p50 > 0 && total.p95 >= total.p50 && (await page.locator('#latStats tbody tr').count()) >= 5);
