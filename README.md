@@ -126,6 +126,7 @@ Server spans are placed on the page's clock using the server time carried on eve
 - **Prompt cache.** Moss caches prompts in 800-token blocks. The system prompt is the same on every call and padded to end on a block, so all of it is cached and only the turn's own tail is read. Run `node scripts/cache-align.mjs` after editing the prompt or the design library.
 - **Warm-up.** When the page opens, the server loads the router, opens the connection to Moss and primes the prompt cache.
 - **Rate limits.** fastlane-1 allows a burst of 10 requests per project. 429 and 503 replies with `Retry-After` are retried once.
+- **Voice to voice.** For voice turns the latency panel shows the time from the end of your speech (from the mic's level) to Moss's first sound, split into stages, and **Voice report** copies a summary. How to measure it: [docs/voice-measurement.md](docs/voice-measurement.md).
 - **Page pacing.** A section's entrance plays in full when nothing waits behind it, and shortens when sections arrive together.
 
 ## Run and deploy

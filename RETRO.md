@@ -61,7 +61,7 @@ For the next session. The work started on branch `claude/relaxed-fermat-rr1j2j` 
 
 **Next:**
 1. **Going public** (the user decides): a new public repository with clean history; decide about `references/`, `PROMPT.md`, `Critic prompt.md`, `design-log.md` and `RETRO.md`; add a LICENSE (`@inferedge/moss` is PolyForm Shield); enable Pages.
-2. **Voice to voice:** measure in a real browser. Then start turns on interim transcripts, stream TTS and cache the openers (see the speed plan in the chat).
+2. **Voice to voice:** the measurement is ready (mic-level end of speech, stages, **Voice report** in the latency panel; steps in `docs/voice-measurement.md`). The user runs it in Chrome with headphones and pastes the report. Then work on the largest stage: likely starting turns on interim transcripts, streaming TTS from the streamed reply words, and cached openers.
 3. **Ask Moss** the questions below.
 
 ## Earlier: the "replace Vercel" session (done)

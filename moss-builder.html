@@ -864,7 +864,7 @@ if (new URLSearchParams(location.search).has('replay')) { const f = window.fetch
 <body>
 <div id="app">
   <aside class="lat-panel glass" id="latPanel" hidden aria-label="Latency waterfall">
-    <div class="lat-h"><b>Latency</b><span class="lat-legend"><i class="g-retrieval"></i>retrieval<i class="g-inference ft"></i>first token<i class="g-inference"></i>inference<i class="g-network"></i>network<i class="g-apply"></i>page</span><span class="lat-voice" id="latVoice"></span><button type="button" class="chip" id="latCopy">Copy JSON</button><button type="button" class="icon-btn" id="latClose" aria-label="Close latency">×</button></div>
+    <div class="lat-h"><b>Latency</b><span class="lat-legend"><i class="g-retrieval"></i>retrieval<i class="g-inference ft"></i>first token<i class="g-inference"></i>inference<i class="g-network"></i>network<i class="g-apply"></i>page</span><span class="lat-voice" id="latVoice"></span><button type="button" class="chip" id="latVoiceReport" title="Copy a voice-to-voice summary (p50 / p95 per stage)">Voice report</button><button type="button" class="chip" id="latCopy">Copy JSON</button><button type="button" class="icon-btn" id="latClose" aria-label="Close latency">×</button></div>
     <div class="lat-turns" id="latTurns"></div>
     <div class="lat-stats" id="latStats"></div>
   </aside>
@@ -2789,6 +2789,31 @@ const voice = (() => {
   const UNFINISHED = /\b(and|so|but|or|um+|uh+|er+|like|then|because|with|the|a|an|to|of|for|maybe|also|plus)$/i;
   let live = null;
   const speech = { text: '', until: 0 };
+  /* Voice activity, for measuring voice to voice: when you actually stopped speaking, from the mic's level (an energy
+     detector over an adaptive noise floor). Transcripts arrive 100–300 ms after the words, so lastWordsAt is late.
+     Runs on the Deepgram mic stream; with the browser recognizer only with ?measure (it opens a second mic stream). */
+  const vad = { lastVoiceAt: 0, floor: 0.004, ctx: null, timer: null, stream: null };
+  function vadLevel(rms, t = performance.now()) {
+    vad.floor = rms < vad.floor ? vad.floor * 0.9 + rms * 0.1 : vad.floor * 0.998 + rms * 0.002;
+    if (rms > Math.max(0.012, vad.floor * 3)) vad.lastVoiceAt = t;
+  }
+  function vadStart(stream) {
+    if (vad.timer || !stream) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext; const ctx = new AC();
+      const an = ctx.createAnalyser(); an.fftSize = 1024; ctx.createMediaStreamSource(stream).connect(an);
+      const buf = new Float32Array(an.fftSize); vad.ctx = ctx;
+      vad.timer = setInterval(() => { an.getFloatTimeDomainData(buf); let sq = 0; for (let i = 0; i < buf.length; i++) sq += buf[i] * buf[i]; vadLevel(Math.sqrt(sq / buf.length)); }, 20);
+    } catch (e) { vad.timer = null; vad.ctx = null; } // no real mic stream (tests, old browsers): no detector
+  }
+  function vadStop() {
+    clearInterval(vad.timer); vad.timer = null;
+    try { vad.ctx && vad.ctx.close(); } catch (e) {} vad.ctx = null;
+    if (vad.stream) { vad.stream.getTracks().forEach((t) => t.stop()); vad.stream = null; }
+  }
+  /** The audio device's own delay before a sound is heard (Chrome reports it; 0 when unknown). */
+  let outCtx = null;
+  const outputMs = () => { try { outCtx = outCtx || new (window.AudioContext || window.webkitAudioContext)(); return Math.round(((outCtx.outputLatency || 0) + (outCtx.baseLatency || 0)) * 1000); } catch (e) { return 0; } };
   let lastHeardAt = 0; let lastWordsAt = 0; // lastWordsAt: performance clock, for the latency waterfall          // last time we heard *you* (non-echo speech)
   const queue = [];             // Moss's lines waiting for a quiet moment
   let flushTimer = null;
@@ -2962,6 +2987,7 @@ const voice = (() => {
     const l = live; if (!l) return;
     try {
       if (!dg.stream) dg.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+      vadStart(dg.stream);
       const cfg = await freshToken();
       if (live !== l) return;
       const pcm = await setupPcm(dg.stream);
@@ -3057,7 +3083,12 @@ const voice = (() => {
     if (live) return true;
     if (rec && active) { try { rec.abort(); } catch (e) {} }
     live = { h, pending: '', interim: '', timer: null, rec: null, ws: null, mr: null, keep: null, pcm: null, restarts: 0, startedAt: Date.now(), voiceAt: 0 };
-    if (dg.ready) { openDeepgram(); watchIdle(live); } else openLive();
+    if (dg.ready) { openDeepgram(); watchIdle(live); } else {
+      openLive();
+      if (new URLSearchParams(location.search).has('measure') && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const l = live; navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).then((st) => { if (live !== l) return st.getTracks().forEach((t) => t.stop()); vad.stream = st; vadStart(st); }).catch(() => {});
+      }
+    }
     return true;
   }
   // Spend control: a forgotten hot mic turns itself off after a couple of quiet minutes (Deepgram only; ?liveidle=<s> to tune)
@@ -3076,6 +3107,7 @@ const voice = (() => {
     try { l.rec && l.rec.abort(); } catch (e) {}
     const ws = l.ws; closeDg(l);
     try { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'CloseStream' })); ws && ws.close(); } catch (e) {}
+    vadStop();
     if (dg.stream) { dg.stream.getTracks().forEach((t) => t.stop()); dg.stream = null; } // release the mic
     l.h.onStop && l.h.onStop();
   }
@@ -3101,7 +3133,7 @@ const voice = (() => {
     speech.until = Math.max(speech.until, now) + est;
   }
   let timingHook = null;
-  const timing = (e) => { if (timingHook) try { timingHook(e); } catch (x) {} };
+  const timing = (e) => { if (timingHook) try { timingHook({ ...e, outputMs: outputMs() }); } catch (x) {} };
   function say(t, at = performance.now()) { const e = engine(); if (e === 'kokoro') sayKokoro(t, at); else if (e === 'aura') sayDeepgram(t, at); else sayBrowser(t, at); }
   function sayBrowser(t, at = performance.now()) {
     if (!synth) return;
@@ -3120,7 +3152,7 @@ const voice = (() => {
     if (synth) synth.cancel();
     speech.until = Math.min(speech.until, Date.now());
   }
-  return { init, backend: () => (dg.ready ? 'deepgram' : 'browser'), canPushToTalk: () => !!SR, supported: () => !!SR || dg.ready, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), engine, setEngine, preference: () => pref, auraAvailable: auraOk, kokoro: kokoroStatus, onKokoro: (fn) => kk.listeners.push(fn), lastWordsAt: () => lastWordsAt, onTiming: (fn) => { timingHook = fn; }, usage: () => ({ sentMs: dg.sentMs, skippedMs: dg.skippedMs, cacheHits: dg.cacheHits || 0, pcm: !!(live && live.pcm) }), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
+  return { init, backend: () => (dg.ready ? 'deepgram' : 'browser'), canPushToTalk: () => !!SR, supported: () => !!SR || dg.ready, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), engine, setEngine, preference: () => pref, auraAvailable: auraOk, kokoro: kokoroStatus, onKokoro: (fn) => kk.listeners.push(fn), lastWordsAt: () => lastWordsAt, lastVoiceAt: () => vad.lastVoiceAt, vadLevel, vadActive: () => !!vad.timer, onTiming: (fn) => { timingHook = fn; }, usage: () => ({ sentMs: dg.sentMs, skippedMs: dg.skippedMs, cacheHits: dg.cacheHits || 0, pcm: !!(live && live.pcm) }), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
 })();
 
 /* =====================================================================
@@ -3139,7 +3171,14 @@ const latency = (() => {
   function begin(text, o = {}) {
     const t0 = now();
     const tr = { id: Math.round(t0), text: String(text).slice(0, 80), t0, at: new Date().toISOString(), spans: [], marks: [], meta: { voice: !!o.voice, engine: null }, end: null };
-    if (o.speechEndAt && o.speechEndAt < t0 && t0 - o.speechEndAt < 15000) { tr.spans.push({ name: 'speech end → send', group: 'speech', start: o.speechEndAt, end: t0 }); tr.t0 = o.speechEndAt; }
+    tr.sentAt = t0;
+    const heardAt = o.speechEndAt && o.speechEndAt < t0 && t0 - o.speechEndAt < 15000 ? o.speechEndAt : null;
+    const stoppedAt = o.voiceEndAt && o.voiceEndAt <= t0 && t0 - o.voiceEndAt < 15000 && (!heardAt || (o.voiceEndAt <= heardAt + 50 && o.voiceEndAt >= heardAt - 3000)) ? o.voiceEndAt : null;
+    if (stoppedAt) { // the mic's voice detector knows when you actually stopped
+      if (heardAt && heardAt > stoppedAt) tr.spans.push({ name: 'you stopped → last words heard', group: 'speech', start: stoppedAt, end: heardAt });
+      tr.spans.push({ name: 'last words heard → sent', group: 'speech', start: heardAt && heardAt > stoppedAt ? heardAt : stoppedAt, end: t0 });
+      tr.t0 = stoppedAt; tr.meta.vad = true;
+    } else if (heardAt) { tr.spans.push({ name: 'speech end → send', group: 'speech', start: heardAt, end: t0 }); tr.t0 = heardAt; }
     turns.push(tr); if (turns.length > MAX) turns.shift();
     cur = tr; last = tr; schedule();
     const api = {
@@ -3156,7 +3195,7 @@ const latency = (() => {
     const tr = last; if (!tr || e.requestedAt < tr.t0) return;
     if (!tr.meta.engine) tr.meta.engine = e.engine;
     if (tr.spans.some((x) => x.group === 'voice')) return; // first audio only
-    tr.spans.push({ name: `first audio · ${e.engine}`, group: 'voice', start: e.requestedAt, end: e.startedAt, meta: { engine: e.engine, chars: (e.text || '').length } });
+    tr.spans.push({ name: `first audio · ${e.engine}`, group: 'voice', start: e.requestedAt, end: e.startedAt, meta: { engine: e.engine, chars: (e.text || '').length, outputMs: e.outputMs || 0 } });
     schedule();
   }
   const durOf = (tr) => Math.max(tr.end || 0, ...tr.spans.map((x) => x.end), ...tr.marks.map((m) => m.at)) - tr.t0;
@@ -3172,7 +3211,7 @@ const latency = (() => {
   /* The simple view: every span falls into one of a few plain categories. Retrieval and inference are the two that
      matter most, so each gets a row and a headline number even when it's zero. */
   const CATS = [
-    { key: 'speech', label: 'Turn detection', hint: 'from the end of your speech to the request', test: (n) => /^speech end/.test(n) },
+    { key: 'speech', label: 'Turn detection', hint: 'from the end of your speech to the request', test: (n) => /^speech end|^you stopped|^last words heard/.test(n) },
     { key: 'retrieval', label: 'Retrieval', hint: 'Moss search: the intent router and site facts', test: (n) => /^router\.(query|load)$|^knowledge|^index\.|^scrape|^crawl|^local command$/.test(n) },
     { key: 'inference', label: 'Inference', hint: 'Moss model calls; the darker part is the wait for the first token', test: (n) => /^(inference|talker)\.(ttft|total)$|^section\.|^(design|next)\.writer$|\.retry$/.test(n) },
     { key: 'network', label: 'Network', hint: 'browser to server and back', test: (n) => /^request → first byte$/.test(n) },
@@ -3193,7 +3232,43 @@ const latency = (() => {
       firstToken: ttfts.length ? Math.min(...ttfts.map((x) => x.end - x.start)) : null,
       inference: inf.length ? Math.max(...inf.map((x) => x.end)) - Math.min(...inf.map((x) => x.start)) : null, calls, routed,
       screen: shown ? shown.at - tr.t0 : null, total: tr.end ? durOf(tr) : null,
+      voice: voiceOf(tr),
     };
+  }
+  /** Voice to voice: from the end of your speech to Moss's first audio, and where the time went. */
+  function voiceOf(tr) {
+    const audio = tr.spans.find((x) => x.group === 'voice'); if (!audio) return null;
+    const out = (audio.meta && audio.meta.outputMs) || 0;
+    const sentAt = tr.sentAt != null ? tr.sentAt : tr.t0;
+    const recv = tr.marks.find((m) => m.name === 'reply received');
+    const v2v = audio.end + out - tr.t0;
+    const detect = Math.max(0, sentAt - tr.t0);
+    const moss = recv ? Math.max(0, recv.at - sentAt) : null;
+    const speech = audio.end - audio.start + out;
+    return { v2v, detect, moss, speech, other: Math.max(0, v2v - detect - (moss || 0) - speech), outputMs: out, engine: audio.meta && audio.meta.engine, trueEnd: !!tr.meta.vad };
+  }
+  /** A plain-text voice report (p50 / p95 and every voice turn), to copy and share. */
+  function voiceReport() {
+    const vs = turns.map((tr) => ({ tr, v: voiceOf(tr) })).filter((x) => x.v);
+    if (!vs.length) return 'No voice turns yet: turn on the mic and talk to Moss, then try again.';
+    const row = (label, pick) => { const a = vs.map((x) => pick(x.v)).filter((v) => v != null); return `${label.padEnd(26)}${ms(percentile(a, 50)).padStart(9)}${ms(percentile(a, 95)).padStart(9)}`; };
+    const engines = [...new Set(vs.map((x) => x.v.engine))].join(', ');
+    return [
+      `Moss Builder voice-to-voice report · ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`,
+      `${vs.length} voice turn${vs.length === 1 ? '' : 's'} · voice: ${engines} · end of speech from ${vs.every((x) => x.v.trueEnd) ? 'the mic level (true end)' : vs.some((x) => x.v.trueEnd) ? 'the mic level on some turns, transcripts on others' : 'transcripts (late by 100–300 ms; true end needs the Deepgram mic or ?measure)'}`,
+      `Browser: ${navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 90)}`,
+      '',
+      `${'Stage'.padEnd(26)}${'p50'.padStart(9)}${'p95'.padStart(9)}`,
+      row('Voice to voice', (v) => v.v2v),
+      row('  hearing you finish', (v) => v.detect),
+      row('  Moss reply', (v) => v.moss),
+      row('  speech synthesis', (v) => v.speech),
+      row('  other waits', (v) => v.other),
+      row('  (audio device delay)', (v) => v.outputMs || null),
+      '',
+      'Per turn: voice to voice = hearing you finish + Moss reply + speech synthesis + other waits',
+      ...vs.map(({ tr, v }) => `- ${ms(v.v2v)} = ${ms(v.detect)} + ${ms(v.moss)} + ${ms(v.speech)} + ${ms(v.other)} · "${tr.text.slice(0, 50)}"`),
+    ].join('\n');
   }
   function percentile(arr, p) { if (!arr.length) return null; const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor((p / 100) * a.length))]; }
   /** p50 / p95 per row name over the kept turns (the "apply ops" row uses its whole extent). */
@@ -3236,14 +3311,14 @@ const latency = (() => {
     } else {
       segs = spans.map((x) => `<i class="seg" style="left:${pct(x.start - tr.t0, scale)}%;width:${Math.max(0.4, pct(x.end - x.start, scale))}%" title="${esc(`${x.name}: ${ms(x.end - x.start)}`)}"></i>`).join('');
       value = spans.length ? ms(union(spans)) : '–';
-      note = cat.key === 'retrieval' ? (spans.length ? sm.retrievalWhat : 'none this turn') : cat.key === 'apply' ? `${spans.length} change${spans.length === 1 ? '' : 's'}` : '';
+      note = cat.key === 'retrieval' ? (spans.length ? sm.retrievalWhat : 'none this turn') : cat.key === 'apply' ? `${spans.length} change${spans.length === 1 ? '' : 's'}` : cat.key === 'voice' && sm.voice ? `${sm.voice.engine || ''}${sm.voice.outputMs ? ` · +${sm.voice.outputMs} ms device` : ''}` : cat.key === 'speech' && sm.voice ? (sm.voice.trueEnd ? 'from the mic level' : 'from the transcript') : '';
     }
     return `<div class="lat-row simple g-${cat.key}" title="${esc(cat.hint)}"><span class="nm">${esc(cat.label)}${note ? `<small>${esc(note)}</small>` : ''}</span><span class="v">${value}</span><span class="track">${segs}</span></div>`;
   }
   function tiles(tr) {
     const sm = summary(tr);
     const tile = (cls, label, v, sub) => `<div class="lat-tile g-${cls}"><span>${label}</span><b>${v}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
-    return `<div class="lat-tiles">${tile('retrieval', 'Retrieval', sm.retrieval != null ? ms(sm.retrieval) : '–', sm.retrieval != null ? sm.retrievalWhat : 'none')}${tile('inference', 'Moss first token', sm.firstToken != null ? ms(sm.firstToken) : '–', sm.routed ? 'no model call' : '')}${tile('inference', 'Inference', sm.inference != null ? ms(sm.inference) : '–', sm.calls > 1 ? `${sm.calls} calls` : '')}${tile('apply', 'Reply on screen', sm.screen != null ? ms(sm.screen) : '–', '')}</div>`;
+    return `<div class="lat-tiles">${tile('retrieval', 'Retrieval', sm.retrieval != null ? ms(sm.retrieval) : '–', sm.retrieval != null ? sm.retrievalWhat : 'none')}${tile('inference', 'Moss first token', sm.firstToken != null ? ms(sm.firstToken) : '–', sm.routed ? 'no model call' : '')}${tile('inference', 'Inference', sm.inference != null ? ms(sm.inference) : '–', sm.calls > 1 ? `${sm.calls} calls` : '')}${sm.voice ? tile('voice', 'Voice to voice', ms(sm.voice.v2v), `you stop → Moss speaks${sm.voice.trueEnd ? '' : ' (from transcript)'}`) : tile('apply', 'Reply on screen', sm.screen != null ? ms(sm.screen) : '–', '')}</div>`;
   }
   function render() {
     const panel = $('#latPanel'); if (!panel || panel.hidden) return;
@@ -3265,7 +3340,7 @@ const latency = (() => {
     if (open) render();
   }
   function json() { return JSON.stringify(turns.map((tr) => ({ text: tr.text, at: tr.at, totalMs: Math.round(durOf(tr)), meta: tr.meta, spans: rows(tr).map((r) => ({ name: r.name, group: r.group, startMs: Math.round(r.start - tr.t0), ms: Math.round(r.end - r.start), parts: r.segs.length, ...(r.meta ? { meta: r.meta } : {}) })), marks: tr.marks.map((m) => ({ name: m.name, atMs: Math.round(m.at - tr.t0) })) })), null, 2); }
-  return { begin, tts, stats, simpleStats, summary, toggle, render, json, turns: () => turns, NULL };
+  return { begin, tts, stats, simpleStats, summary, voiceReport, toggle, render, json, turns: () => turns, NULL };
 })();
 
 const app = (() => {
@@ -3798,7 +3873,7 @@ const app = (() => {
       return;
     }
     if (busy) await interrupt();
-    send(text, { voice: true, speechEndAt: voice.lastWordsAt() });
+    send(text, { voice: true, speechEndAt: voice.lastWordsAt(), voiceEndAt: voice.lastVoiceAt() });
   }
 
   /* ---- interruptible turns ---- */
@@ -3848,7 +3923,7 @@ const app = (() => {
       $('#chat').insertBefore($('#scene'), $('#suggest'));
       isoScene.render(); // clears ghosts
     }
-    const L = latency.begin(text, { voice: spoken, speechEndAt: opts.speechEndAt });
+    const L = latency.begin(text, { voice: spoken, speechEndAt: opts.speechEndAt, voiceEndAt: opts.voiceEndAt });
     setBusy(true); setStatus('Thinking', true); setSuggestions([]);
     addUser(text); flashMentions(text);
     const msg = addAgent();
@@ -4030,6 +4105,7 @@ const app = (() => {
     $('#styleBtn').addEventListener('click', () => toggleStyleDrawer());
     $('#latencyBtn').addEventListener('click', () => latency.toggle());
     $('#latClose').addEventListener('click', () => latency.toggle(false));
+    $('#latVoiceReport').addEventListener('click', async () => { const t = latency.voiceReport(); const b = $('#latVoiceReport'); try { await navigator.clipboard.writeText(t); b.textContent = 'Copied'; } catch (e) { console.log(t); b.textContent = 'Logged to console'; } setTimeout(() => (b.textContent = 'Voice report'), 1500); });
     $('#latCopy').addEventListener('click', async () => { const j = latency.json(); try { await navigator.clipboard.writeText(j); $('#latCopy').textContent = 'Copied'; } catch (e) { console.log(j); $('#latCopy').textContent = 'Logged to console'; } setTimeout(() => ($('#latCopy').textContent = 'Copy JSON'), 1500); });
     voice.onTiming((e) => latency.tts(e));
     // Voice switch (in the Latency panel): Aura / Kokoro / Browser, so the waterfall can compare first-audio times

@@ -132,6 +132,10 @@ const server = http.createServer((req, res) => {
   check('waterfall rows: speech, request, server inference spans, applying ops, first audio', ['speech end → send', 'request → first byte', 'inference.request', 'inference.ttft', 'inference.total', 'apply ops', 'first audio · browser'].every((n) => names.includes(n)), names.join(' | '));
   const sp = Object.fromEntries(t1.spans.map((s) => [s.name, s]));
   check('speech end → send is the 600 ms you waited', sp['speech end → send'].ms >= 550 && sp['speech end → send'].ms <= 900, String(sp['speech end → send'].ms));
+  // voice to voice for that turn: from the transcript (no mic level here), split into stages that add up
+  const v1 = await page.evaluate(() => window.moss.latency.summary(window.moss.latency.turns().at(-1)).voice);
+  check('voice to voice: measured from your last words to the first audio, in stages that add up', v1 && v1.v2v > 600 && !v1.trueEnd && Math.abs(v1.detect + (v1.moss || 0) + v1.speech + v1.other - v1.v2v) < 2 && v1.detect >= 550, JSON.stringify(v1));
+  check('voice to voice: the turn shows it as a headline tile', /Voice to voice/.test(await page.locator('#latTurns .lat-turn[open] .lat-tiles').innerText()));
   check('server spans land after the request starts (clocks lined up)', sp['inference.total'].startMs >= sp['request → first byte'].startMs - 5 && sp['inference.total'].ms >= 1500, JSON.stringify(sp['inference.total']));
   check('each op is its own segment on the build row', sp['apply ops'].parts === 7, String(sp['apply ops'].parts));
   check('the panel draws the turn with bars', (await page.locator('#latTurns .lat-turn').count()) === 1 && (await page.locator('#latTurns .lat-turn[open] .seg').count()) >= 8);
@@ -204,6 +208,17 @@ const server = http.createServer((req, res) => {
   check('the switch remembers the choice', (await pk.evaluate(() => localStorage.getItem('moss-voice'))) === 'browser' && (await pk.evaluate(() => window.moss.voice.engine())) === 'browser');
   check('no page errors (Kokoro)', errK.length === 0, errK.join(' | '));
   await ctxK.close();
+
+  // the mic's voice detector: the true end of speech starts the clock, before the last transcript
+  const pv = await browser.newPage(); await pv.goto(`${base}/?speed=0.03&debug`);
+  await pv.evaluate(() => { window.__spokenV = []; const S = window.speechSynthesis; S.speak = (u) => { setTimeout(() => u.onstart && u.onstart(), 30); setTimeout(() => u.onend && u.onend(), 60); }; });
+  await pv.evaluate(() => { const v = window.moss.voice; const now = performance.now(); v.vadLevel(0.3, now - 900); for (let i = 0; i < 10; i++) v.vadLevel(0.001, now - 880 + i * 20); window.moss.app.send('build a bakery called Crumb in Leeds', { voice: true, speechEndAt: now - 600, voiceEndAt: v.lastVoiceAt() }); });
+  await pv.evaluate(() => window.moss.app.whenIdle()); await pv.waitForTimeout(300);
+  const v2 = await pv.evaluate(() => { const t = window.moss.latency.turns().at(-1); return { v: window.moss.latency.summary(t).voice, names: t.spans.map((x) => x.name) }; });
+  check('voice detector: you stopped (mic level) → last words heard → sent', v2.names.includes('you stopped → last words heard') && v2.names.includes('last words heard → sent') && v2.v && v2.v.trueEnd && v2.v.detect >= 850, JSON.stringify(v2.v));
+  const report = await pv.evaluate(() => window.moss.latency.voiceReport());
+  check('voice report: p50/p95 per stage and each turn, ready to paste', /Voice to voice/.test(report) && /hearing you finish/.test(report) && /speech synthesis/.test(report) && /mic level \(true end\)/.test(report) && /^- \d/m.test(report), report.split('\n').slice(0, 3).join(' | '));
+  await pv.close();
 
   // fallback notices say what actually happened
   const pf = await browser.newPage(); await pf.goto(`${base}/?speed=0.03`);
