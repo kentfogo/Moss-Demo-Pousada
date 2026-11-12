@@ -1,8 +1,16 @@
 # Retro and handoff: Moss Builder latency work
 
-For the next session. Everything is on branch `claude/relaxed-fermat-rr1j2j` (PR kentfogo/Moss-Demo-Pousada#1). `npm test` runs 10 suites, all green.
+For the next session. The work started on branch `claude/relaxed-fermat-rr1j2j` (PR kentfogo/Moss-Demo-Pousada#1). The benchmark session continued on `claude/retro-md-continuation-y29ff4`, which holds all of that plus the benchmark. `npm test` runs 10 suites, all green.
 
-## Pick up here
+## Pick up here (after the benchmark session, 2026-11-12)
+Steps 1 to 3 of the previous list are done. Results are in **Benchmark** below and in `data/bench-results.md`.
+1. **Implement the two cheap fixes:**
+   - Keep the connection to Moss open between turns (an undici `Agent` with a long `keepAliveTimeout`).
+   - Make the page's warm-up ping also send a 1-token Moss call with the worker's system prompt. That opens the connection and primes the prefix cache.
+2. **Re-measure on Vercel** with the waterfall: `talker.ttft` and `inference.ttft` on turns 1 and 2, and after 30 s or more of idle.
+3. **Ask Moss** the questions below, especially the region. Then pin the Vercel function next to it.
+
+## Previous list (done)
 1. **Check the Moss keys.**
    - `MOSS_PROJECT_ID` and `MOSS_PROJECT_KEY` are now environment variables on this cloud environment, and the old Moss network secret was deleted.
    - Confirm both are set without printing them, e.g. `[ -n "$MOSS_PROJECT_KEY" ] && echo set`.
@@ -63,6 +71,41 @@ For the next session. Everything is on branch `claude/relaxed-fermat-rr1j2j` (PR
 - **Aura first audio:** p50 about 1.6 s before streaming. After streaming, the waterfall stopped recording first audio after turn 1. Possibly the headless browser fails to play the MP3; not checked in a real browser.
 - **Router:** queries take about 13 ms when warm. Cold load is about 5 s; a fresh server skips the router and a warm-up ping is sent. Hybrid keyword guards gave zero wrong commands in the live evaluation; high threshold 0.65.
 
+## Benchmark (2026-11-12, cloud dev container → Moss)
+- **How to run:** `npm run bench`. It rebuilds `data/bench-state.json` with `scripts/bench-state.cjs`, then runs `scripts/bench.mjs`. Not part of `npm test`.
+- **Setup:** 10 runs per variant, `X-Moss-Cache: off`. Times start once curl has the connection up, so the TCP + TLS cost is a separate column. Test edit: "make the headline punchier" on a 7-section page, phase `edit`.
+
+| Variant | TTFT p50 / p95 (ms) | Total p50 (ms) | Prompt / cached / output tokens |
+|---|---|---|---|
+| Round trip only (`GET /v1/models`) | n/a | 49 | n/a |
+| Talker | **100 / 116** | 166 | 231 / 0 / 10 |
+| Edit, new layout, **cold** prefix | 407 / 430 | 972 | 5,681 / 0 / 80 |
+| Edit, new layout, **warm** prefix | **119 / 134** | 789 | 5,669 / 5,600 / 87 |
+| Edit, old layout (320a90f), warm | 154 / 178 | 593 | 3,863 / 3,200 / 71 |
+| Edit, JSON mode off | 115 / 154 | 759 | 5,669 / 5,600 / 86 |
+| Edit, `max_tokens` 200 | 121 / 135 | 754 | 5,669 / 5,600 / 90 |
+| Edit, Responses API | 156 / 166 | 757 | 5,669 / 5,600 / 89 |
+
+Connection setup (TCP + TLS through the proxy) adds about 60 ms to every call that opens a new connection.
+
+**What it means:**
+- **Moss already answers in under 200 ms when the prefix is warm.** Talker 100 ms, edit 119 ms; about 50 ms of each is network round trip. The model's own first token takes roughly 50–70 ms.
+- **The prefix cache matters most.** A cold 5.7k-token prompt costs about 290 ms more (407 against 119). Cached counts are always multiples of 800 (5,600, 3,200, and last session's 4,800), so the cache probably works in 800-token blocks. Prompts under 800 tokens, like the talker's 231, are never cached; the talker is fast anyway.
+- **Cache lifetime:** a primed prefix was still fully cached after 0 s, 30 s and 2 min (5,600/5,700). The 5 and 10 minute results are under **Cache lifetime** below.
+- **The new prompt layout pays off.** It leaves 69 tokens uncached against 663 in the old layout, which makes it 35 ms faster to first token. Totals differ only through output length.
+- **No first-token effect** from JSON mode or `max_tokens`. Keep both.
+- **Responses API is about 37 ms slower** to first token than Chat Completions. Stay on Chat Completions.
+- **Output speed** is about 130 tokens/s (87 tokens in about 670 ms after the first).
+- **Rate limits:** about 2% of back-to-back calls got HTTP 429. The bench reports them and leaves them out of the times. No retry-after guidance was found.
+
+**Why Vercel measured 165–192 ms (talker) and 224–255 ms (worker), and what gets it under 200 ms:**
+1. **Warm prefix:** saves about 290 ms on cold turns. The worker prompt is identical every turn, so it stays warm while the user is active. The first turn after the page opens is cold unless the warm-up ping primes it with a 1-token call (cheap: almost every token is cached on later calls).
+2. **Connection reuse:** saves about 60 ms per turn. Node's fetch (undici) closes idle connections after 4 s by default, so almost every chat turn reconnects. Use a module-level `new Agent({ keepAliveTimeout: 60_000, keepAliveMaxTimeout: 300_000 })` as the `dispatcher`, and open the connection in the warm-up ping.
+3. **Region:** the container is about 49 ms from Moss. Vercel `iad1` could be closer or further. The region needs Moss's answer, or a test from two or three Vercel regions.
+4. **Already done, keep it:** Chat Completions, a stable system prompt first, the variable tail last.
+
+With 1 and 2, the expected server-side times on Vercel are a talker first token of about 100–130 ms and a worker first token of about 120–150 ms. That is not yet verified on Vercel. The browser → Vercel hop (about 140 ms) comes on top of that and is outside Moss.
+
 ## Moss docs findings (docs.moss.dev; `/llms.txt` indexes them)
 - **Endpoints:** both Responses (`/v1/responses`) and Chat Completions. Auth is `Bearer <id>:<key>`.
 - **Headers:**
@@ -75,10 +118,11 @@ For the next session. Everything is on branch `claude/relaxed-fermat-rr1j2j` (PR
 
 ## Questions for Moss
 - Which region? (Pin the Vercel function next to it.)
-- Is there a minimum prompt size for the prefix cache? Is 2,400 tokens the step size?
-- Does JSON mode slow generation?
+- Is the prefix cache in 800-token blocks, with nothing cached under 800? How long does a prefix stay cached, and can it be pinned or warmed explicitly?
+- What are the rate limits? We saw 429s on about 2% of back-to-back calls. Do 429 replies carry `Retry-After`?
+- What keep-alive timeout does the edge allow, and is HTTP/2 to the API recommended for reuse?
 - Are short-lived browser tokens planned?
-- What's the output speed of fastlane-1?
+- What's the output speed of fastlane-1? (We measured about 130 tokens/s.)
 
 ## Gotchas learned
 - **Vercel:**
@@ -95,6 +139,9 @@ For the next session. Everything is on branch `claude/relaxed-fermat-rr1j2j` (PR
 - **Deepgram:** the key needs the Member role to mint live-listening tokens. The user still has to swap the key.
 - **Kokoro:** the real model is untested here; the headless check was blocked by the permission classifier.
 - **Test servers:** must ignore the page's warm-up ping (`{warm:true}`).
+- **Bench:**
+  - Moss's server-sent events put spaces after colons (`"content": "Hi"`), so match them loosely.
+  - From a Node child process, curl can't write `-D /dev/stderr` (exit 23). Use `-D -` and parse the headers from stdout.
 
 ## Still open
 - **Vercel region:** pin the function next to Moss (needs Moss's region).

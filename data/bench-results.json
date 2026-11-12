@@ -1,0 +1,178 @@
+{
+ "when": "2026-11-12T14:34:30.208Z",
+ "model": "moss/fastlane-1",
+ "runs": 10,
+ "phase": "edit",
+ "results": [
+  {
+   "id": "rtt",
+   "label": "Round trip only (GET /v1/models)",
+   "ok": 10,
+   "runs": 10,
+   "ttftP50": null,
+   "ttftP95": null,
+   "totalP50": 49.28817700000003,
+   "totalP95": 74.49112099999994,
+   "connectP50": 63.96,
+   "prompt": null,
+   "cached": null,
+   "output": null,
+   "headers": {
+    "x-moss-box": "g904212",
+    "x-moss-request-id": "0c1fc6e402aa4c16ac8806840caa5556"
+   }
+  },
+  {
+   "id": "talker",
+   "label": "Talker (tiny prompt, 40 tokens)",
+   "ok": 10,
+   "runs": 10,
+   "ttftP50": 99.93194199999995,
+   "ttftP95": 115.59280900000013,
+   "totalP50": 166.21863599999983,
+   "totalP95": 181.97535499999995,
+   "connectP50": 61.945,
+   "prompt": 231,
+   "cached": 0,
+   "output": 10,
+   "headers": {
+    "x-moss-box": "g904212",
+    "x-moss-request-id": "0bd52554d6714ebf95cca153de39ef98",
+    "x-moss-retrieve-ms": "0.0"
+   }
+  },
+  {
+   "id": "talker-nostream",
+   "label": "Talker, not streamed",
+   "ok": 8,
+   "runs": 10,
+   "ttftP50": null,
+   "ttftP95": null,
+   "totalP50": 168.28496300000026,
+   "totalP95": 192.32707700000014,
+   "connectP50": 58.629,
+   "prompt": 231,
+   "cached": 0,
+   "output": 10,
+   "headers": {
+    "x-moss-box": "g904212",
+    "x-moss-request-id": "5b2e8c96b34f45c3bdbf9e2cfbab059a",
+    "x-moss-retrieve-ms": "0.0"
+   }
+  },
+  {
+   "id": "edit-cold",
+   "label": "Edit, new layout, cold prefix",
+   "ok": 10,
+   "runs": 10,
+   "ttftP50": 406.5140119999997,
+   "ttftP95": 430.08078699999965,
+   "totalP50": 972.3786049999997,
+   "totalP95": 1182.9181630000003,
+   "connectP50": 58.419,
+   "prompt": 5681,
+   "cached": 0,
+   "output": 79.8,
+   "headers": {
+    "x-moss-box": "g904212",
+    "x-moss-request-id": "bb39de7536464086b9c2a087aa42bc30",
+    "x-moss-retrieve-ms": "0.0"
+   }
+  },
+  {
+   "id": "edit-warm",
+   "label": "Edit, new layout, warm prefix",
+   "ok": 10,
+   "runs": 10,
+   "ttftP50": 118.94592799999955,
+   "ttftP95": 133.58247700000013,
+   "totalP50": 788.9408550000018,
+   "totalP95": 1092.7520459999994,
+   "connectP50": 58.916000000000004,
+   "prompt": 5669,
+   "cached": 5600,
+   "output": 86.7,
+   "headers": {
+    "x-moss-box": "g904212",
+    "x-moss-request-id": "9df6e2e9dd2746b582d4a0393c763c97",
+    "x-moss-retrieve-ms": "0.0"
+   }
+  },
+  {
+   "id": "edit-old",
+   "label": "Edit, old layout (320a90f), warm",
+   "ok": 10,
+   "runs": 10,
+   "ttftP50": 154.2706989999991,
+   "ttftP95": 178.07068199999952,
+   "totalP50": 593.1786180000003,
+   "totalP95": 909.9337900000005,
+   "connectP50": 61.078,
+   "prompt": 3863,
+   "cached": 3200,
+   "output": 71.3,
+   "headers": {
+    "x-moss-box": "g904212",
+    "x-moss-request-id": "c2374955cd9d4fffbc2ecc2ee1bba69a",
+    "x-moss-retrieve-ms": "0.0"
+   }
+  },
+  {
+   "id": "edit-nojson",
+   "label": "Edit, new layout, JSON mode off",
+   "ok": 10,
+   "runs": 10,
+   "ttftP50": 114.92608499999862,
+   "ttftP95": 154.46352400000143,
+   "totalP50": 758.722509999999,
+   "totalP95": 922.6221870000035,
+   "connectP50": 60.958,
+   "prompt": 5669,
+   "cached": 5600,
+   "output": 86.4,
+   "headers": {
+    "x-moss-box": "g904212",
+    "x-moss-request-id": "502d4cd72aff44aea08da3d0d47d4d1e",
+    "x-moss-retrieve-ms": "0.0"
+   }
+  },
+  {
+   "id": "edit-cap200",
+   "label": "Edit, new layout, max_tokens 200",
+   "ok": 10,
+   "runs": 10,
+   "ttftP50": 120.76217799999944,
+   "ttftP95": 135.4709580000047,
+   "totalP50": 753.6329589999973,
+   "totalP95": 1054.1708400000055,
+   "connectP50": 58.802,
+   "prompt": 5669,
+   "cached": 5600,
+   "output": 89.9,
+   "headers": {
+    "x-moss-box": "g904212",
+    "x-moss-request-id": "e706df736e324f99b2836012ea61428a",
+    "x-moss-retrieve-ms": "0.0"
+   }
+  },
+  {
+   "id": "edit-responses",
+   "label": "Edit, Responses API (/v1/responses)",
+   "ok": 10,
+   "runs": 10,
+   "ttftP50": 156.4083710000016,
+   "ttftP95": 166.1730549999983,
+   "totalP50": 757.3238130000007,
+   "totalP95": 1069.9721730000015,
+   "connectP50": 58.662,
+   "prompt": 5669,
+   "cached": 5600,
+   "output": 89.1,
+   "headers": {
+    "x-moss-box": "g904212",
+    "x-moss-request-id": "b36872bb1ee14dedacdc26494c0f841c",
+    "x-moss-retrieve-ms": "0.0"
+   }
+  }
+ ]
+}

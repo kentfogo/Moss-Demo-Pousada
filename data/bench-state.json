@@ -1,0 +1,557 @@
+{
+ "state": {
+  "business": {
+   "name": "Studio Brooklyn",
+   "kind": "generic",
+   "place": "Brooklyn"
+  },
+  "palette": "ice",
+  "design": {
+   "direction": "swiss",
+   "name": "Swiss Minimal",
+   "colors": {
+    "bg": "#ffffff",
+    "surface": "#f2f2f2",
+    "ink": "#121212",
+    "muted": "#575757",
+    "accent": "#df1684",
+    "accent2": "#121212",
+    "inverse": "#121212"
+   },
+   "swatches": {},
+   "type": {
+    "display": "Inter",
+    "body": "Inter",
+    "mono": "JetBrains Mono",
+    "case": "none",
+    "weight": 700,
+    "tracking": -0.045,
+    "scale": 1.05,
+    "navCase": "none"
+   },
+   "shape": {
+    "radius": 0,
+    "button": "square",
+    "border": "hairline",
+    "shadow": "none"
+   },
+   "variants": {
+    "hero": "bigtype",
+    "features": "cards",
+    "testimonials": "grid",
+    "pricing": "table",
+    "faq": "split",
+    "cta": "split",
+    "footer": "columns"
+   },
+   "art": "shapes",
+   "motion": "calm",
+   "button": {
+    "style": "auto",
+    "size": "m",
+    "hover": "auto"
+   },
+   "nav": {
+    "style": "bar",
+    "sticky": false
+   }
+  },
+  "plan": null,
+  "drafts": [],
+  "pages": [
+   {
+    "id": "home",
+    "name": "Home",
+    "sections": [
+     {
+      "id": "her97401",
+      "type": "hero",
+      "data": {
+       "eyebrow": "Independent studio · Brooklyn",
+       "headline": "Careful work, done properly.",
+       "punchy": [
+        "Done properly.",
+        "Made with care.",
+        "Less, but better."
+       ],
+       "punchIx": 0,
+       "sub": "Studio Brooklyn is a small team doing one thing well: thoughtful work, delivered on time, with nothing lost in translation.",
+       "subShort": "Thoughtful work, on time.",
+       "primary": "Get in touch",
+       "secondary": "See our work",
+       "card": {
+        "title": "Next availability",
+        "tag": "Open",
+        "rows": [
+         [
+          "Start",
+          "April"
+         ],
+         [
+          "Team",
+          "3 people"
+         ],
+         [
+          "Response",
+          "Same day"
+         ]
+        ],
+        "cta": "Get in touch",
+        "note": "Free 20-minute intro call"
+       },
+       "logos": null
+      }
+     },
+     {
+      "id": "fea97402",
+      "type": "features",
+      "data": {
+       "eyebrow": "What we do",
+       "title": "Fewer things, done better.",
+       "lede": "A short list, held to a high standard.",
+       "items": [
+        [
+         "compass",
+         "Clear scope",
+         "We agree what done looks like before we start."
+        ],
+        [
+         "clock",
+         "On time",
+         "Weekly check-ins and a date we keep."
+        ],
+        [
+         "shield",
+         "Quality first",
+         "Reviewed twice, shipped once."
+        ],
+        [
+         "leaf",
+         "Built to last",
+         "Work that ages well."
+        ]
+       ]
+      }
+     },
+     {
+      "id": "tes97403",
+      "type": "testimonials",
+      "data": {
+       "eyebrow": "Clients",
+       "title": "Kind words.",
+       "items": [
+        [
+         "Calm, clear and genuinely excellent to work with.",
+         "Marta L.",
+         "Founder"
+        ],
+        [
+         "They did exactly what they said they would.",
+         "James O.",
+         "Director"
+        ],
+        [
+         "We came back three times. That says it.",
+         "Nadia F.",
+         "Owner"
+        ]
+       ],
+       "logos": "Trusted by"
+      }
+     },
+     {
+      "id": "pri97404",
+      "type": "pricing",
+      "data": {
+       "eyebrow": "Pricing",
+       "title": "Straightforward rates.",
+       "lede": "Fixed prices, agreed upfront.",
+       "unit": "/ project",
+       "cta": "Enquire",
+       "plans": [
+        [
+         "Starter",
+         "€900",
+         [
+          "Single deliverable",
+          "One revision round",
+          "Two weeks"
+         ],
+         false
+        ],
+        [
+         "Studio",
+         "€2,400",
+         [
+          "Full project",
+          "Three revision rounds",
+          "Four weeks"
+         ],
+         true
+        ],
+        [
+         "Partner",
+         "€4,800",
+         [
+          "Ongoing support",
+          "Priority scheduling",
+          "Quarterly review"
+         ],
+         false
+        ]
+       ]
+      }
+     },
+     {
+      "id": "faq97405",
+      "type": "faq",
+      "data": {
+       "eyebrow": "FAQ",
+       "title": "Common questions.",
+       "items": [
+        [
+         "How do we start?",
+         "A free 20-minute call to understand what you need."
+        ],
+        [
+         "How long does it take?",
+         "Most projects take two to six weeks."
+        ],
+        [
+         "Do you work remotely?",
+         "Yes, with clients everywhere."
+        ],
+        [
+         "How do payments work?",
+         "Half upfront, half on delivery."
+        ]
+       ]
+      }
+     },
+     {
+      "id": "cta97406",
+      "type": "cta",
+      "data": {
+       "eyebrow": "Next step",
+       "title": "Let’s make something good.",
+       "titles": [
+        "Let’s make something good.",
+        "Start with a conversation.",
+        "Your project, done properly."
+       ],
+       "sub": "Tell us what you’re working on.",
+       "button": "Get in touch",
+       "titleIx": 0,
+       "href": "#/home"
+      }
+     },
+     {
+      "id": "foo97407",
+      "type": "footer",
+      "data": {
+       "blurb": "Careful work, done properly.",
+       "cols": [
+        [
+         "Studio",
+         [
+          "Work",
+          "About",
+          "Journal"
+         ]
+        ],
+        [
+         "Contact",
+         [
+          "Email",
+          "Visit"
+         ]
+        ],
+        [
+         "Follow",
+         [
+          "Instagram",
+          "Newsletter"
+         ]
+        ]
+       ],
+       "base": "© 2026 Studio Brooklyn",
+       "name": "Studio Brooklyn"
+      }
+     }
+    ]
+   }
+  ],
+  "currentPage": "home",
+  "links": [],
+  "flows": [],
+  "pagePos": {
+   "home": {
+    "x": 40,
+    "y": 0
+   }
+  }
+ },
+ "directions": [
+  {
+   "id": "editorial",
+   "name": "Editorial Serif",
+   "mood": "Magazine-like: big literary serif, warm paper, generous space.",
+   "fits": "hospitality, food, culture, studios, boutiques",
+   "palette": "warm paper base tinted toward the brand, near-black ink, one rich accent",
+   "type": {
+    "display": "Fraunces",
+    "body": "Inter",
+    "case": "none"
+   },
+   "shape": {
+    "radius": 4,
+    "button": "square",
+    "border": "hairline",
+    "shadow": "none"
+   },
+   "mode": "light",
+   "variants": {
+    "hero": "editorial",
+    "features": "list",
+    "testimonials": "single",
+    "pricing": "cards",
+    "faq": "split",
+    "cta": "minimal",
+    "footer": "wordmark"
+   },
+   "art": "frame"
+  },
+  {
+   "id": "swiss",
+   "name": "Swiss Minimal",
+   "mood": "Strict grid, heavy grotesk, black and white with one signal colour.",
+   "fits": "agencies, software, architecture, consultancies",
+   "palette": "pure white, black ink, one loud signal colour",
+   "type": {
+    "display": "Inter",
+    "body": "Inter",
+    "case": "none"
+   },
+   "shape": {
+    "radius": 0,
+    "button": "square",
+    "border": "hairline",
+    "shadow": "none"
+   },
+   "mode": "light",
+   "variants": {
+    "hero": "bigtype",
+    "features": "cards",
+    "testimonials": "grid",
+    "pricing": "table",
+    "faq": "split",
+    "cta": "split",
+    "footer": "columns"
+   },
+   "art": "shapes"
+  },
+  {
+   "id": "brutal",
+   "name": "Neo-Brutalist",
+   "mood": "Loud display type, flat bold fills, square buttons with hard shadows.",
+   "fits": "burgers, bars, streetwear, events, indie brands",
+   "palette": "pastel base, black outlines, a saturated accent plus a contrasting second colour",
+   "type": {
+    "display": "Bowlby One",
+    "body": "Archivo",
+    "case": "uppercase"
+   },
+   "shape": {
+    "radius": 0,
+    "button": "brutal",
+    "border": "heavy",
+    "shadow": "hard"
+   },
+   "mode": "light",
+   "variants": {
+    "hero": "bigtype",
+    "features": "cards",
+    "testimonials": "marquee",
+    "pricing": "cards",
+    "faq": "centered",
+    "cta": "band",
+    "footer": "wordmark"
+   },
+   "art": "shapes"
+  },
+  {
+   "id": "darktech",
+   "name": "Dark Tech",
+   "mood": "Near-black canvas, crisp grotesk, a cyan signal colour and dot-grid visuals.",
+   "fits": "developer tools, AI, SaaS, security, infrastructure",
+   "palette": "near-black base with a cool cast, one luminous accent, grey text",
+   "type": {
+    "display": "Inter",
+    "body": "Inter",
+    "case": "none"
+   },
+   "shape": {
+    "radius": 8,
+    "button": "accent",
+    "border": "hairline",
+    "shadow": "none"
+   },
+   "mode": "dark",
+   "variants": {
+    "hero": "spotlight",
+    "features": "bento",
+    "testimonials": "grid",
+    "pricing": "cards",
+    "faq": "centered",
+    "cta": "minimal",
+    "footer": "columns"
+   },
+   "art": "dotgrid"
+  },
+  {
+   "id": "hospitality",
+   "name": "Warm Hospitality",
+   "mood": "Soft serif, sand and terracotta, rounded cards and a gentle glow.",
+   "fits": "hotels, guesthouses, spas, cafes, wellness",
+   "palette": "soft sand base, deep warm ink, an earthy accent and a pale companion",
+   "type": {
+    "display": "Instrument Serif",
+    "body": "Inter",
+    "case": "none"
+   },
+   "shape": {
+    "radius": 16,
+    "button": "pill",
+    "border": "hairline",
+    "shadow": "soft"
+   },
+   "mode": "light",
+   "variants": {
+    "hero": "split",
+    "features": "list",
+    "testimonials": "grid",
+    "pricing": "cards",
+    "faq": "split",
+    "cta": "band",
+    "footer": "columns"
+   },
+   "art": "orb"
+  },
+  {
+   "id": "playful",
+   "name": "Playful Rounded",
+   "mood": "Chunky rounded type, sunny colours, big friendly shapes.",
+   "fits": "kids, pets, education, apps, community",
+   "palette": "creamy bright base, deep ink, a vivid accent and a sunny second colour",
+   "type": {
+    "display": "Nunito",
+    "body": "Nunito",
+    "case": "none"
+   },
+   "shape": {
+    "radius": 24,
+    "button": "pill",
+    "border": "none",
+    "shadow": "soft"
+   },
+   "mode": "light",
+   "variants": {
+    "hero": "split",
+    "features": "icons",
+    "testimonials": "single",
+    "pricing": "cards",
+    "faq": "centered",
+    "cta": "split",
+    "footer": "columns"
+   },
+   "art": "shapes"
+  },
+  {
+   "id": "mono",
+   "name": "Mono Grid",
+   "mood": "Grey paper, visible grid lines, grotesk headlines and mono details.",
+   "fits": "portfolios, photographers, designers, galleries",
+   "palette": "grey paper, black ink, accent kept almost neutral",
+   "type": {
+    "display": "Space Grotesk",
+    "body": "Space Grotesk",
+    "case": "none"
+   },
+   "shape": {
+    "radius": 2,
+    "button": "outline",
+    "border": "hairline",
+    "shadow": "none"
+   },
+   "mode": "light",
+   "variants": {
+    "hero": "editorial",
+    "features": "list",
+    "testimonials": "grid",
+    "pricing": "table",
+    "faq": "split",
+    "cta": "minimal",
+    "footer": "wordmark"
+   },
+   "art": "pattern"
+  },
+  {
+   "id": "luxury",
+   "name": "Quiet Luxury",
+   "mood": "Deep charcoal, gold hairlines, refined serif, lots of air.",
+   "fits": "jewellery, fine dining, real estate, private clinics, law",
+   "palette": "deep warm charcoal, ivory text, one metallic accent",
+   "type": {
+    "display": "DM Serif Display",
+    "body": "Inter",
+    "case": "none"
+   },
+   "shape": {
+    "radius": 0,
+    "button": "outline",
+    "border": "hairline",
+    "shadow": "none"
+   },
+   "mode": "dark",
+   "variants": {
+    "hero": "centered",
+    "features": "cards",
+    "testimonials": "single",
+    "pricing": "cards",
+    "faq": "split",
+    "cta": "minimal",
+    "footer": "wordmark"
+   },
+   "art": "orb"
+  },
+  {
+   "id": "trade",
+   "name": "Trade Bold",
+   "mood": "Condensed uppercase headlines, navy and safety orange, direct and practical.",
+   "fits": "plumbers, electricians, builders, movers, gyms, auto",
+   "palette": "clean white, deep brand-tinted navy ink, one safety-bright accent",
+   "type": {
+    "display": "Bebas Neue",
+    "body": "Inter",
+    "case": "uppercase"
+   },
+   "shape": {
+    "radius": 6,
+    "button": "square",
+    "border": "none",
+    "shadow": "none"
+   },
+   "mode": "light",
+   "variants": {
+    "hero": "split",
+    "features": "icons",
+    "testimonials": "grid",
+    "pricing": "cards",
+    "faq": "split",
+    "cta": "band",
+    "footer": "columns"
+   },
+   "art": "shapes"
+  }
+ ]
+}
