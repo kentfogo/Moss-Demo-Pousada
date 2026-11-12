@@ -23,7 +23,7 @@ export async function lookup(host, tr, env = process.env) {
 /** The summary stored with the index (so a cached site skips the crawl). */
 export async function cachedSummary(name, env = process.env) {
   const c = await client(env); if (!c) return null;
-  try { const [m] = await c.getDocs(name, { docIds: ['__meta'] }); return m && m.metadata && m.metadata.summary ? JSON.parse(m.metadata.summary) : null; } catch { return null; }
+  try { const [m] = await c.getDocs(name, { docIds: ['__meta'] }); const raw = m && m.text && m.text.startsWith('{') ? m.text : m && m.metadata && m.metadata.summary; return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
 
 /**
@@ -43,15 +43,16 @@ export async function build(host, passages, summary, tr, env = process.env) {
     for (const x of all.slice(0, Math.max(0, extra))) { try { await c.deleteIndex(x.name); } catch {} }
   } catch {}
   const docs = passages.map((p, i) => ({ id: `p${i}`, text: p.text, metadata: { kind: p.kind, page: p.page } }));
-  docs.push({ id: '__meta', text: `Site summary for ${summary && summary.name}`, metadata: { kind: 'meta', summary: JSON.stringify(summary).slice(0, 6000) } });
-  let uploaded = false, done = false;
-  const job = c.createIndex(name, docs, { onProgress: (p) => { if (p && p.status && p.status !== 'pending_upload' && p.status !== 'uploading') uploaded = true; } })
-    .then(() => { done = true; ready.set(name, true); });
-  job.catch(() => {});
+  docs.push({ id: '__meta', text: JSON.stringify(summary).slice(0, 8000), metadata: { kind: 'meta' } }); // the summary, so a cached site skips the crawl
+  let uploaded = false, done = false, error = null, phase = null;
+  const job = c.createIndex(name, docs, { onProgress: (p) => { phase = p && (p.currentPhase || p.status); if (p && p.status && p.status !== 'pending_upload' && p.status !== 'uploading') uploaded = true; } })
+    .then(() => { done = true; ready.set(name, true); }, (e) => { error = String(e && e.message).slice(0, 200); });
+  // keep the build going after the response is sent (Vercel would otherwise freeze the function)
+  try { const { waitUntil } = await import('@vercel/functions'); waitUntil(job); } catch {}
   const t0 = Date.now();
-  while (!done && !uploaded && Date.now() - t0 < KNOWLEDGE.uploadWaitMs) { await new Promise((r) => setTimeout(r, 100)); }
-  await Promise.race([job, new Promise((r) => setTimeout(r, 50))]).catch(() => {});
-  if (end) end({ ready: done, uploaded: uploaded || done });
+  while (!done && !error && !uploaded && Date.now() - t0 < KNOWLEDGE.uploadWaitMs) { await new Promise((r) => setTimeout(r, 100)); }
+  if (end) end({ ready: done, uploaded: uploaded || done, phase, ...(error ? { error } : {}) });
+  if (error) throw new Error(error);
   return { name, ready: done, passages: passages.length };
 }
 

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@deepgram/sdk": "^5.18.0",
-    "@inferedge/moss": "^1.0.0-beta.8"
+    "@inferedge/moss": "^1.0.0-beta.8",
+    "@vercel/functions": "^3.11.1"
   }
 }

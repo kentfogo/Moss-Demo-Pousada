@@ -273,7 +273,7 @@ kfake.indexes.set('site-new-one', { name: 'site-new-one', status: 'Building', cr
 check('knowledge: an index still building returns nothing (and says so)', (await kn.retrieve('site-new-one', ['opening hours'], ktr)).length === 0 && ktr.spans.some((x) => x.name === 'knowledge.pending'));
 check('knowledge: without an index, passages are picked by kind', kn.byKind(crawled.passages).some((x) => x.kind === 'hours'));
 for (let i = 0; i < 52; i++) kfake.indexes.set(`site-x${i}`, { name: `site-x${i}`, createdAt: new Date(now - (60 - i) * 1000).toISOString(), status: 'Ready' });
-kfake.deleted.length = 0; await kn.build('joes.example', crawled.passages, crawled.summary, trace());
+kfake.deleted.length = 0; await kn.build('joes.example', crawled.passages, crawled.summary, trace()); await new Promise((r) => setTimeout(r, 60));
 check('knowledge: at most ~50 site indexes, oldest deleted first', kfake.deleted.includes('site-old-1') && kfake.deleted.includes('site-x0') && !kfake.deleted.includes('site-x51'), kfake.deleted.slice(0, 5).join());
 // in the agent: mock builds get SITE FACTS; edits on a mocked site only when relevant
 Object.assign(process.env, env('moss-test')); process.env.MOSS_ROUTER = 'off';
