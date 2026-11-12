@@ -10,6 +10,8 @@
 //   MOSS_TEMPERATURE  optional  default 0.4
 
 import { guard } from './_guard.js';
+import { trace } from './_trace.js';
+import { createScanner } from './_jsonScan.js';
 
 export const config = { maxDuration: 60 };
 
@@ -201,40 +203,104 @@ export function buildMessages({ message, state, history, directions, recentDirec
   ];
 }
 
-export async function callMoss({ message, state, history, directions, recentDirections, live, mode, scraped }, env = process.env, fetchImpl = fetch) {
+/** Read an OpenAI-style SSE stream and yield the text deltas. */
+async function* deltas(body) {
+  const reader = body.getReader(); const dec = new TextDecoder(); let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let k;
+    while ((k = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, k).trim(); buf = buf.slice(k + 1);
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim();
+      if (data === '[DONE]') return;
+      try { const j = JSON.parse(data); const d = j?.choices?.[0]?.delta?.content ?? j?.choices?.[0]?.message?.content; if (d) yield d; } catch {}
+    }
+  }
+}
+
+/**
+ * Ask Moss Inference for the reply and ops.
+ * opts.stream: ask for a token stream and report reply/ops through opts.onEvent as they complete (falls back to one response).
+ * opts.tr: a trace (api/_trace.js) for the latency waterfall. opts.extra: text added before STATE (router hints, site facts).
+ */
+export async function callMoss({ message, state, history, directions, recentDirections, live, mode, scraped }, env = process.env, fetchImpl = fetch, opts = {}) {
   const { token, base, model } = mossSettings(env);
   if (!token) {
     // Names only (never values), so a misnamed or wrongly scoped variable is easy to spot.
     const seen = Object.keys(env).filter((k) => /moss/i.test(k)).sort();
     throw Object.assign(new Error(`Moss inference is not configured (set MOSS_PROJECT_ID and MOSS_PROJECT_KEY). Moss variables visible to this deployment: ${seen.length ? seen.join(', ') : 'none'}`), { status: 503 });
   }
-  const payload = { model, messages: buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped }), max_tokens: MAX_TOKENS[phaseOf(state, mode)] || 900, temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
+  const tr = opts.tr; const emit = opts.onEvent || (() => {});
+  const messages = buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped });
+  if (opts.extra) messages[messages.length - 1].content = opts.extra + messages[messages.length - 1].content;
+  const payload = { model, messages, max_tokens: MAX_TOKENS[phaseOf(state, mode)] || 900, temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' }, ...(opts.stream ? { stream: true } : {}) };
   const post = (body) => fetchImpl(`${base}/chat/completions`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(opts.stream ? { accept: 'text/event-stream' } : {}) },
     body: JSON.stringify(body),
   });
+  const endReq = tr ? tr.start('inference.request', { model, promptChars: JSON.stringify(messages).length }) : null;
+  const tInf = tr ? tr.now() : 0;
   let r = await post(payload);
   if (r.status === 400 || r.status === 422) { // some OpenAI-compatible servers reject response_format; retry without it
     const { response_format, ...plain } = payload;
     r = await post(plain);
   }
+  if (endReq) endReq({ status: r.status });
   if (!r.ok) {
     const detail = (await r.text().catch(() => '')).slice(0, 300);
     throw Object.assign(new Error(`Moss inference returned ${r.status}${detail ? ': ' + detail : ''}`), { status: 502 });
   }
-  const json = await r.json();
-  const content = json?.choices?.[0]?.message?.content;
+  const streamed = !!opts.stream && /text\/event-stream/i.test(r.headers?.get?.('content-type') || '') && !!r.body;
+  let content = '';
+  const sent = { reply: false, ops: 0 };
+  if (streamed) {
+    const scan = createScanner(); let first = true;
+    for await (const d of deltas(r.body)) {
+      if (first && tr) { tr.add('inference.ttft', tInf, tr.now()); first = false; }
+      content += d;
+      for (const ev of scan.push(d)) {
+        if (ev.type === 'reply') { sent.reply = true; emit('reply', { reply: ev.text }); }
+        else { sent.ops++; emit('op', { op: ev.op }); }
+      }
+    }
+  } else {
+    const json = await r.json();
+    content = json?.choices?.[0]?.message?.content;
+  }
+  if (tr) tr.add('inference.total', tInf, tr.now(), { streamed, chars: (content || '').length });
   const out = extractJSON(content);
-  return {
+  const result = {
     reply: typeof out.reply === 'string' ? out.reply : '',
     ops: Array.isArray(out.ops) ? out.ops : [],
     after: typeof out.after === 'string' ? out.after : undefined,
     suggestions: Array.isArray(out.suggestions) ? out.suggestions.filter((s) => typeof s === 'string').slice(0, 4) : undefined,
+    streamed,
   };
+  // anything the scanner could not deliver early (odd formatting) still goes out, in order
+  if (opts.onEvent) {
+    if (!sent.reply) emit('reply', { reply: result.reply });
+    result.ops.slice(sent.ops).forEach((op) => emit('op', { op }));
+  }
+  return result;
 }
 
+/** Turn arguments from the request body. */
+function argsOf(body, message) {
+  return { message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live, mode: ['plan', 'autopilot', 'mock'].includes(body.mode) ? body.mode : undefined, scraped: body.mode === 'mock' && body.scraped && typeof body.scraped === 'object' ? body.scraped : undefined };
+}
+
+/**
+ * Work done before inference (the intent router and site knowledge, added in later steps). Returns
+ * { route } to answer without the model, or { extra } to add to the prompt. Replaceable in tests.
+ */
+export const hooks = { async prepare(/* args, tr, env */) { return {}; } };
+
 export default async function handler(req, res) {
+  const tr = trace();
   if (guard(req, res, { methods: ['POST'], bucket: 'agent' })) return;
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'invalid JSON' }); } }
@@ -242,11 +308,40 @@ export default async function handler(req, res) {
   if (!message) return res.status(400).json({ error: 'message is required' });
   if (message.length > MAX_MESSAGE) return res.status(413).json({ error: 'message too long' });
   if (JSON.stringify(body.state || {}).length > MAX_STATE) return res.status(413).json({ error: 'state too large' });
-  try {
-    const result = await callMoss({ message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live, mode: ['plan', 'autopilot', 'mock'].includes(body.mode) ? body.mode : undefined, scraped: body.mode === 'mock' && body.scraped && typeof body.scraped === 'object' ? body.scraped : undefined });
-    res.setHeader('cache-control', 'no-store');
-    return res.status(200).json(result);
-  } catch (err) {
-    return res.status(err.status || 500).json({ error: err.message || 'agent failed' });
+  if (!mossSettings().token) { try { await callMoss(argsOf(body, message)); } catch (err) { return res.status(err.status || 500).json({ error: err.message }); } }
+  const args = argsOf(body, message);
+  const wantsStream = /text\/event-stream/i.test((req.headers && req.headers.accept) || '') && args.mode !== 'mock';
+  res.setHeader('cache-control', 'no-store');
+  if (!wantsStream) {
+    try {
+      const pre = await hooks.prepare(args, tr, process.env);
+      if (pre.route) return res.status(200).json({ reply: '', ops: [], route: pre.route, timing: tr.spans, serverMs: tr.now() });
+      const result = await callMoss(args, process.env, fetch, { tr, extra: pre.extra });
+      return res.status(200).json({ ...result, ...(pre.meta ? { meta: pre.meta } : {}), timing: tr.spans, serverMs: tr.now() });
+    } catch (err) {
+      return res.status(err.status || 500).json({ error: err.message || 'agent failed', timing: tr.spans });
+    }
   }
+  // Server-sent events: span / route / reply / op / done / error, each with "t" (server ms) for the waterfall
+  res.statusCode = 200;
+  res.setHeader('content-type', 'text/event-stream; charset=utf-8');
+  res.setHeader('cache-control', 'no-store, no-transform');
+  res.setHeader('x-accel-buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+  const send = (event, data) => { try { res.write(`event: ${event}\ndata: ${JSON.stringify({ ...data, t: tr.now() })}\n\n`); } catch {} };
+  tr.onSpan = (s) => send('span', { span: s });
+  send('hello', {});
+  try {
+    const pre = await hooks.prepare(args, tr, process.env);
+    if (pre.meta) send('meta', pre.meta);
+    if (pre.route) send('route', pre.route);
+    else {
+      const out = await callMoss(args, process.env, fetch, { tr, stream: true, extra: pre.extra, onEvent: send });
+      send('done', { after: out.after, suggestions: out.suggestions, streamed: out.streamed });
+    }
+    if (pre.route) send('done', { streamed: false, routed: true });
+  } catch (err) {
+    send('error', { error: err.message || 'agent failed', status: err.status || 500 });
+  }
+  res.end();
 }

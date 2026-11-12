@@ -290,6 +290,39 @@ body:not(.started) .frame-wrap { display: none; }
 .frame-bar .url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font: 11px var(--f-mono); color: var(--ink-3); letter-spacing: .02em; }
 .frame-bar .url b { color: var(--ink-2); font-weight: 500; }
 .frame-bar .count { font: 10px var(--f-mono); color: var(--ink-3); letter-spacing: .1em; }
+
+/* latency waterfall panel */
+.lat-panel { position: fixed; z-index: 45; left: 72px; bottom: 16px; width: min(720px, calc(100vw - 460px)); max-height: 46vh; display: flex; flex-direction: column; border-radius: 14px; font-size: 12px; overflow: hidden; }
+.lat-panel[hidden] { display: none; }
+.lat-h { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.lat-h b { font-size: 13px; }
+.lat-legend { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; flex: 1; color: var(--ink-3); font: 10px var(--f-mono); }
+.lat-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-left: 4px; }
+.lat-voice { display: flex; gap: 4px; }
+.lat-turns { overflow: auto; padding: 4px 12px; flex: 1; }
+.lat-turn { border-bottom: 1px solid var(--line); padding: 6px 0; }
+.lat-turn summary { display: flex; gap: 8px; align-items: center; cursor: pointer; list-style: none; }
+.lat-turn summary::-webkit-details-marker { display: none; }
+.lat-turn summary .q { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.lat-turn summary .tag { font: 10px var(--f-mono); padding: 1px 6px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--ink-3); }
+.lat-turn summary b { font: 600 11px var(--f-mono); }
+.lat-rows { padding: 6px 0 2px; }
+.lat-row { display: grid; grid-template-columns: 170px 62px 1fr; gap: 8px; align-items: center; height: 18px; }
+.lat-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.lat-row .v { font: 10.5px var(--f-mono); color: var(--ink-3); text-align: right; }
+.lat-row .track { position: relative; height: 10px; background: var(--surface-2); border-radius: 3px; }
+.lat-row .seg { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--g, #888); min-width: 2px; }
+.lat-row.marks .track { background: none; }
+.lat-row .mk { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink-3); }
+.g-speech { --g: #a78bfa; } .g-network { --g: #94a3b8; } .g-retrieval { --g: #10b981; } .g-inference { --g: #f59e0b; } .g-apply { --g: #3b82f6; } .g-voice { --g: #ec4899; } .g-other, .g-total { --g: #64748b; }
+.lat-legend i { background: var(--g); }
+.lat-stats { border-top: 1px solid var(--line); max-height: 30%; overflow: auto; padding: 4px 12px 8px; }
+.lat-stats table { width: 100%; border-collapse: collapse; font: 11px var(--f-mono); }
+.lat-stats th { text-align: left; color: var(--ink-3); font-weight: 500; padding: 4px 0; }
+.lat-stats td { padding: 2px 0; } .lat-stats td i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--g); margin-right: 6px; }
+.lat-empty { color: var(--ink-3); padding: 12px 0; }
+#latencyBtn[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+@media (max-width: 720px) { .lat-panel { left: 8px; right: 8px; width: auto; bottom: 8px; max-height: 60vh; } .lat-row { grid-template-columns: 110px 54px 1fr; } .lat-legend { display: none; } }
 /* mocks switcher, style drawer, section toolbar, photo slots (builder chrome) */
 .frame-bar .mock-bar { display: flex; align-items: center; gap: 4px; }
 .frame-bar .mock-bar[hidden] { display: none; }
@@ -811,6 +844,11 @@ body.started .canvas { background: var(--bg-2); }
 </head>
 <body>
 <div id="app">
+  <aside class="lat-panel glass" id="latPanel" hidden aria-label="Latency waterfall">
+    <div class="lat-h"><b>Latency</b><span class="lat-legend"><i class="g-speech"></i>speech<i class="g-network"></i>network<i class="g-retrieval"></i>retrieval<i class="g-inference"></i>inference<i class="g-apply"></i>build<i class="g-voice"></i>voice</span><span class="lat-voice" id="latVoice"></span><button type="button" class="chip" id="latCopy">Copy JSON</button><button type="button" class="icon-btn" id="latClose" aria-label="Close latency">×</button></div>
+    <div class="lat-turns" id="latTurns"></div>
+    <div class="lat-stats" id="latStats"></div>
+  </aside>
   <header class="topbar">
     <div class="brand">
       <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l8.5 4.9v9.2L12 21.5l-8.5-4.9V7.4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M3.5 7.4L12 12.3l8.5-4.9M12 12.3v9.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="12" cy="12.3" r="1.6" fill="var(--accent-glow)"/></svg>
@@ -822,6 +860,7 @@ body.started .canvas { background: var(--bg-2); }
         <button id="viewPage" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><path d="M5 4h14v16H5z M5 9h14"/></svg><span>Page</span></button>
         <button id="viewFlow" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M4 4h6v6H4z M14 14h6v6h-6z M7 10v4a3 3 0 0 0 3 3h4"/></svg><span>Flow</span></button>
       </div>
+      <button class="icon-btn" id="latencyBtn" aria-pressed="false" aria-label="Latency waterfall" title="Latency"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h9M4 12h13M4 18h6M15 4v4M19 10v4M12 16v4"/></svg></button>
       <button class="icon-btn" id="soundBtn" aria-pressed="true" aria-label="Sound on" title="Sound"></button>
       <button class="icon-btn" id="themeBtn" aria-label="Switch to dark mode" title="Theme"></button>
     </div>
@@ -1730,14 +1769,26 @@ const agent = (() => {
     const low = message.trim().toLowerCase();
     const mode = modeOf(low, state, opts);
     const asMention = (m) => m.replace(/^(go to|open|show( me)?|take me to)\s+(the\s+)?([A-Za-z][\w-]*)/i, (all, a, b, c, word) => (state.pages.some((p) => p.name.toLowerCase() === word.toLowerCase() || p.id === word.toLowerCase()) ? `${a} @${word}` : all));
-    if (!REMOTE || remoteDisabled || (mode !== 'mock' && isLocalCommand(low, state))) return localRespond(asMention(message), state, { mode, scraped: opts.scraped });
+    const L = opts.lat || null; // latency recorder for this turn
+    if (!REMOTE || remoteDisabled || (mode !== 'mock' && isLocalCommand(low, state))) {
+      const t0 = performance.now(); const res = await localRespond(asMention(message), state, { mode, scraped: opts.scraped });
+      if (L) L.span('local command', 'retrieval', t0, performance.now(), { model: 'none' });
+      return res;
+    }
     try {
+      // streaming: the reply and each op arrive as server-sent events (mock turns stay one response: they get reordered)
+      const streaming = !!opts.onReply && mode !== 'mock' && !!window.ReadableStream && !new URLSearchParams(location.search).has('nostream');
+      const tReq = performance.now();
       const r = await fetch('/api/agent', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, signal: opts.signal,
-        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-6), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections(), live: !!opts.live, mode, ...(mode === 'mock' && opts.scraped ? { scraped: opts.scraped } : {}) }),
+        method: 'POST', headers: { 'content-type': 'application/json', ...(streaming ? { accept: 'text/event-stream' } : {}) }, signal: opts.signal,
+        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-6), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections(), live: !!opts.live, mode, ...(opts.noRoute ? { noRoute: true } : {}), ...(mode === 'mock' && opts.scraped ? { scraped: opts.scraped } : {}) }),
       });
+      if (L) L.span('request → first byte', 'network', tReq, performance.now(), { status: r.status });
+      if (r.ok && streaming && /event-stream/.test(r.headers.get('content-type') || '')) return await readStream(r, message, state, Object.assign({}, opts, { sentAt: tReq }), L);
       const json = await r.json().catch(() => ({}));
+      if (L && json.timing) L.server(json.timing, Math.max(tReq, performance.now() - (json.serverMs || 0)));
       if (!r.ok) { if (r.status === 503 || r.status === 404) remoteDisabled = true; throw new Error(json.error || `HTTP ${r.status}`); }
+      if (json.route) return await routed(json.route, message, state, opts);
       if (mode === 'mock') prepareMock(json, state, opts.scraped);
       const res = normalize(json, state, message);
       if (mode === 'mock') { // the looks go on before the sections, so the page is built in look A
@@ -1757,6 +1808,64 @@ const agent = (() => {
     }
   }
 
+  /** Read the agent's server-sent events: speak the reply when it lands, hand each clean op to the page as it lands. */
+  async function readStream(r, message, state, opts, L) {
+    const n = createNormalizer(state, message);
+    let reply = null, done = null, route = null, err = null, serverStart = null, anyOp = false, meta = null;
+    const handle = (event, data) => {
+      const now = performance.now();
+      if (serverStart == null && typeof data.t === 'number') serverStart = Math.max(opts.sentAt || 0, now - data.t); // the server can't start before the request was sent
+      if (event === 'span') { if (L) L.server([data.span], serverStart); }
+      else if (event === 'reply') { if (reply == null) { reply = n.replyText(data.reply); if (L) L.mark('reply received', 'inference', now); opts.onReply(reply); } }
+      else if (event === 'op') { const clean = n.push(data.op); if (clean.length) { anyOp = true; clean.forEach((o) => opts.onOp(o)); } }
+      else if (event === 'route') route = data;
+      else if (event === 'meta') meta = data;
+      else if (event === 'done') done = data;
+      else if (event === 'error') err = data;
+    };
+    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
+    try {
+      for (;;) {
+        const { value, done: end } = await reader.read();
+        if (end) break;
+        buf += dec.decode(value, { stream: true });
+        let k;
+        while ((k = buf.indexOf('\n\n')) >= 0) {
+          const block = buf.slice(0, k); buf = buf.slice(k + 2);
+          const ev = (block.match(/^event: (.*)$/m) || [])[1]; const data = (block.match(/^data: (.*)$/m) || [])[1];
+          if (ev && data) { try { handle(ev, JSON.parse(data)); } catch (e) { console.warn('bad event', e); } }
+        }
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') throw e;
+      err = { error: e.message || 'stream broke' };
+    }
+    if (L && done) L.note({ streamed: done.streamed !== false, routed: !!done.routed });
+    if (route) return await routed(route, message, state, opts);
+    if (err && reply == null && !anyOp) { if (err.status === 503) remoteDisabled = true; throw new Error(err.error); }
+    const fin = n.finish({ reply: reply || '', after: done && done.after, suggestions: done && done.suggestions });
+    fin.rest.forEach((o) => opts.onOp(o));
+    if (reply == null) { reply = fin.reply; opts.onReply(reply); }
+    turns.push({ role: 'user', content: message }, { role: 'assistant', content: reply });
+    return { reply, ops: fin.ops, after: fin.after, suggestions: fin.suggestions, streamed: true, broken: !!err || !done, meta };
+  }
+  /** The intent router matched a command: run it here (the standard phrase is handled by quickStyle). */
+  async function routed(route, message, state, opts) {
+    const L = opts.lat;
+    let phrase = String(route.canonical || '');
+    if (/\{section\}/.test(phrase)) {
+      const t = findSections(message.toLowerCase())[0];
+      const page = state.pages.find((pg) => pg.id === state.currentPage);
+      const sec = t && page && page.sections.find((x) => x.type === t);
+      phrase = sec ? phrase.replace('{section}', SECTION_META[sec.type].label) : '';
+    }
+    const res = phrase ? quickStyle(phrase.toLowerCase(), state) : null;
+    if (L) L.note({ route: { phrase: route.canonical, score: route.score, used: !!res } });
+    if (res) { res.routed = { phrase, score: route.score }; return res; }
+    // the match could not be completed (e.g. no section named): ask the model after all, once
+    if (opts.noRoute) return { reply: 'I could not match that to something I can change yet. Could you say it another way?', ops: [] };
+    return respond(message, state, Object.assign({}, opts, { noRoute: true }));
+  }
   /** Mock turns start from a blank site, always have a Home page, and always end up with three looks. */
   function prepareMock(json, state, sc) {
     const ops = Array.isArray(json.ops) ? json.ops.filter((o) => o && o.op !== 'setDesign' && o.op !== 'resetSite') : [];
@@ -1842,6 +1951,14 @@ const agent = (() => {
     return MossSite.byId(k) || MossSite.byId(DIR_ALIASES[k]) || MossSite.DIRECTIONS.find((d) => k.includes(d.id) || d.name.toLowerCase().replace(/[^a-z]/g, '').includes(k)) || null;
   }
   function normalize(json, state, message) {
+    const n = createNormalizer(state, message);
+    (Array.isArray(json.ops) ? json.ops : []).forEach((raw) => n.push(raw));
+    return n.finish(json);
+  }
+  /* Cleans ops one at a time against a running copy of the state, so streamed ops can be applied as they arrive.
+     push(raw) returns the clean ops ready now; per-section deletes are held until finish(), which may merge them
+     into one deletePage/resetPage and returns { reply, ops (all), after, suggestions, rest (not yet returned) }. */
+  function createNormalizer(state, message) {
     const sim = clone(slimState(state));
     sim.pages.forEach((pg) => (pg.sections = pg.sections.map((x) => ({ id: x.id, type: x.type, data: x.data }))));
     let copy = state.business && state.business.copy;
@@ -1850,9 +1967,9 @@ const agent = (() => {
       const pg = pageOf(pageId); if (!pg || ref == null) return null;
       return pg.sections.find((x) => x.id === ref) || pg.sections.find((x) => x.type === String(ref).toLowerCase()) || null;
     };
-    const ops = [];
-    for (const raw of Array.isArray(json.ops) ? json.ops.slice(0, 60) : []) {
-      if (!raw || typeof raw.op !== 'string') continue;
+    const ops = []; const given = new Set(); let count = 0;
+    function step(raw) {
+      if (count++ >= 60 || !raw || typeof raw.op !== 'string') return;
       const pageId = slug(raw.page) || sim.currentPage;
       switch (raw.op) {
         case 'setBusiness': {
@@ -2037,6 +2154,13 @@ const agent = (() => {
         case 'keepMock': ops.push({ op: 'keepMock' }); break;
       }
     }
+    function push(raw) {
+      const n0 = ops.length; step(raw);
+      const fresh = ops.slice(n0).filter((o) => o.op !== 'deleteSection');
+      fresh.forEach((o) => given.add(o));
+      return fresh;
+    }
+    function finish(json) {
     // Deleting every section of a page one by one becomes a single step: deletePage (or resetPage for Home).
     const startPages = slimState(state).pages;
     startPages.forEach((pg0) => {
@@ -2057,7 +2181,12 @@ const agent = (() => {
       ops,
       after: unAt(str(json.after, 300)) || undefined,
       suggestions: Array.isArray(json.suggestions) && json.suggestions.length ? json.suggestions.map((x) => str(x, 48)).filter(Boolean).slice(0, 4) : ((ops.find((o) => o.op === 'askQuestion') || {}).options || undefined),
+      rest: ops.filter((o) => !given.has(o)),
     };
+    }
+    const pageNamesNow = () => new Set(sim.pages.map((pg) => pg.name.toLowerCase()));
+    const replyText = (t) => { const names = pageNamesNow(); return (str(t, 600) || '').replace(/@([A-Za-z][\w-]*)/g, (m, n) => (names.has(n.toLowerCase()) ? m : n)); };
+    return { push, finish, replyText };
   }
 
   // Append a note (e.g. an interruption) to the last assistant turn so the model knows what really happened.
@@ -2615,7 +2744,7 @@ const voice = (() => {
   const UNFINISHED = /\b(and|so|but|or|um+|uh+|er+|like|then|because|with|the|a|an|to|of|for|maybe|also|plus)$/i;
   let live = null;
   const speech = { text: '', until: 0 };
-  let lastHeardAt = 0;          // last time we heard *you* (non-echo speech)
+  let lastHeardAt = 0; let lastWordsAt = 0; // lastWordsAt: performance clock, for the latency waterfall          // last time we heard *you* (non-echo speech)
   const queue = [];             // Moss's lines waiting for a quiet moment
   let flushTimer = null;
   const words = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9'à-ÿ ]+/g, ' ').split(/\s+/).filter(Boolean);
@@ -2649,7 +2778,7 @@ const voice = (() => {
     const shownInterim = interim && !isEcho(interim) ? interim : '';
     live.interim = shownInterim;
     const heard = `${live.pending} ${shownInterim}`.replace(/\s+/g, ' ').trim();
-    if (heard) lastHeardAt = Date.now();
+    if (heard) { lastHeardAt = Date.now(); lastWordsAt = performance.now(); }
     // barge-in: your words stop Moss. With browser speech on speakers its own voice can leak back in, so while it
     // is talking only a stop phrase or 4+ of your words count. Deepgram's mic has echo cancellation: 2 words do.
     const w = words(heard);
@@ -2769,7 +2898,7 @@ const voice = (() => {
     return p;
   }
   function fetchSpeech(text) { return fetch('/api/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) }).then((r) => { if (!r.ok) throw new Error('speak ' + r.status); return r.blob(); }); }
-  function sayDeepgram(t) { sentences(t).forEach((x) => { const audio = fetchAudio(x); audio.catch(() => {}); dg.tq.push({ text: x, audio, gen: dg.gen }); }); pump(); } // prefetch every sentence; skipped ones may fail quietly
+  function sayDeepgram(t, at) { sentences(t).forEach((x) => { const audio = fetchAudio(x); audio.catch(() => {}); dg.tq.push({ text: x, audio, gen: dg.gen, at }); }); pump(); } // prefetch every sentence; skipped ones may fail quietly
   async function pump() {
     if (dg.playing || !dg.tq.length) return;
     const item = dg.tq.shift(); if (item.gen !== dg.gen) return pump();
@@ -2781,7 +2910,7 @@ const voice = (() => {
     markSpeaking(item.text);
     const done = () => { URL.revokeObjectURL(url); if (dg.playing === a) { dg.playing = null; speech.until = Math.min(speech.until, Date.now() + 200); } pump(); };
     a.onended = done; a.onerror = done;
-    try { await a.play(); } catch (e) { done(); }
+    try { await a.play(); timing({ engine: item.engine || 'aura', text: item.text, requestedAt: item.at || performance.now(), startedAt: performance.now() }); } catch (e) { done(); }
   }
 
   function commitLive() {
@@ -2825,22 +2954,24 @@ const voice = (() => {
     const t = forSpeech(text);
     if ((!synth && !(dg.ready && dg.tts)) || !t || !sound.isEnabled()) return;
     if (!live) return say(t);
-    queue.push(t); flush();
+    queue.push({ t, at: performance.now() }); flush();
   }
   function flush() {
     clearTimeout(flushTimer);
     if (!queue.length) return;
     const quietFor = Date.now() - lastHeardAt;
     if (quietFor < QUIET_BEFORE_SPEAKING || (live && live.pending)) { flushTimer = setTimeout(flush, QUIET_BEFORE_SPEAKING - Math.min(quietFor, QUIET_BEFORE_SPEAKING) + 60); return; }
-    while (queue.length) say(queue.shift());
+    while (queue.length) { const q = queue.shift(); say(q.t, q.at); }
   }
   function markSpeaking(t) {
     const now = Date.now(); const est = words(t).length * 380 + 700;
     speech.text = (now < speech.until ? speech.text + ' ' : '') + t;
     speech.until = Math.max(speech.until, now) + est;
   }
-  function say(t) { if ((dg.ready || dg.speakOnly) && dg.tts) sayDeepgram(t); else sayBrowser(t); }
-  function sayBrowser(t) {
+  let timingHook = null;
+  const timing = (e) => { if (timingHook) try { timingHook(e); } catch (x) {} };
+  function say(t, at = performance.now()) { if ((dg.ready || dg.speakOnly) && dg.tts) sayDeepgram(t, at); else sayBrowser(t, at); }
+  function sayBrowser(t, at = performance.now()) {
     if (!synth) return;
     const u = new SpeechSynthesisUtterance(t);
     const v = pickVoice(); if (v) u.voice = v;
@@ -2848,6 +2979,7 @@ const voice = (() => {
     // remember what Moss is saying, and roughly until when, so the live mic can ignore it
     markSpeaking(t);
     u.onend = () => { if (!synth.speaking && !dg.playing) speech.until = Math.min(speech.until, Date.now()); };
+    u.onstart = () => timing({ engine: 'browser', text: t, requestedAt: at, startedAt: performance.now() });
     synth.speak(u);
   }
   function cancelSpeech() {
@@ -2856,7 +2988,95 @@ const voice = (() => {
     if (synth) synth.cancel();
     speech.until = Math.min(speech.until, Date.now());
   }
-  return { init, backend: () => (dg.ready ? 'deepgram' : 'browser'), canPushToTalk: () => !!SR, supported: () => !!SR || dg.ready, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), usage: () => ({ sentMs: dg.sentMs, skippedMs: dg.skippedMs, cacheHits: dg.cacheHits || 0, pcm: !!(live && live.pcm) }), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
+  return { init, backend: () => (dg.ready ? 'deepgram' : 'browser'), canPushToTalk: () => !!SR, supported: () => !!SR || dg.ready, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), lastWordsAt: () => lastWordsAt, onTiming: (fn) => { timingHook = fn; }, usage: () => ({ sentMs: dg.sentMs, skippedMs: dg.skippedMs, cacheHits: dg.cacheHits || 0, pcm: !!(live && live.pcm) }), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
+})();
+
+/* =====================================================================
+   LATENCY: a waterfall per turn — speech, retrieval (router / site knowledge / scrape), inference (request,
+   first token, total), applying ops, and first audio. Server spans arrive with the server's own clock and are
+   placed on the page's clock. Open with the Latency button or ?debug.
+   ===================================================================== */
+const latency = (() => {
+  const MAX = 20;
+  const turns = [];
+  let cur = null, last = null, open = false, raf = 0;
+  const now = () => performance.now();
+  const GROUP = (name) => /^router|^knowledge|^crawl|^index|^scrape|local command/.test(name) ? 'retrieval' : /^inference|reply received/.test(name) ? 'inference' : /^request/.test(name) ? 'network' : /^apply|reply shown/.test(name) ? 'apply' : /^tts|audio/.test(name) ? 'voice' : /speech/.test(name) ? 'speech' : 'other';
+  const NULL = { span() {}, mark() {}, server() {}, note() {}, end() {} };
+
+  function begin(text, o = {}) {
+    const t0 = now();
+    const tr = { id: Math.round(t0), text: String(text).slice(0, 80), t0, at: new Date().toISOString(), spans: [], marks: [], meta: { voice: !!o.voice, engine: null }, end: null };
+    if (o.speechEndAt && o.speechEndAt < t0 && t0 - o.speechEndAt < 15000) { tr.spans.push({ name: 'speech end → send', group: 'speech', start: o.speechEndAt, end: t0 }); tr.t0 = o.speechEndAt; }
+    turns.push(tr); if (turns.length > MAX) turns.shift();
+    cur = tr; last = tr; schedule();
+    const api = {
+      span(name, group, start, end, meta) { tr.spans.push({ name, group: group || GROUP(name), start, end, ...(meta ? { meta } : {}) }); schedule(); },
+      mark(name, group, at, meta) { tr.marks.push({ name, group: group || GROUP(name), at, ...(meta ? { meta } : {}) }); schedule(); },
+      server(spans, serverStart) { (spans || []).forEach((sp) => { if (sp && typeof sp.start === 'number' && typeof sp.end === 'number') tr.spans.push({ name: sp.name, group: GROUP(sp.name), start: serverStart + sp.start, end: serverStart + sp.end, server: true, ...(sp.meta ? { meta: sp.meta } : {}) }); }); schedule(); },
+      note(meta) { Object.assign(tr.meta, meta); schedule(); },
+      end(meta) { tr.end = now(); if (meta) Object.assign(tr.meta, meta); if (cur === tr) cur = null; schedule(); },
+    };
+    return api;
+  }
+  /** Voice timing from the voice module: the first audio of a turn (requested when the reply was ready). */
+  function tts(e) {
+    const tr = last; if (!tr || e.requestedAt < tr.t0) return;
+    if (!tr.meta.engine) tr.meta.engine = e.engine;
+    if (tr.spans.some((x) => x.group === 'voice')) return; // first audio only
+    tr.spans.push({ name: `first audio · ${e.engine}`, group: 'voice', start: e.requestedAt, end: e.startedAt, meta: { engine: e.engine, chars: (e.text || '').length } });
+    schedule();
+  }
+  const durOf = (tr) => Math.max(tr.end || 0, ...tr.spans.map((x) => x.end), ...tr.marks.map((m) => m.at)) - tr.t0;
+  // rows: spans with the same name merge into one row with several segments (e.g. one segment per op applied)
+  function rows(tr) {
+    const map = new Map();
+    tr.spans.slice().sort((a, b) => a.start - b.start).forEach((sp) => {
+      const k = sp.name; if (!map.has(k)) map.set(k, { name: k, group: sp.group, segs: [], meta: sp.meta, server: sp.server });
+      map.get(k).segs.push(sp);
+    });
+    return [...map.values()].map((r) => ({ ...r, start: Math.min(...r.segs.map((x) => x.start)), end: Math.max(...r.segs.map((x) => x.end)) }));
+  }
+  function percentile(arr, p) { if (!arr.length) return null; const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor((p / 100) * a.length))]; }
+  /** p50 / p95 per row name over the kept turns (the "apply ops" row uses its whole extent). */
+  function stats() {
+    const by = new Map();
+    turns.forEach((tr) => rows(tr).forEach((r) => { if (!by.has(r.name)) by.set(r.name, { group: r.group, v: [] }); by.get(r.name).v.push(r.end - r.start); }));
+    const out = [...by.entries()].map(([name, { group, v }]) => ({ name, group, n: v.length, p50: percentile(v, 50), p95: percentile(v, 95) }));
+    const totals = turns.filter((tr) => tr.end).map(durOf);
+    out.push({ name: 'turn total', group: 'total', n: totals.length, p50: percentile(totals, 50), p95: percentile(totals, 95) });
+    return out;
+  }
+  const ms = (v) => (v == null ? '–' : v >= 1000 ? (v / 1000).toFixed(2) + ' s' : Math.round(v) + ' ms');
+  function schedule() { if (!open || raf) return; raf = requestAnimationFrame(() => { raf = 0; render(); }); }
+  function rowHTML(tr, r, scale) {
+    const meta = r.meta || {};
+    const extra = meta.score != null ? ` · ${Number(meta.score).toFixed(2)}` : meta.cached ? ' · cached' : meta.streamed === false ? ' · not streamed' : '';
+    const label = r.name === 'apply ops' ? `apply ${r.segs.length} op${r.segs.length > 1 ? 's' : ''}` : r.name;
+    const segs = r.segs.map((sp) => `<i class="seg" style="left:${(((sp.start - tr.t0) / scale) * 100).toFixed(2)}%;width:${Math.max(0.4, ((sp.end - sp.start) / scale) * 100).toFixed(2)}%" title="${esc(`${sp.name}${sp.meta && sp.meta.op ? ' · ' + sp.meta.op : ''}: ${ms(sp.end - sp.start)} (at +${ms(sp.start - tr.t0)})`)}"></i>`).join('');
+    return `<div class="lat-row g-${r.group}"><span class="nm" title="${esc(r.name)}${r.server ? ' (server)' : ''}">${esc(label)}${esc(extra)}</span><span class="v">${ms(r.end - r.start)}</span><span class="track">${segs}</span></div>`;
+  }
+  function render() {
+    const panel = $('#latPanel'); if (!panel || panel.hidden) return;
+    const list = turns.slice().reverse();
+    const body = $('#latTurns');
+    if (!list.length) { body.innerHTML = '<p class="lat-empty">Talk or type to Moss: each turn appears here as a waterfall.</p>'; $('#latStats').innerHTML = ''; return; }
+    body.innerHTML = list.map((tr, i) => {
+      const total = durOf(tr); const scale = Math.max(total, 400);
+      const rs = rows(tr);
+      const marks = tr.marks.map((m) => `<i class="mk" style="left:${(((m.at - tr.t0) / scale) * 100).toFixed(2)}%" title="${esc(m.name)} at +${ms(m.at - tr.t0)}"></i>`).join('');
+      const tag = tr.meta.route ? (tr.meta.route.used ? `router · ${Number(tr.meta.route.score).toFixed(2)}` : 'router miss') : tr.meta.streamed === false ? 'not streamed' : tr.spans.some((x) => x.name === 'local command') ? 'local' : '';
+      return `<details class="lat-turn" ${i === 0 ? 'open' : ''}><summary><span class="q">${esc(tr.text)}</span>${tag ? `<span class="tag">${esc(tag)}</span>` : ''}<b>${tr.end ? ms(total) : '…'}</b></summary><div class="lat-rows">${rs.map((r) => rowHTML(tr, r, scale)).join('')}<div class="lat-row marks"><span class="nm">marks</span><span class="v"></span><span class="track">${marks}</span></div></div></details>`;
+    }).join('');
+    $('#latStats').innerHTML = `<table><thead><tr><th>Step</th><th>n</th><th>p50</th><th>p95</th></tr></thead><tbody>${stats().map((s) => `<tr class="g-${s.group}"><td><i></i>${esc(s.name)}</td><td>${s.n}</td><td>${ms(s.p50)}</td><td>${ms(s.p95)}</td></tr>`).join('')}</tbody></table>`;
+  }
+  function toggle(on) {
+    const panel = $('#latPanel'); open = on == null ? panel.hidden : !!on;
+    panel.hidden = !open; $('#latencyBtn').setAttribute('aria-pressed', String(open));
+    if (open) render();
+  }
+  function json() { return JSON.stringify(turns.map((tr) => ({ text: tr.text, at: tr.at, totalMs: Math.round(durOf(tr)), meta: tr.meta, spans: rows(tr).map((r) => ({ name: r.name, group: r.group, startMs: Math.round(r.start - tr.t0), ms: Math.round(r.end - r.start), parts: r.segs.length, ...(r.meta ? { meta: r.meta } : {}) })), marks: tr.marks.map((m) => ({ name: m.name, atMs: Math.round(m.at - tr.t0) })) })), null, 2); }
+  return { begin, tts, stats, toggle, render, json, turns: () => turns, NULL };
 })();
 
 const app = (() => {
@@ -3389,7 +3609,7 @@ const app = (() => {
       return;
     }
     if (busy) await interrupt();
-    send(text, { voice: true });
+    send(text, { voice: true, speechEndAt: voice.lastWordsAt() });
   }
 
   /* ---- interruptible turns ---- */
@@ -3439,51 +3659,86 @@ const app = (() => {
       $('#chat').insertBefore($('#scene'), $('#suggest'));
       isoScene.render(); // clears ghosts
     }
+    const L = latency.begin(text, { voice: spoken, speechEndAt: opts.speechEndAt });
     setBusy(true); setStatus('Thinking', true); setSuggestions([]);
     addUser(text); flashMentions(text);
     const msg = addAgent();
     const t = turn = { controller: new AbortController(), aborted: false };
     let res;
     const ack = spoken ? setTimeout(() => { if (!t.aborted && voice.quietFor() > 1500) voice.speak('On it.'); }, 2500) : null; // fill a slow Moss turn, quietly
+
+    // Ops are applied as they arrive (streamed) or all at once (local / one-shot). One undo step covers the whole turn.
+    const squash = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const queue = []; let wake = null, ended = false, replyText = null, replyShown = null, snap = false, building = false, total = 0;
+    const doneOps = [];
+    const onReply = (r) => {
+      if (replyText != null || t.aborted) return;
+      clearTimeout(ack);
+      replyText = r || '';
+      const typing = msg.querySelector('.typing'); if (typing) typing.remove();
+      if (spoken && replyText) voice.speak(replyText);
+      replyShown = stream(msg.querySelector('.text'), replyText, t);
+      L.mark('reply shown', 'apply', performance.now());
+    };
+    const onOp = (op) => { queue.push(op); total++; if (wake) { wake(); wake = null; } };
+    const consumer = (async () => {
+      for (;;) {
+        if (t.aborted) return;
+        if (!queue.length) { if (ended) return; await new Promise((r) => (wake = r)); continue; }
+        if (replyShown) await replyShown;
+        if (t.aborted) return;
+        const op = queue.shift();
+        if (!snap && MUTATING.has(op.op)) { pageModel.snapshot(); snap = true; }
+        if (op.op === 'addSection' && !building) { building = true; document.body.classList.add('building'); }
+        if (op.op === 'askQuestion' && replyText != null && !squash(replyText).includes(squash(op.question).slice(0, 40))) { // the reply forgot to ask it: ask it now
+          replyText = `${replyText} ${op.question}`.trim(); msg.querySelector('.text').textContent = replyText; if (spoken) voice.speak(op.question);
+        }
+        const a0 = performance.now();
+        await applyOp(op, msg); doneOps.push(op);
+        L.span('apply ops', 'apply', a0, performance.now(), { op: op.op + (op.section ? ':' + op.section.type : '') });
+      }
+    })();
+
     // "Mock up joesplumbing.com": read the site first, then Moss redesigns it from the facts
     const site = agent.siteIn(text); let scraped = null, scrapeErr = null;
     if (site) {
       setStatus(`Reading ${site}`, true);
       const done = logLine(msg, 'read', site);
+      const s0 = performance.now();
       try {
         const r = await fetch('/api/scrape?url=' + encodeURIComponent(site), { signal: t.controller.signal });
         const j = await r.json().catch(() => ({}));
+        L.span('scrape site', 'retrieval', s0, performance.now(), { site, status: r.status, cached: j.index && j.index.cached });
         if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
         scraped = j; done(); setStatus('Designing three looks', true);
       } catch (e) { if (e.name !== 'AbortError') scrapeErr = /^HTTP|Failed to fetch|NetworkError|Load failed/.test(e.message) ? 'reading sites only works on the deployed builder' : e.message; }
     }
     try {
       if (scrapeErr) res = { reply: `I couldn't read ${site}: ${scrapeErr.replace(/\.$/, '')}. Tell me about the business instead, or try another address.`, ops: [], suggestions: ['Let\'s plan it out together'] };
-      else res = await agent.respond(text, pageModel.get(), { signal: t.controller.signal, live: isLive, mode: scraped ? 'mock' : opts.mode, scraped });
+      else res = await agent.respond(text, pageModel.get(), { signal: t.controller.signal, live: isLive, mode: scraped ? 'mock' : opts.mode, scraped, lat: L, onReply, onOp });
     }
     catch (err) { res = { reply: 'Something went wrong on my side. Try that again?', ops: [] }; console.error(err); }
     clearTimeout(ack);
-    msg.querySelector('.typing').remove();
-    if (t.aborted || res.aborted) { finishInterrupted(msg, [], 0); turn = null; setBusy(false); return; }
-    const askedQ = (res.ops || []).find((o) => o.op === 'askQuestion');
-    const squash = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    if (askedQ && !squash(res.reply).includes(squash(askedQ.question).slice(0, 40))) res.reply = `${(res.reply || '').trim()} ${askedQ.question}`.trim();
-    if (spoken) voice.speak(res.reply);
-    await stream(msg.querySelector('.text'), res.reply, t);
-    const ops = res.ops || [];
-    const building = ops.some((o) => o.op === 'addSection');
-    if (building) document.body.classList.add('building');
-    if (ops.some((o) => MUTATING.has(o.op))) pageModel.snapshot();
-    const doneOps = [];
-    for (const op of ops) { if (t.aborted) break; await applyOp(op, msg); doneOps.push(op); }
-    if (t.aborted) {
+    if (!res.streamed && !res.aborted && !t.aborted) { // one-shot answers go through the same path
+      const askedQ = (res.ops || []).find((o) => o.op === 'askQuestion');
+      if (askedQ && !squash(res.reply).includes(squash(askedQ.question).slice(0, 40))) res.reply = `${(res.reply || '').trim()} ${askedQ.question}`.trim();
+      onReply(res.reply);
+      (res.ops || []).forEach(onOp);
+    }
+    ended = true; if (wake) { wake(); wake = null; }
+    if (replyShown) await replyShown;
+    await consumer;
+    const typingLeft = msg.querySelector('.typing'); if (typingLeft) typingLeft.remove();
+    if (t.aborted || res.aborted) {
       if (building) document.body.classList.remove('building');
-      finishInterrupted(msg, doneOps, ops.length);
+      finishInterrupted(msg, doneOps, total);
+      L.end({ aborted: true });
       turn = null; setBusy(false); return;
     }
     turn = null;
+    if (res.broken) { const li = document.createElement('li'); li.className = 'done'; li.innerHTML = `<span class="st">${icon('check')}</span><span class="k">stopped part-way</span><span>${esc(`${doneOps.length} change${doneOps.length === 1 ? '' : 's'} kept · undo removes them`)}</span>`; msg.querySelector('.log').appendChild(li); }
     // a fresh set of mocks: show it from the top, with its entrance
-    if (ops.some((o) => o.op === 'setMocks')) { $('#pageView').scrollTo({ top: 0, behavior: 'instant' }); renderer.replay(); }
+    if (doneOps.some((o) => o.op === 'setMocks')) { $('#pageView').scrollTo({ top: 0, behavior: 'instant' }); renderer.replay(); }
     const curP = pageModel.current(); isoScene.setActive(curP && curP.sections.length ? curP.sections[curP.sections.length - 1].id : null);
     if (building) { await wait(700); document.body.classList.remove('building'); }
     const logEl = msg.querySelector('.log');
@@ -3497,6 +3752,7 @@ const app = (() => {
     }
     if (res.after) { if (spoken) voice.speak(res.after); await stream(msg.querySelector('.after'), res.after); }
     setSuggestions(res.suggestions);
+    L.end({ routed: res.routed || null, ops: doneOps.length });
     setBusy(false);
   }
 
@@ -3568,6 +3824,11 @@ const app = (() => {
     }));
     $('#styleDrawer').addEventListener('submit', (e) => { e.preventDefault(); const v = $('#swName').value.trim(); if (v && !busy) send(`Save this colour as ${v}`); });
     $('#styleBtn').addEventListener('click', () => toggleStyleDrawer());
+    $('#latencyBtn').addEventListener('click', () => latency.toggle());
+    $('#latClose').addEventListener('click', () => latency.toggle(false));
+    $('#latCopy').addEventListener('click', async () => { const j = latency.json(); try { await navigator.clipboard.writeText(j); $('#latCopy').textContent = 'Copied'; } catch (e) { console.log(j); $('#latCopy').textContent = 'Logged to console'; } setTimeout(() => ($('#latCopy').textContent = 'Copy JSON'), 1500); });
+    voice.onTiming((e) => latency.tts(e));
+    if (new URLSearchParams(location.search).has('debug')) latency.toggle(true);
     $('#photoInput').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; const tgt = photoTarget; e.target.value = ''; if (f) placePhoto(tgt, f); });
     $('#siteSections').addEventListener('click', (e) => {
       const ph = e.target.closest('.photo-btn'); if (ph) { e.preventDefault(); photoTarget = { page: pageModel.get().currentPage, id: ph.dataset.photo }; return $('#photoInput').click(); }
@@ -3620,7 +3881,7 @@ const app = (() => {
 })();
 
 app.init();
-window.moss = { app, agent, pageModel, renderer, isoScene, flowCanvas, theme, sound, voice };
+window.moss = { app, agent, pageModel, renderer, isoScene, flowCanvas, theme, sound, voice, latency };
 </script>
 </body>
 </html>

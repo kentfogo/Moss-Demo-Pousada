@@ -17,6 +17,13 @@ const server = http.createServer((req, res) => {
     if (json.model === 'strict' && json.response_format) { res.writeHead(400); return res.end('response_format not supported'); }
     if (json.model === 'down') { res.writeHead(500); return res.end('boom'); }
     const content = '```json\n' + JSON.stringify({ reply: 'Adding a FAQ.', ops: [{ op: 'addSection', page: 'home', section: { type: 'faq', data: { title: 'Good to know' } } }], suggestions: ['Warmer colors'] }) + '\n```';
+    if (json.stream && json.model !== 'nostream') { // token stream, a few characters at a time
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      const body2 = JSON.stringify({ reply: 'Two sections, "quoted".', ops: [{ op: 'addSection', page: 'home', section: { type: 'faq', data: { title: 'A { brace' } } }, { op: 'addSection', page: 'home', section: { type: 'cta', data: { title: 'Go' } } }], after: 'Done.', suggestions: ['More'] });
+      const parts = body2.match(/.{1,7}/gs);
+      let k = 0; const tick = () => { if (k < parts.length) { res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: parts[k++] } }] })}\n\n`); setTimeout(tick, 2); } else { res.write('data: [DONE]\n\n'); res.end(); } };
+      return tick();
+    }
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content } }] }));
   });
@@ -163,7 +170,37 @@ const mr2 = () => { const x = mockRes(); x.end = () => x; return x; };
 r = mr2(); await sc.default({ method: 'GET', headers: { host: 'a.app' }, query: { url: 'localhost' } }, r);
 check('scrape handler: 400 for a non-public address', r.code === 400);
 
-// 12. helpers
+// 12. streaming: the scanner, and the handler's server-sent events
+const { createScanner } = await import('../api/_jsonScan.js');
+const sc2 = createScanner(); const evs = [];
+const whole = 'Sure!\n```json\n' + JSON.stringify({ reply: 'He said "hi" \\ {ok}', ops: [{ op: 'a', x: '} ] {' }, { op: 'b', y: [1, { z: 2 }] }], after: 'x' }) + '\n``` trailing { "reply": "no" }';
+for (const ch of whole) evs.push(...sc2.push(ch));
+check('scanner: reply as soon as its string closes, each op as it closes, braces in strings ignored', evs.length === 3 && evs[0].type === 'reply' && evs[0].text === 'He said "hi" \\ {ok}' && evs[1].op.x === '} ] {' && evs[2].op.y[1].z === 2, JSON.stringify(evs));
+const sseRes = () => { const r = { code: 0, headers: {}, chunks: [], ended: false }; r.status = (c) => ((r.code = c), r); r.json = (b) => ((r.body = b), r); r.setHeader = (k, v) => (r.headers[k.toLowerCase()] = v); r.write = (c) => r.chunks.push(c); r.end = () => (r.ended = true); r.flushHeaders = () => {}; return r; };
+const parseSSE = (chunks) => chunks.join('').split('\n\n').filter(Boolean).map((b) => ({ event: (b.match(/^event: (.*)$/m) || [])[1], data: JSON.parse((b.match(/^data: (.*)$/m) || [])[1]) }));
+Object.assign(process.env, env('moss-test'));
+let sr = sseRes(); await handler({ method: 'POST', headers: { host: 'a.app', accept: 'text/event-stream' }, body: { message: 'add two', state: home } }, sr);
+let ev = parseSSE(sr.chunks); const names = ev.map((e) => e.event);
+check('SSE: event-stream headers and a hello first', /text\/event-stream/.test(sr.headers['content-type']) && names[0] === 'hello' && sr.ended);
+check('SSE: reply comes before the ops, ops one by one, then done', names.indexOf('reply') < names.indexOf('op') && names.filter((n) => n === 'op').length === 2 && names.at(-1) === 'done' && ev.find((e) => e.event === 'op').data.op.section.data.title === 'A { brace', names.join());
+const spanNames = ev.filter((e) => e.event === 'span').map((e) => e.data.span.name);
+check('SSE: inference spans (request, time to first token, total) with server times', ['inference.request', 'inference.ttft', 'inference.total'].every((n) => spanNames.includes(n)) && ev.every((e) => typeof e.data.t === 'number') && ev.find((e) => e.event === 'done').data.streamed === true, spanNames.join());
+process.env.MOSS_MODEL = 'nostream';
+sr = sseRes(); await handler({ method: 'POST', headers: { host: 'a.app', accept: 'text/event-stream' }, body: { message: 'add a faq', state: home } }, sr);
+ev = parseSSE(sr.chunks);
+check('SSE: a server that does not stream still delivers reply, ops and done (streamed:false)', ev.some((e) => e.event === 'reply') && ev.filter((e) => e.event === 'op').length === 1 && ev.find((e) => e.event === 'done').data.streamed === false);
+const ag = await import('../api/agent.js');
+const savedPrep = ag.hooks.prepare;
+ag.hooks.prepare = async (a, tr) => { const end = tr.start('router.query'); end({ score: 0.93 }); return { route: { canonical: 'Make it lively', score: 0.93 } }; };
+sr = sseRes(); const calls0 = seen.length; await handler({ method: 'POST', headers: { host: 'a.app', accept: 'text/event-stream' }, body: { message: 'make it pop', state: home } }, sr);
+ev = parseSSE(sr.chunks);
+check('a router hit answers without calling the model', ev.some((e) => e.event === 'route' && e.data.canonical === 'Make it lively') && seen.length === calls0 && ev.some((e) => e.event === 'span' && e.data.span.name === 'router.query'));
+let jr = mockRes(); await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'make it pop', state: home } }, jr);
+check('…also on the JSON path, with timing', jr.code === 200 && jr.body.route.canonical === 'Make it lively' && Array.isArray(jr.body.timing));
+ag.hooks.prepare = savedPrep;
+process.env = saved;
+
+// 13. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');
 check('compactState keeps flow names only', JSON.stringify(compactState({ flows: [{ name: 'Booking', nodes: [1, 2] }] }).flows) === '["Booking"]');
 
