@@ -1,10 +1,10 @@
-// Vercel function: GET /api/scrape?url=example.com
+// Handler (served by server.mjs): GET /api/scrape?url=example.com
 // Reads one public web page and returns the facts a redesign needs (name, headings, services, contact, prices,
 // quotes, brand colour) as compact JSON. Used by "mock up joesplumbing.com".
 //
 // Safety: http(s) on ports 80/443 only; every DNS answer is checked inside the socket's own lookup, so private,
 // loopback, link-local and cloud-metadata addresses are refused even after redirects or DNS rebinding.
-// 8 s timeout, 1.5 MB cap, HTML only, at most 3 redirects. Results are cached on Vercel's CDN for an hour.
+// 8 s timeout, 1.5 MB cap, HTML only, at most 3 redirects. Responses allow an hour of caching (by a CDN, if one is in front).
 import http from 'node:http';
 import https from 'node:https';
 import dns from 'node:dns';

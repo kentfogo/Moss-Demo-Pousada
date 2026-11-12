@@ -1,8 +1,8 @@
-// Vercel serverless function: POST /api/agent
+// Handler (served by server.mjs): POST /api/agent
 // Turns one chat message plus the builder's current page state into a reply and a list of page ops,
 // using Moss inference through its OpenAI-compatible chat completions API.
 //
-// Environment (set in Vercel → Project → Settings → Environment Variables):
+// Environment (.env locally, or the host's secrets; see .env.example):
 //   MOSS_PROJECT_ID   required  Moss project id
 //   MOSS_PROJECT_KEY  required  Moss project key (MOSS_API_KEY also accepted); sent as "Bearer <id>:<key>", never to the browser
 //   MOSS_MODEL        optional  default "moss/fastlane-1"
@@ -371,6 +371,22 @@ export async function talk({ message, state, mode }, env = process.env, fetchImp
   return text;
 }
 
+/**
+ * Prime Moss before the first turn: one 1-token call with the exact system prompt the turns will send. It opens the
+ * connection (kept alive by server.mjs) and puts the prompt in Moss's prefix cache, which holds it for 10+ minutes.
+ * Measured: a cold 5.7k-token prompt costs about 290 ms more to first token than a cached one.
+ */
+export async function prime(directions, env = process.env, fetchImpl = fetch, tr) {
+  const { token, base, model } = mossSettings(env);
+  if (!token || env.MOSS_PRIME === 'off') return false;
+  const dirs = Array.isArray(directions) && JSON.stringify(directions).length < MAX_STATE ? directions : [];
+  const end = tr ? tr.start('prime') : null;
+  const r = await fetchImpl(`${base}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ model, messages: [{ role: 'system', content: systemPrompt(dirs) }, { role: 'user', content: 'ready?' }], max_tokens: 1 }) });
+  const j = await r.json().catch(() => ({}));
+  if (end) end({ status: r.status, ...usageMeta(j && j.usage) });
+  return r.ok;
+}
+
 /** Turn arguments from the request body. */
 function argsOf(body, message) {
   return { message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live, mode: ['plan', 'autopilot', 'mock'].includes(body.mode) ? body.mode : undefined, noRoute: body.noRoute === true, siteIndex: typeof body.siteIndex === 'string' && /^site-[a-z0-9-]{1,60}$/.test(body.siteIndex) ? body.siteIndex : undefined, ...scrapedOf(body) };
@@ -429,9 +445,11 @@ export default async function handler(req, res) {
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'invalid JSON' }); } }
   // the page pings once when it opens, so the router's model and index are loaded before the first edit
   if (body && body.warm === true) {
-    let ok = false; try { ok = process.env.MOSS_ROUTER !== 'off' && await warm(tr, process.env); } catch (e) { tr.add('router.error', tr.now(), tr.now(), { error: String(e && e.message).slice(0, 160) }); }
+    const router = (async () => { try { return process.env.MOSS_ROUTER !== 'off' && await warm(tr, process.env); } catch (e) { tr.add('router.error', tr.now(), tr.now(), { error: String(e && e.message).slice(0, 160) }); return false; } })();
+    const primed = prime(body.directions, process.env, fetch, tr).catch((e) => { tr.add('prime.error', tr.now(), tr.now(), { error: String(e && e.message).slice(0, 160) }); return false; });
+    const [ok, cache] = await Promise.all([router, primed]);
     res.setHeader('cache-control', 'no-store');
-    return res.status(200).json({ warm: ok, timing: tr.spans, serverMs: tr.now() });
+    return res.status(200).json({ warm: ok, primed: cache, timing: tr.spans, serverMs: tr.now() });
   }
   const message = typeof body?.message === 'string' ? body.message.trim() : '';
   if (!message) return res.status(400).json({ error: 'message is required' });

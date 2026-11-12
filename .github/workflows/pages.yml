@@ -1,0 +1,33 @@
+# Publishes the replay site (the page, its assets and replays/) to GitHub Pages. No server and no keys involved.
+# One-time setup: Settings → Pages → Source: GitHub Actions. (Pages needs a public repository on free plans.)
+name: Replay site
+on:
+  push:
+    branches: [main]
+    paths: ['moss-builder.html', 'site/**', 'fonts/**', 'replays/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the static site
+        run: |
+          mkdir -p _site
+          cp -r moss-builder.html site fonts replays _site/
+          printf '%s\n' '<!doctype html><meta charset="utf-8"><title>Moss Builder</title>' \
+            '<meta http-equiv="refresh" content="0; url=moss-builder.html?replay=pousada">' \
+            '<a href="moss-builder.html?replay=pousada">Watch a replay of Moss Builder</a>' > _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+      - id: deployment
+        uses: actions/deploy-pages@v4

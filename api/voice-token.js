@@ -1,4 +1,4 @@
-// Vercel function: GET /api/voice-token
+// Handler (served by server.mjs): GET /api/voice-token
 // Mints a short-lived Deepgram token (about 30 s) so the browser can open a live transcription
 // WebSocket without ever seeing DEEPGRAM_API_KEY. The token only needs to be valid when connecting.
 //

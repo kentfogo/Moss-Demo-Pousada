@@ -1,4 +1,4 @@
-// Vercel function: GET /api/router-eval
+// Handler (served by server.mjs): GET /api/router-eval
 // Runs the held-out phrases (api/_router-eval-set.js) through the intent router's Moss index and reports, for a range of
 // thresholds, how many commands would run instantly, how many would wrongly fire, and the query timings. Used to tune
 // ROUTER_HIGH / ROUTER_MID. Same-origin and rate-limited like the other functions.

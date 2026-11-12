@@ -1,4 +1,4 @@
-// Vercel function: POST /api/speak {text}
+// Handler (served by server.mjs): POST /api/speak {text}
 // Turns one sentence of Moss's reply into speech with a Deepgram Aura voice and returns MP3.
 // The audio is played by the page itself, so the mic's echo cancellation can remove it (no self-interruption on speakers).
 //

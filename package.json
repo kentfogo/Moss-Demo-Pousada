@@ -3,15 +3,17 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "scripts": {
-    "test": "node tests/agent-api.mjs && node tests/remote.cjs && node tests/voice.cjs && node tests/voice-deepgram.cjs && node tests/plan.cjs && node tests/mocks.cjs && node tests/style.cjs && node tests/latency.cjs && node tests/variety.cjs && node tests/functional.cjs",
-    "bench": "node scripts/bench-state.cjs && node scripts/bench.mjs"
+    "start": "node server.mjs",
+    "test": "node tests/agent-api.mjs && node tests/remote.cjs && node tests/voice.cjs && node tests/voice-deepgram.cjs && node tests/plan.cjs && node tests/mocks.cjs && node tests/style.cjs && node tests/latency.cjs && node tests/variety.cjs && node tests/functional.cjs && node tests/replay.cjs",
+    "bench": "node scripts/bench-state.cjs && node scripts/bench.mjs",
+    "record": "node scripts/record.cjs"
   },
   "dependencies": {
     "@deepgram/sdk": "^5.18.0",
     "@inferedge/moss": "^1.0.0-beta.8",
-    "@vercel/functions": "^3.11.1"
+    "undici": "^7.30.2"
   }
 }

@@ -15,7 +15,7 @@ export function clientIp(req) {
   return fwd || String(h['x-real-ip'] || '') || (req.socket && req.socket.remoteAddress) || 'unknown';
 }
 
-/** Per-IP limits, per function instance. Not a hard global cap (add a Vercel Firewall rule for that), but it stops a single tab or script looping. */
+/** Per-IP limits, per function instance. Not a hard global cap (put a host-level rate limit in front for that), but it stops a single tab or script looping. */
 export const LIMITS = {
   agent: { limit: 40, windowMs: 10 * 60e3 },
   speak: { limit: 240, windowMs: 10 * 60e3 },

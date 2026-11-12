@@ -1,11 +1,13 @@
 // Moss indexes (retrieval) for the agent: the intent router and per-site knowledge.
 // The client loads an index once per warm function instance and queries it in memory (sub-millisecond search; the
 // query is embedded on this machine). Index files and the embedding model are cached under /tmp (the only writable
-// path on Vercel). Credentials are the same Moss project id and key used for inference.
+// path on some hosts). Credentials are the same Moss project id and key used for inference.
 import { INTENTS, INTENT_INDEX, intentDocs, eligible } from './_intents.js';
 
 let clientP = null;
 const loaded = new Map(); // index name → Promise (loaded once per instance)
+const failedAt = new Map(); // index name → time of the last failed load (so a broken load doesn't cost every turn)
+export const RETRY_AFTER_MS = 60_000;
 
 export function mossCreds(env = process.env) {
   let id = env.MOSS_PROJECT_ID || env.MOSS_PROJECT || '';
@@ -28,7 +30,7 @@ export async function client(env = process.env) {
   clientP.catch(() => { clientP = null; });
   return clientP;
 }
-export function setClient(c) { clientP = c ? Promise.resolve(c) : null; loaded.clear(); }
+export function setClient(c) { clientP = c ? Promise.resolve(c) : null; loaded.clear(); failedAt.clear(); }
 
 /** Load an index into memory, creating it from docs() if it doesn't exist yet. Spans: index.load, index.build. */
 export function ensureIndex(c, name, docs, tr, span = 'index.load') {
@@ -48,7 +50,7 @@ export function ensureIndex(c, name, docs, tr, span = 'index.load') {
     if (end) end({ cold: true });
   })();
   loaded.set(name, p);
-  p.catch(() => loaded.delete(name));
+  p.then(() => failedAt.delete(name), () => { loaded.delete(name); failedAt.set(name, Date.now()); });
   return p;
 }
 export const isLoaded = (name) => loaded.has(name);
@@ -82,9 +84,12 @@ export async function warm(tr, env = process.env) {
 export async function route(message, tr, env = process.env) {
   const c = await client(env); if (!c) return null;
   const th = thresholds(env);
+  // the last load failed (e.g. the model host is unreachable): skip at once, and try again only after a pause
+  const failed = failedAt.get(INTENT_INDEX);
+  if (failed && Date.now() - failed < RETRY_AFTER_MS) { if (tr) tr.add('router.cold', tr.now(), tr.now(), { skipped: true, failed: true }); return { decision: 'cold', top: [] }; }
   // a cold instance needs seconds to load the model and index: don't make this turn wait; it loads meanwhile
   const ready = ensureIndex(c, INTENT_INDEX, intentDocs, tr, 'router.load');
-  const loadedNow = await Promise.race([ready.then(() => true), new Promise((r) => setTimeout(() => r(false), th.coldBudgetMs))]);
+  const loadedNow = await Promise.race([ready.then(() => true, () => false), new Promise((r) => setTimeout(() => r(false), th.coldBudgetMs))]);
   if (!loadedNow) { ready.catch(() => {}); if (tr) tr.add('router.cold', tr.now(), tr.now(), { skipped: true }); return { decision: 'cold', top: [] }; }
   const end = tr && tr.start('router.query');
   const res = await c.query(INTENT_INDEX, message, { topK: 8 });

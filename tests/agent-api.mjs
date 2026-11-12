@@ -1,7 +1,7 @@
 // Tests for api/agent.js against a mock OpenAI-compatible Moss server. No real credentials needed.
 // Run: node tests/agent-api.mjs
 import http from 'node:http';
-import handler, { callMoss, extractJSON, compactState, mossSettings } from '../api/agent.js';
+import handler, { callMoss, extractJSON, compactState, mossSettings, buildMessages } from '../api/agent.js';
 
 const results = [];
 const check = (name, ok, detail = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); };
@@ -254,6 +254,11 @@ check('router: a middle score becomes hints, a low one nothing, a near tie is no
 const opp = fakeMoss(() => [doc('Smaller buttons', 0.944), doc('Bigger buttons', 0.82)]); opp.exists = true; mossMod.setClient(opp);
 const dOpp = await mossMod.route('the buttons need to be bigger', trace(), {});
 check('router: keyword guards veto an opposite the embedding confused (bigger ≠ smaller)', dOpp.decision === 'high' && dOpp.canonical === 'Bigger buttons', JSON.stringify(dOpp));
+const broken = fakeMoss(() => []); broken.loadIndex = async () => { broken.loads++; throw new Error('Error loading model: fetch failed'); };
+mossMod.setClient(broken);
+await mossMod.route('make it pop', trace(), {}); await new Promise((r) => setTimeout(r, 5));
+const tBroken = Date.now(); const trB = trace(); const dB = await mossMod.route('make it pop', trB, {});
+check('router: after a failed load, later turns skip at once instead of waiting and reloading', dB.decision === 'cold' && Date.now() - tBroken < 50 && broken.loads === 1 && trB.spans.some((x) => x.name === 'router.cold' && x.meta && x.meta.failed), `${Date.now() - tBroken} ms, ${broken.loads} loads`);
 mossMod.setClient(fm); fm.exists = true;
 check('router: one best score per command', JSON.stringify(mossMod.rank([doc('A', 0.5), doc('A', 0.8), doc('B', 0.6)])) === '[{"canonical":"A","score":0.8},{"canonical":"B","score":0.6}]');
 // in the handler: on for edits, off while planning or when the page already tried it
@@ -315,6 +320,21 @@ await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'ad
 check('agent: asked for real facts that are not there, Moss is told not to invent them', seen.at(-1).json.messages.at(-1).content.includes('Do NOT invent'));
 mossMod.setClient(null);
 process.env = saved;
+
+// 14b. warm-up ping primes Moss's prefix cache with the exact system prompt the turns send
+{
+  const saved2 = process.env; process.env = { ...saved2, ...env('moss-test') };
+  const lib2 = [{ id: 'hospitality', name: 'Hospitality', mood: 'warm', fits: 'hotels', colors: {}, type: {}, shape: {}, variants: {}, art: 'orb' }];
+  const n0 = seen.length; const out = mockRes();
+  await handler({ method: 'POST', headers: { host: 'a.app' }, body: { warm: true, directions: lib2 } }, out);
+  const call = seen.slice(n0).find((x) => x.json.max_tokens === 1);
+  const turnSystem = buildMessages({ message: 'x', state: {}, directions: lib2 }).at(0).content;
+  check('warm-up: primes Moss with the same system prompt a turn sends (1 token)', !!call && call.json.messages[0].content === turnSystem && out.body && out.body.primed === true, out.body && JSON.stringify(out.body).slice(0, 120));
+  const n1 = seen.length; process.env.MOSS_PRIME = 'off';
+  await handler({ method: 'POST', headers: { host: 'a.app' }, body: { warm: true } }, mockRes());
+  check('warm-up: MOSS_PRIME=off skips the priming call', seen.length === n1);
+  process.env = saved2;
+}
 
 // 15. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');

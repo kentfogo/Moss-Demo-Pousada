@@ -1,16 +1,36 @@
 # Retro and handoff: Moss Builder latency work
 
-For the next session. The work started on branch `claude/relaxed-fermat-rr1j2j` (PR kentfogo/Moss-Demo-Pousada#1). The benchmark session continued on `claude/retro-md-continuation-y29ff4`, which holds all of that plus the benchmark. `npm test` runs 10 suites, all green.
+For the next session. The work started on branch `claude/relaxed-fermat-rr1j2j` (PR kentfogo/Moss-Demo-Pousada#1) and continues on `claude/retro-md-continuation-y29ff4`, which holds everything. `npm test` runs 11 suites, all green.
 
-## Pick up here (after the benchmark session, 2026-11-12)
-Steps 1 to 3 of the previous list are done. Results are in **Benchmark** below and in `data/bench-results.md`.
-1. **Implement the two cheap fixes:**
-   - Keep the connection to Moss open between turns (an undici `Agent` with a long `keepAliveTimeout`).
-   - Make the page's warm-up ping also send a 1-token Moss call with the worker's system prompt. That opens the connection and primes the prefix cache.
-2. **Re-measure on Vercel** with the waterfall: `talker.ttft` and `inference.ttft` on turns 1 and 2, and after 30 s or more of idle.
-3. **Ask Moss** the questions below, especially the region. Then pin the Vercel function next to it.
+## Pick up here (after the "replace Vercel" session, 2026-11-12)
+**Decisions:** Vercel is gone. The app is one Node server (`npm start`, `server.mjs`). Sharing happens through a **replay link** (free to watch) plus a **public repository** people can clone and run with their own Moss keys. No hosted live server for now.
 
-## Previous list (done)
+**Done this session:**
+- **`server.mjs`:** serves the page and `api/*` with Vercel-style `req`/`res` helpers. It reads `.env`, uses a 60 s keep-alive to Moss, and honours `HTTPS_PROXY`. `vercel.json`, `.vercelignore` and `@vercel/functions` are removed. The knowledge index finishes in the background.
+- **Warm-up ping:** primes Moss's prompt cache with the turns' exact system prompt (1 output token) and opens the connection. `MOSS_PRIME=off` disables it.
+- **Router fix:** after a failed load it skips at once for 60 s. Before, every edit turn waited 250 ms and retried.
+- **Record and replay:** `?record`, `?replay=<name>`, `scripts/record.cjs`, `replays/pousada.json`, `tests/replay.cjs`.
+- **Latency badge** on every Moss turn ("Moss first token 44 ms · reply on screen in 59 ms"). Clicking it opens the waterfall.
+- **GitHub Pages workflow** for the replay site (`.github/workflows/pages.yml`). The root redirects to `?replay=pousada`.
+- **Environment:** the Moss SDK's model host `pub-3744a26a99de4bab8592b11025ee7942.r2.dev` was added to this cloud environment's allowed hosts. The router can't load without it.
+
+**Measured live through `server.mjs`** (container about 50 ms from Moss, browser on the same machine), second recording:
+- **Talker first token:** 41–45 ms.
+- **Reply on screen:** 52–64 ms after Enter.
+- **Worker first token:** 192–234 ms. Real turns add about 1,000 uncached tokens (history and state) after the cached 4,800.
+- **Router:** 5–26 ms. Page-local commands take about 124 ms on screen.
+- **Variance:** the first recording had a ~190 ms talker on every turn and never reproduced. Probably Moss-side.
+
+**Next:**
+1. **Going public** (the user decides): make a new public repository with clean history rather than flipping this one. History is 35 MB and includes a period when `node_modules` was tracked.
+   - Decide what stays: `references/` (screenshots and GIFs of other products), `PROMPT.md`, `Critic prompt.md`, `design-log.md`, `RETRO.md`.
+   - Add a LICENSE. `@inferedge/moss` is PolyForm Shield.
+   - Then enable Pages (Source: GitHub Actions).
+2. **Worker first token** (optional): try ending the system prompt on an 800-token block boundary (cache blocks look like 800 tokens), or move per-turn history after a stable block. Expect up to about 100 ms on edits.
+3. **More recordings:** a mock-up of a real site, and a voice session (needs a real browser for Aura timing).
+4. **Ask Moss** the questions below.
+
+## Benchmark session list (done)
 1. **Check the Moss keys.**
    - `MOSS_PROJECT_ID` and `MOSS_PROJECT_KEY` are now environment variables on this cloud environment, and the old Moss network secret was deleted.
    - Confirm both are set without printing them, e.g. `[ -n "$MOSS_PROJECT_KEY" ] && echo set`.
@@ -91,7 +111,7 @@ Connection setup (TCP + TLS through the proxy) adds about 60 ms to every call th
 **What it means:**
 - **Moss already answers in under 200 ms when the prefix is warm.** Talker 100 ms, edit 119 ms; about 50 ms of each is network round trip. The model's own first token takes roughly 50–70 ms.
 - **The prefix cache matters most.** A cold 5.7k-token prompt costs about 290 ms more (407 against 119). Cached counts are always multiples of 800 (5,600, 3,200, and last session's 4,800), so the cache probably works in 800-token blocks. Prompts under 800 tokens, like the talker's 231, are never cached; the talker is fast anyway.
-- **Cache lifetime:** a primed prefix was still fully cached after 0 s, 30 s and 2 min (5,600/5,700). The 5 and 10 minute results are under **Cache lifetime** below.
+- **Cache lifetime:** a primed prefix was still fully cached (5,600/5,700) after 0 s, 30 s, 2 min, 5 min and 10 min.
 - **The new prompt layout pays off.** It leaves 69 tokens uncached against 663 in the old layout, which makes it 35 ms faster to first token. Totals differ only through output length.
 - **No first-token effect** from JSON mode or `max_tokens`. Keep both.
 - **Responses API is about 37 ms slower** to first token than Chat Completions. Stay on Chat Completions.
