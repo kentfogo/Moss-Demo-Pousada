@@ -41,6 +41,44 @@ The scraper fetches only http(s) on ports 80 and 443. Every DNS answer is checke
 
 All of these run in the browser and cost no tokens.
 
+## Streaming and the latency waterfall
+
+**Streaming.** `/api/agent` streams server-sent events when asked (`accept: text/event-stream`): `reply`, each `op`, the `span` timings, then `done`. An incremental JSON scanner (`api/_jsonScan.js`) releases the reply the moment its string closes, and each op the moment its object closes. The page speaks the reply right away and builds each op as it arrives, with one undo step per turn. If the stream breaks, what was built stays. If Moss doesn't stream, the same events come from one response.
+
+**Latency panel.** Open it with the bars button in the top bar, or add `?debug`. Each turn is a waterfall, with bars coloured by group:
+
+| Group | What it covers |
+|---|---|
+| Speech | From when you stopped talking to the send |
+| Network | The request until the first byte |
+| Retrieval | `router.query`, `knowledge.*`, `crawl.page`, `index.*` |
+| Inference | `inference.request`, `inference.ttft`, `inference.total` |
+| Build | One segment per op applied |
+| Voice | First audio, labelled by engine |
+
+Server spans are placed on the page's clock using the server time carried on every event. Below the waterfall: p50 and p95 over the last 20 turns, a Copy JSON button, and the Voice switch.
+
+## Moss indexes
+
+**1. Intent router.** The commands (`api/_intents.js`) and about 140 example paraphrases are a Moss index, built automatically on first use and renamed whenever the list changes. Each warm function loads it once and queries it before inference while you edit, in about 13 ms including embedding the query.
+- **High score:** the page runs the command itself, with no LLM.
+- **Middle score:** the likely commands go to Moss as hints.
+- **Guards:** embeddings confuse opposites ("bigger" matched *Smaller buttons* at 0.94), so each command has `require` and `avoid` word patterns that veto contradictions. In the live evaluation (`data/router-eval.md`, re-run with `GET /api/router-eval`), the hybrid router had no wrong commands or misfires; semantic search alone had 3–5.
+- **Cold starts:** a cold instance doesn't make a turn wait for the model and index (250 ms budget), and the page sends a warm-up ping when it opens.
+
+**2. Site knowledge.** "Mock up joesplumbing.com" reads the home page plus up to 3 nav pages (services, about, contact, reviews, pricing or FAQ) in parallel within 8 s. It splits them into passages tagged by kind (service, hours, contact, review, price, about, FAQ), into one Moss index per site (`site-<host>`).
+- A site read in the last 24 hours skips the crawl.
+- At most about 50 site indexes are kept, oldest deleted first.
+- On Vercel the build finishes in the background (`waitUntil`), so the first mock never waits for it.
+- Mock builds and later edits retrieve only the relevant facts.
+- When you ask for real facts that aren't on the site, Moss is told not to invent them.
+
+## Voices: Aura and Kokoro
+
+- **Aura (Deepgram)** is the default. `GET /api/speak?text=` streams the audio, so each sentence starts playing on its first bytes, the next ones preload, and the browser caches repeated lines.
+- **Kokoro** (open source, Kokoro-82M through `kokoro-js`) runs in the visitor's browser in a Web Worker, with no server cost. It's opt-in: use the Voice switch in the Latency panel or `?voice=kokoro`. The first time it downloads the `q8` model (about 92 MB, then cached) for WASM; `?kokoro=webgpu` uses WebGPU with the larger fp32 model. If it fails, Aura (or the browser voice) takes over.
+- **Browser** speech is the last fallback.
+
 ## Costs and a public link
 
 **Moss tokens:**
@@ -77,6 +115,9 @@ All of these run in the browser and cost no tokens.
    | `DEEPGRAM_API_KEY` | Deepgram key for voice (optional; without it the browser's speech is used) |
    | `DEEPGRAM_VOICE` | optional, default `aura-2-thalia-en` |
    | `DEEPGRAM_STT_MODEL` | optional, default `nova-3` |
+   | `ROUTER_HIGH` / `ROUTER_MID` | optional router cut-offs, default `0.65` / `0.5` (from `data/router-eval.md`) |
+   | `MOSS_ROUTER` | optional, `off` disables the intent router |
+   | `KNOWLEDGE_MIN` | optional relevance cut-off for site facts, default `0.25` |
 
    The function calls `POST <base>/chat/completions` with `Authorization: Bearer <project id>:<project key>`.
 
@@ -96,6 +137,7 @@ npm test
 - `tests/voice.cjs`: the voice loop with a fake recognizer and synthesizer (speak to build, spoken replies, hold Space, spoken @mentions, barge-in, mute, unsupported browsers).
 - `tests/mocks.cjs`: "mock up a site" against mock scrape and agent endpoints (scraped facts, three looks, A/B/C switching with no model calls, "go with B", undo, unreadable sites, offline mocks that invent nothing).
 - `tests/style.cjs`: motion (levels, word reveal, scroll-in, reduced motion), buttons, nav, swatches, section style, the Style drawer, the section toolbar, photo upload (never sent to Moss), undo and the phone layout.
+- `tests/latency.cjs`: streaming turns against a fake SSE agent (the reply before the build finishes, ops one by one, one undo per turn, a broken stream, router hits that skip inference, an error falling back), the waterfall rows, clock alignment and p50/p95, streamed mocks, and Kokoro with a fake worker (progress, speaking, falling back, the Voice switch).
 - `tests/functional.cjs`: the original end-to-end checks (build, edit, reorder, restyle, delete, undo, pages, @mentions, flow drag, theme, sound, 375px mobile), using the offline agent.
 
 Playwright and Chromium must be available for the browser tests.

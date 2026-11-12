@@ -289,6 +289,8 @@ await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'pu
 check('agent: a later edit pulls the relevant facts', seen.at(-1).json.messages.at(-1).content.includes('SITE FACTS'));
 await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'zzz qq', siteIndex: 'site-joes-example', state: home } }, mockRes());
 check('agent: an unrelated edit adds nothing', !seen.at(-1).json.messages.at(-1).content.includes('SITE FACTS'));
+await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'add their customer reviews', siteIndex: 'site-joes-example', state: home } }, mockRes());
+check('agent: asked for real facts that are not there, Moss is told not to invent them', seen.at(-1).json.messages.at(-1).content.includes('Do NOT invent'));
 mossMod.setClient(null);
 process.env = saved;
 

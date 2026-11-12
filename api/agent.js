@@ -332,10 +332,13 @@ export const hooks = {
         out.meta = Object.assign(out.meta || {}, { facts: facts.length });
       }
       if (facts.length) out.extra = (out.extra || '') + knowledge.factsBlock(facts);
+      // asked for their real facts but none were found: say so rather than make them up (a live run invented hours and reviews)
+      else if (args.siteIndex && FACT_SEEKING.test(args.message)) out.extra = (out.extra || '') + 'SITE FACTS: none found on their site for this request. Do NOT invent hours, reviews, prices, phone numbers or other facts. Make no change that needs them; in reply, say you could not find it on their site and ask them to tell you.\n\n';
     } catch (e) { tr.add('knowledge.error', tr.now(), tr.now(), { error: String(e && e.message).slice(0, 160) }); }
     return out;
   },
 };
+const FACT_SEEKING = /\b(their|our|real|actual|genuine)\b|\b(hours|opening|open|reviews?|testimonials?|phone|number|address|location|prices?|pricing|rates|email|area)\b/i;
 const MOCK_QUERIES = ['services we offer', 'opening hours', 'customer reviews and testimonials', 'phone email address and service area', 'prices and rates', 'about the business, history and team'];
 
 export default async function handler(req, res) {

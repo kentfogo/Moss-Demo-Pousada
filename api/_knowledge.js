@@ -2,7 +2,7 @@
 // Mocks and later edits retrieve only the passages that matter instead of sending the whole scrape to the model.
 import { client, ensureIndex } from './_moss.js';
 
-export const KNOWLEDGE = { maxAgeMs: 24 * 3600e3, maxIndexes: 50, minScore: 0.35, uploadWaitMs: 7000 };
+export const KNOWLEDGE = { maxAgeMs: 24 * 3600e3, maxIndexes: 50, minScore: Number(process.env.KNOWLEDGE_MIN) || 0.25, uploadWaitMs: 7000 }; // 0.25: live, 'opening hours' scored 0.29 on a real site
 export const siteIndexName = (host) => 'site-' + String(host || '').toLowerCase().replace(/^www\./, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 const ready = new Map(); // index name → true once Moss reports it Ready (per instance)
 
