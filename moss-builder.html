@@ -2819,13 +2819,42 @@ const voice = (() => {
   let flushTimer = null;
   const words = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9'à-ÿ ]+/g, ' ').split(/\s+/).filter(Boolean);
   const mossSpeaking = () => Date.now() < speech.until + 600;
-  function isEcho(heard) {
-    if (!speech.text || Date.now() > speech.until + 900) return false;
-    const said = new Set(words(speech.text)); const w = words(heard);
-    if (!w.length) return true;
-    // while Moss is talking, a mis-transcribed echo of its own voice only half matches: be stricter then
-    return w.filter((x) => said.has(x)).length / w.length >= (mossSpeaking() ? 0.45 : 0.7);
+  /* Echo: on speakers the mic hears Moss, and the recognizer can deliver that transcript 1–2 s after Moss stops (a
+     live session showed Moss answering its own question). So remember what Moss said in the last few seconds, and cut
+     the part of a phrase that follows Moss's words in order; what comes after the order breaks is the user's. */
+  const ECHO_MS = 6000;
+  const saidLog = []; // { w: [words], end: ms }
+  function saidRecently() { const now = Date.now(); while (saidLog.length && now - saidLog[0].end > ECHO_MS) saidLog.shift(); return saidLog.flatMap((x) => x.w); }
+  /** How many leading words of `norm` follow Moss's recent words in order (allowing a misheard word now and then). */
+  function echoPrefix(norm, pool) {
+    let best = 0, bestMatched = 0;
+    for (let skip = 0; skip <= Math.min(1, norm.length - 1); skip++) { // the first word may be misheard
+      for (let i = 0; i < pool.length; i++) {
+        if (pool[i] !== norm[skip]) continue;
+        let p = i + 1, matched = 1, last = skip + 1, misses = skip;
+        for (let k = skip + 1; k < norm.length; k++) {
+          let j = -1; for (let d = 0; d < 3 && p + d < pool.length; d++) if (pool[p + d] === norm[k]) { j = p + d; break; }
+          if (j >= 0) { p = j + 1; matched++; last = k + 1; } else if (++misses > Math.max(1, Math.floor((k + 1) / 4))) break;
+        }
+        if (last > best) { best = last; bestMatched = matched; }
+      }
+    }
+    return { len: best, matched: bestMatched };
   }
+  /** The heard text without a leading echo of Moss's own words ('' when it was all echo). */
+  function stripEcho(heard) {
+    const tokens = String(heard || '').split(/\s+/).filter(Boolean); if (!tokens.length) return '';
+    const pool = saidRecently(); if (!pool.length) return heard;
+    const norm = tokens.map((t) => words(t)[0] || '');
+    const { len, matched } = echoPrefix(norm, pool);
+    const speakingNow = mossSpeaking(); const justSpoke = Date.now() < speech.until + 1500;
+    // an answer that repeats one of Moss's options ("bold and loud") is short: after Moss has finished, only a longer
+    // run of its sentence counts as echo; while it is talking, even a couple of its words do
+    const minLen = speakingNow ? 1 : justSpoke ? 2 : 4;
+    if (len < minLen || matched / len < 0.75) return heard;
+    return tokens.slice(len).join(' ');
+  }
+  const isEcho = (heard) => !stripEcho(heard).trim();
   const STOP_WORDS = /^(stop|wait|hold on|hang on|pause|cancel|no stop|stop stop|stop listening|mic off)\b/;
   function openLive() {
     if (!live) return;
@@ -2844,8 +2873,8 @@ const voice = (() => {
   // Shared by both backends: finals are confirmed text, interim is the current unconfirmed phrase.
   function hear(finals, interim) {
     if (!live) return;
-    finals.forEach((t) => { if (t && !isEcho(t)) live.pending += ' ' + t; });
-    const shownInterim = interim && !isEcho(interim) ? interim : '';
+    finals.forEach((t) => { const own = t && stripEcho(t); if (own) live.pending += ' ' + own; });
+    const shownInterim = interim ? stripEcho(interim) : '';
     live.interim = shownInterim;
     const heard = `${live.pending} ${shownInterim}`.replace(/\s+/g, ' ').trim();
     if (heard) { lastHeardAt = Date.now(); lastWordsAt = performance.now(); }
@@ -3131,6 +3160,7 @@ const voice = (() => {
     const now = Date.now(); const est = words(t).length * 380 + 700;
     speech.text = (now < speech.until ? speech.text + ' ' : '') + t;
     speech.until = Math.max(speech.until, now) + est;
+    saidLog.push({ w: words(t), end: speech.until });
   }
   let timingHook = null;
   const timing = (e) => { if (timingHook) try { timingHook({ ...e, outputMs: outputMs() }); } catch (x) {} };

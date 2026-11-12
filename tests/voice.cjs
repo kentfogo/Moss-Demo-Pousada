@@ -195,6 +195,29 @@ async function open(browser, speed) {
   check('no speech recognition: mic hidden', !(await p3.locator('#introMic').isVisible()) && (await p3.evaluate(() => document.body.classList.contains('no-voice'))));
   await c3.close();
 
+  // echo on speakers, as in a live session: the recognizer hands over Moss's own sentence after Moss has stopped,
+  // sometimes glued to the user's real answer
+  {
+    const { page: pe, errors: errE } = await open(browser, 0.04);
+    await pe.evaluate(() => { const S = window.speechSynthesis; S.speak = (u) => { window.__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 50); }; });
+    await pe.click('#introMic');
+    const sayE = async (t) => { await pe.evaluate((x) => window.__say(x), t); await pe.waitForTimeout(1750); await pe.waitForTimeout(150); await pe.evaluate(() => window.moss.app.whenIdle()); };
+    const users = () => pe.$$eval('.msg.user', (els) => els.map((e) => e.innerText.trim()));
+    const ask = async (q) => { await pe.evaluate((x) => window.moss.voice.speak(x), q); await pe.waitForTimeout(2200); }; // Moss says it, stops, 2 s pass
+    await ask('Nice, a second spot in Wisconsin and juicy burger pics. How should the site feel, bold and loud or clean and simple?');
+    const n0 = (await users()).length;
+    await sayE('a second spot in Wisconsin and juicy burger pics how should the site feel bold and loud or clean and simple');
+    check('echo: Moss\'s sentence transcribed 2 s after it stopped is not sent as the user', (await users()).length === n0, JSON.stringify((await users()).slice(n0)));
+    await ask('How should the site feel, bold and loud or clean and simple?');
+    await sayE('how should the site feel bold and loud or clean and simple bold and loud and family friendly');
+    const lastU = (await users()).at(-1);
+    check('echo: the echo is cut and the user\'s answer after it is kept', /^bold and loud and family friendly$/i.test(lastU), lastU);
+    await ask('Who is it for, college kids or families?');
+    await sayE('college kids');
+    check('echo: a short answer that repeats one of Moss\'s options is kept', /^college kids$/i.test((await users()).at(-1)), (await users()).at(-1));
+    check('no page errors (echo)', errE.length === 0, errE.join(' | '));
+  }
+
   await browser.close();
   const failed = results.filter((x) => !x).length;
   console.log(`\n${results.length - failed}/${results.length} passed`);
