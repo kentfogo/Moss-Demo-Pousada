@@ -10,6 +10,7 @@
 //   MOSS_TEMPERATURE  optional  default 0.4
 //   MOSS_REPLY_CACHE  optional  "off" sends X-Moss-Cache: off (for recordings: no free answers to repeated requests)
 //   MOSS_TALKER_LEAD_MS optional default 30: how much earlier the talker is sent than the worker (0 = together)
+//   MOSS_DEGENERATE_RETRY optional "off": don't retry a worker reply that went wrong while streaming
 //   MOSS_FANOUT       optional  "off" builds in one serial stream instead of the parallel build (api/_fanout.js)
 
 import { guard } from './_guard.js';
@@ -296,6 +297,7 @@ export function buildMessages({ message, state, history, directions, recentDirec
 /** Read an OpenAI-style SSE stream and yield the text deltas (and, last, a { usage } object when the server sends one). */
 async function* deltas(body) {
   const reader = body.getReader(); const dec = new TextDecoder(); let buf = '';
+  try { // a consumer that stops early (break) cancels the stream, so Moss stops generating too
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -312,6 +314,22 @@ async function* deltas(body) {
       if (j && j.usage) yield { usage: j.usage };
     }
   }
+  } finally { try { await reader.cancel(); } catch {} }
+}
+
+/**
+ * A worker reply that has gone wrong while streaming: no JSON after 200 characters, a long run of whitespace, or a short
+ * pattern repeating at the end. Seen live: 900 tokens of whitespace that never formed JSON (the turn failed after 11.6 s).
+ * Returns the reason, or null.
+ */
+export function degenerate(text) {
+  if (!text) return null;
+  const head = text.trimStart();
+  if (head.length >= 200 && !head.slice(0, 200).includes('{')) return 'no JSON';
+  const tail = text.slice(-400);
+  if (/\s{200,}/.test(tail)) return 'whitespace run';
+  if (/((?=[^]{0,7}\S)[^]{1,8}?)\1{40,}$/.test(tail)) return 'repeating'; // a unit with something besides whitespace
+  return null;
 }
 
 /**
@@ -350,16 +368,27 @@ export async function callMoss({ message, state, history, directions, recentDire
   const streamed = !!opts.stream && /text\/event-stream/i.test(r.headers?.get?.('content-type') || '') && !!r.body;
   let content = ''; let usage = null;
   const sent = { reply: false, ops: 0 };
+  let broken = null; // why the reply was cut off, when it degenerated
   if (streamed) {
-    const scan = createScanner(); let first = true;
-    for await (const d of deltas(r.body)) {
-      if (typeof d !== 'string') { usage = d.usage; continue; }
-      if (first && tr) { tr.add('inference.ttft', tInf, tr.now()); first = false; }
-      content += d;
-      for (const ev of scan.push(d)) {
-        if (ev.type === 'reply') { sent.reply = true; emit('reply', { reply: ev.text }); }
-        else { sent.ops++; emit('op', { op: ev.op }); }
+    let first = true;
+    for (let attempt = 0; ; attempt++) {
+      const scan = createScanner(); content = ''; broken = null;
+      for await (const d of deltas(r.body)) {
+        if (typeof d !== 'string') { usage = d.usage; continue; }
+        if (first && tr) { tr.add('inference.ttft', tInf, tr.now()); first = false; }
+        content += d;
+        for (const ev of scan.push(d)) {
+          if (ev.type === 'reply') { sent.reply = true; emit('reply', { reply: ev.text }); }
+          else { sent.ops++; emit('op', { op: ev.op }); }
+        }
+        if ((broken = degenerate(content))) break; // stops the stream (and Moss) right away
       }
+      if (!broken) break;
+      if (tr) tr.add('inference.degenerate', tInf, tr.now(), { why: broken, chars: content.length, attempt, opsSent: sent.ops });
+      // retry once, and only while nothing reached the page (a second run would repeat ops already applied)
+      if (attempt > 0 || sent.ops > 0 || env.MOSS_DEGENERATE_RETRY === 'off') break;
+      r = await post(payload);
+      if (!r.ok || !r.body || !/text\/event-stream/i.test(r.headers?.get?.('content-type') || '')) break;
     }
   } else {
     const json = await r.json();
@@ -367,13 +396,16 @@ export async function callMoss({ message, state, history, directions, recentDire
     usage = json && json.usage;
   }
   if (tr) tr.add('inference.total', tInf, tr.now(), { streamed, chars: (content || '').length, ...usageMeta(usage) });
-  const out = extractJSON(content);
+  // a broken reply after some ops reached the page: keep what was applied and end the turn; otherwise it's an error
+  if (broken && !sent.ops) throw Object.assign(new Error(`Moss's reply broke off (${broken})`), { status: 502 });
+  const out = broken ? {} : extractJSON(content);
   const result = {
     reply: typeof out.reply === 'string' ? out.reply : '',
     ops: Array.isArray(out.ops) ? out.ops : [],
     after: typeof out.after === 'string' ? out.after : undefined,
     suggestions: Array.isArray(out.suggestions) ? out.suggestions.filter((s) => typeof s === 'string').slice(0, 4) : undefined,
     streamed,
+    ...(broken ? { broken } : {}),
   };
   // anything the scanner could not deliver early (odd formatting) still goes out, in order
   if (opts.onEvent) {

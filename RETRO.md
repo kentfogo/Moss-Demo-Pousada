@@ -57,11 +57,12 @@ For the next session. The work started on branch `claude/relaxed-fermat-rr1j2j` 
 - **Degenerate generations:** one worker reply ran to 900 tokens without ever forming JSON (15,910 characters), and the turn failed after 11.6 s. One writer per ~6 builds also fails (it falls back to a default section). Idea: if the first ~200 characters contain no `{`, stop the stream and retry once.
 - **Simpler waterfall (done):** headline tiles (Retrieval, Moss first token, Inference, Reply on screen) and a few plain rows; raw spans under "All steps".
 
+- **Degenerate-stream retry (done):** `degenerate()` in `api/agent.js` flags a worker reply that shows no JSON in 200 characters, runs 200+ whitespace characters, or loops a short pattern 40+ times. The stream is cancelled at once (so Moss stops generating) and retried once if no op has reached the page yet. If some have, the turn ends with what was applied. `MOSS_DEGENERATE_RETRY=off` disables the retry. No false positives across 5 live turns and 4 builds. Section writers aren't streamed; they keep their per-type caps and fall back to a default section.
+
 **Next:**
-1. **Stop and retry degenerate streams** early (above).
-2. **Going public** (the user decides): a new public repository with clean history; decide about `references/`, `PROMPT.md`, `Critic prompt.md`, `design-log.md` and `RETRO.md`; add a LICENSE (`@inferedge/moss` is PolyForm Shield); enable Pages.
-3. **Voice to voice:** measure in a real browser. Then start turns on interim transcripts, stream TTS and cache the openers (see the speed plan in the chat).
-4. **Ask Moss** the questions below.
+1. **Going public** (the user decides): a new public repository with clean history; decide about `references/`, `PROMPT.md`, `Critic prompt.md`, `design-log.md` and `RETRO.md`; add a LICENSE (`@inferedge/moss` is PolyForm Shield); enable Pages.
+2. **Voice to voice:** measure in a real browser. Then start turns on interim transcripts, stream TTS and cache the openers (see the speed plan in the chat).
+3. **Ask Moss** the questions below.
 
 ## Earlier: the "replace Vercel" session (done)
 **Decisions:** Vercel is gone. The app is one Node server (`npm start`, `server.mjs`). Sharing happens through a **replay link** (free to watch) plus a **public repository** people can clone and run with their own Moss keys. No hosted live server for now.

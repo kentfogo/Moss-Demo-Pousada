@@ -8,6 +8,7 @@ const check = (name, ok, detail = '') => { results.push(ok); console.log(`${ok ?
 
 // Mock Moss: records requests; behaviour chosen by the model name.
 const seen = [];
+const degenCalls = {}; const degenClosed = {};
 const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
@@ -22,6 +23,18 @@ const server = http.createServer((req, res) => {
       ['Sure, adding ', 'two sections ', 'now.'].forEach((t) => res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: t } }] })}\n\n`));
       res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 120, completion_tokens: 6, prompt_tokens_details: { cached_tokens: 110 } } })}\n\n`);
       res.write('data: [DONE]\n\n'); return res.end();
+    }
+    if (json.stream && /^degen/.test(json.model)) { // replies that go wrong mid-stream (whitespace that never ends)
+      degenCalls[json.model] = (degenCalls[json.model] || 0) + 1;
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      const chunk = (t) => res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: t } }] })}\n\n`);
+      const good = json.model === 'degen-once' && degenCalls[json.model] > 1;
+      if (good) { chunk('{"reply":"Fixed.","ops":[{"op":"deleteSection","page":"home","id":"h"}]}'); res.write('data: [DONE]\n\n'); return res.end(); }
+      if (json.model === 'degen-late') chunk('{"reply":"","ops":[{"op":"deleteSection","page":"home","id":"h"},');
+      else chunk('{"reply":"');
+      let n = 0; const tick = () => { if (res.destroyed || res.writableEnded) return; if (n++ < 400) { chunk('          '); setTimeout(tick, 1); } else { res.write('data: [DONE]\n\n'); res.end(); } };
+      req.on('close', () => { degenClosed[json.model] = true; });
+      return tick();
     }
     if (json.stream && json.model !== 'nostream') { // token stream, a few characters at a time
       res.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -405,6 +418,22 @@ process.env = saved;
   const cut = async () => ({ status: 200, ok: true, headers: new Headers(), json: async () => ({ choices: [{ message: { content: '{"reply":"","ops":[{"op":"addSection","section":{"type":"faq","data":{"items":[["a' }, finish_reason: 'length' }] }) });
   let msg = ''; try { await ws({ directions: lib3 }, 't', env('moss-test'), cut); } catch (e) { msg = e.message; }
   check('writer: a cut-off reply fails with the reason (finish length)', /finish length/.test(msg), msg);
+}
+
+// 14e. a reply that goes wrong mid-stream is stopped at once, and retried once while nothing reached the page
+{
+  const evs = []; const t0 = Date.now();
+  const r1 = await callMoss({ message: 'hi', state: home }, env('degen-once'), fetch, { stream: true, onEvent: (e, d) => evs.push([e, d]) });
+  check('degenerate: a broken stream is cut short and retried; the retry answers', r1.reply === 'Fixed.' && degenCalls['degen-once'] === 2 && evs.filter(([e]) => e === 'op').length === 1 && Date.now() - t0 < 2000, `${degenCalls['degen-once']} calls, ${Date.now() - t0} ms`);
+  let err = ''; try { await callMoss({ message: 'hi', state: home }, env('degen-always'), fetch, { stream: true, onEvent: () => {} }); } catch (e) { err = e.message; }
+  check('degenerate: retried once only, then fails with the reason', /broke off \(whitespace run\)/.test(err) && degenCalls['degen-always'] === 2, err);
+  const evs3 = []; const r3 = await callMoss({ message: 'hi', state: home }, env('degen-late'), fetch, { stream: true, onEvent: (e, d) => evs3.push([e, d]) });
+  check('degenerate: once an op reached the page, no retry: the turn ends with what was applied', r3.broken === 'whitespace run' && degenCalls['degen-late'] === 1 && evs3.filter(([e]) => e === 'op').length === 1);
+  await new Promise((r) => setTimeout(r, 50));
+  check('degenerate: the broken stream is cancelled (Moss stops generating)', degenClosed['degen-always'] === true);
+  const { degenerate } = await import('../api/agent.js');
+  const fine = JSON.stringify({ reply: 'x', ops: [{ op: 'addSection', page: 'home', section: { type: 'faq', data: { items: Array(20).fill(['Is breakfast included?', 'Yes, 7:30 to 10:00 on the terrace.']) } } }] }, null, 2);
+  check('degenerate: normal replies (even long, pretty-printed, repetitive data) pass', degenerate(fine) === null && degenerate('{"reply":"ok"}') === null && degenerate('Sure! '.repeat(50)) === 'no JSON' && degenerate('{"a":"' + 'ab'.repeat(60)) === 'repeating');
 }
 
 // 15. helpers
