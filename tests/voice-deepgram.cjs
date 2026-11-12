@@ -142,6 +142,45 @@ function fakePcm() {
   check('no console/page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 
+  // early send at Deepgram's 300 ms endpoint, and taking the turn back when you keep talking
+  {
+    const cE = await browser.newContext({ viewport: { width: 1440, height: 900 } }); await cE.addInitScript(fakes);
+    const pE = await cE.newPage(); const errE = []; pE.on('pageerror', (e) => errE.push(e.message));
+    await pE.goto(`${base}/?speed=0.03`); await pE.waitForFunction(() => document.body.dataset.voice);
+    await pE.click('#introMic'); await pE.waitForFunction(() => window.__dg && window.__dg.ws() && window.__dg.ws().readyState === 1);
+    const usersE = () => pE.$$eval('.msg.user', (els) => els.map((e) => e.innerText.trim()));
+    const idleE = () => pE.evaluate(() => window.moss.app.whenIdle());
+    // a finished phrase goes at speech_final, without waiting for the 1 s utterance end
+    const tA = Date.now();
+    await pE.evaluate(() => window.__dg.final('just build a smash burger joint in Brooklyn'));
+    await pE.waitForFunction(() => document.querySelectorAll('.msg.user').length === 1, null, { timeout: 3000 });
+    check('early send: a finished phrase is sent at Deepgram\'s 300 ms endpoint (no utterance-end wait)', Date.now() - tA < 400, `${Date.now() - tA} ms`);
+    await idleE();
+    // a phrase that trails off ("…and") waits for more
+    await pE.evaluate(() => window.__dg.final('make the headline punchier and'));
+    await pE.waitForTimeout(500);
+    check('early send: a phrase ending on "and" is not sent at the endpoint', (await usersE()).length === 1);
+    await pE.evaluate(() => { window.__dg.final('warmer colors'); });
+    await pE.waitForFunction(() => document.querySelectorAll('.msg.user').length === 2, null, { timeout: 3000 });
+    check('…and goes with what follows', /punchier and warmer colors/i.test((await usersE()).at(-1)), (await usersE()).at(-1));
+    await idleE();
+    // sent early, then you keep talking: the first turn is taken back and both phrases go together
+    const before = await pE.evaluate(() => JSON.stringify(window.moss.pageModel.get().pages));
+    await pE.evaluate(() => window.__dg.final('add a FAQ section'));
+    await pE.waitForFunction(() => document.querySelectorAll('.msg.user').length === 3, null, { timeout: 3000 });
+    await pE.evaluate(() => window.__dg.interim('about delivery'));
+    await pE.waitForTimeout(80);
+    const heldPages = await pE.evaluate(() => JSON.stringify(window.moss.pageModel.get().pages));
+    await pE.evaluate(() => window.__dg.final('about delivery times'));
+    await idleE(); await pE.waitForTimeout(200);
+    const uE = await usersE();
+    check('early start: while you keep talking, the early turn changes nothing', heldPages === before);
+    check('early start: the early turn is taken back, and both phrases are sent as one', uE.length === 3 && /^add a FAQ section about delivery times$/i.test(uE.at(-1)) && /section about/.test(uE.at(-1)) && !uE.includes('add a FAQ section'), JSON.stringify(uE.slice(-2)));
+    check('early start: no "stopped" note for a turn that was taken back', !(await pE.locator('.msg.agent .log li.done').allInnerTexts()).some((x) => /stopped/.test(x)));
+    check('no page errors (early send)', errE.length === 0, errE.join(' | '));
+    await cE.close();
+  }
+
   // without a Deepgram key the page falls back to browser speech
   const ctx2 = await browser.newContext();
   await ctx2.route('**/api/voice-token', (r) => r.fulfill({ status: 503, body: '{"error":"Deepgram is not configured"}' }));

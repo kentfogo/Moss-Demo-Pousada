@@ -2786,6 +2786,11 @@ const voice = (() => {
      Moss's own speech is filtered out by word overlap with what it is saying (echo on laptop speakers). */
   // End of turn: wait longer when the last word suggests you're mid-thought.
   const SILENCE = 1400, SILENCE_LONG = 2200, QUIET_BEFORE_SPEAKING = 700;
+  // Early send: a phrase that looks finished goes as soon as the recognizer marks it final (Deepgram: its 300 ms
+  // speech_final; the browser: 600 ms after a final result), not after a full silence. If you keep talking, the
+  // app takes the turn back and sends both phrases together (see takeBack in the app).
+  const EARLY_MS = 600;
+  const looksDone = (t) => !!t && !UNFINISHED.test(t.replace(/[.,!?…]+$/, '').trim());
   const UNFINISHED = /\b(and|so|but|or|um+|uh+|er+|like|then|because|with|the|a|an|to|of|for|maybe|also|plus)$/i;
   let live = null;
   const speech = { text: '', until: 0 };
@@ -2886,7 +2891,7 @@ const voice = (() => {
     if (barge) { queue.length = 0; if (live.h.onSpeech) live.h.onSpeech(heard); }
     if (live.h.onInterim) live.h.onInterim(heard);
     clearTimeout(live.timer);
-    if (heard) live.timer = setTimeout(commitLive, UNFINISHED.test(heard.replace(/[.,!?…]+$/, '')) ? SILENCE_LONG : SILENCE);
+    if (heard) live.timer = setTimeout(commitLive, !looksDone(heard) ? SILENCE_LONG : finals.length && !shownInterim && !dgLive() ? EARLY_MS : SILENCE);
   }
 
   /* ---- Deepgram backend: preferred whenever /api/voice-token works (deployed with DEEPGRAM_API_KEY) ----
@@ -3039,6 +3044,8 @@ const voice = (() => {
         if (m.type === 'Results') {
           const t = (m.channel && m.channel.alternatives && m.channel.alternatives[0] && m.channel.alternatives[0].transcript) || '';
           if (m.is_final) hear([t], ''); else hear([], t);
+          // Deepgram's endpointing: 300 ms of silence after a finished-looking phrase sends it now
+          if (m.speech_final && live === l && looksDone(`${l.pending} ${l.interim}`.trim())) { clearTimeout(l.timer); commitLive(); }
         } else if (m.type === 'UtteranceEnd') {
           const heard = `${l.pending} ${l.interim}`.trim();
           if (heard && !UNFINISHED.test(heard.replace(/[.,!?…]+$/, ''))) { clearTimeout(l.timer); commitLive(); }
@@ -3393,7 +3400,7 @@ const app = (() => {
     });
   }
   function scrollChat() { const m = $('#messages'); m.scrollTop = m.scrollHeight; }
-  function addUser(text) { const el = document.createElement('div'); el.className = 'msg user'; el.innerHTML = formatText(text); $('#messages').appendChild(el); scrollChat(); }
+  function addUser(text) { const el = document.createElement('div'); el.className = 'msg user'; el.innerHTML = formatText(text); $('#messages').appendChild(el); scrollChat(); return el; }
   function addAgent() {
     const el = document.createElement('div'); el.className = 'msg agent';
     el.innerHTML = `<span class="agent-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3l7.5 4.3v9.4L12 21l-7.5-4.3V7.3z M4.5 7.3L12 11.6l7.5-4.3M12 11.6V21"/></svg></span><div class="body"><span class="typing" aria-label="Moss is typing"><i></i><i></i><i></i></span><div class="text"></div><ul class="log"></ul><div class="text after"></div></div>`;
@@ -3883,7 +3890,7 @@ const app = (() => {
     sound.unlock();
     const ok = voice.startLive({
       onInterim: (heard) => { const ta = micTarget(); ta.value = heard; autosize(ta); },
-      onSpeech: () => voice.cancelSpeech(), // you started talking: Moss stops mid-sentence
+      onSpeech: () => { voice.cancelSpeech(); holdIfYoung(); }, // you started talking: Moss stops mid-sentence
       onUtterance: (heard) => { handleUtterance(heard); },
       onError: (err) => { if (/not-allowed|service-not-allowed/.test(err)) setStatus('Mic blocked', false); },
       onStop: () => { setLive(false); sound.play('click'); },
@@ -3902,8 +3909,23 @@ const app = (() => {
       if (busy) { await interrupt(); voice.speak('Stopped. What should I change?'); }
       return;
     }
-    if (busy) await interrupt();
-    send(text, { voice: true, speechEndAt: voice.lastWordsAt(), voiceEndAt: voice.lastVoiceAt() });
+    let say = text;
+    if (busy && turn && turn.voice && turn.paused && !turn.applied) { // you kept talking: take the early turn back
+      const prev = turn; prev.retracted = true;
+      await interrupt();
+      prev.userEl && prev.userEl.remove(); prev.msgEl && prev.msgEl.remove();
+      say = `${prev.text} ${/^I\b|^[A-Z]{2}/.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1)}`; // one sentence, not two
+    } else if (busy) await interrupt();
+    send(say, { voice: true, speechEndAt: voice.lastWordsAt(), voiceEndAt: voice.lastVoiceAt() });
+  }
+  /* Early start: a voice turn is sent at the first pause. For a short while after, if you start talking again, the
+     turn holds its changes (Moss has already stopped speaking); your next phrase then replaces it, sent together with
+     the first. If no phrase follows (a cough, a noise), the turn carries on. */
+  const TAKEBACK_MS = 2500;
+  function holdIfYoung() {
+    const t = turn; if (!t || !t.voice || t.applied || Date.now() - t.sentAt > TAKEBACK_MS) return;
+    t.paused = true; clearTimeout(t.resume);
+    t.resume = setTimeout(() => { t.paused = false; }, TAKEBACK_MS);
   }
 
   /* ---- interruptible turns ---- */
@@ -3955,9 +3977,9 @@ const app = (() => {
     }
     const L = latency.begin(text, { voice: spoken, speechEndAt: opts.speechEndAt, voiceEndAt: opts.voiceEndAt });
     setBusy(true); setStatus('Thinking', true); setSuggestions([]);
-    addUser(text); flashMentions(text);
+    const userEl = addUser(text); flashMentions(text);
     const msg = addAgent();
-    const t = turn = { controller: new AbortController(), aborted: false };
+    const t = turn = { controller: new AbortController(), aborted: false, voice: spoken, text, sentAt: Date.now(), userEl, msgEl: msg };
     let res;
     const ack = spoken ? setTimeout(() => { if (!t.aborted && voice.quietFor() > 1500) voice.speak('On it.'); }, 2500) : null; // fill a slow Moss turn, quietly
 
@@ -4000,7 +4022,10 @@ const app = (() => {
         if (!queue.length) { if (ended) return; await new Promise((r) => (wake = r)); continue; }
         if (replyShown) await replyShown;
         if (t.aborted) return;
+        while (t.paused && !t.aborted) await new Promise((r) => setTimeout(r, 40)); // you're still talking: wait
+        if (t.aborted) return;
         const op = queue.shift();
+        if (MUTATING.has(op.op)) t.applied = true;
         if (!snap && MUTATING.has(op.op)) { pageModel.snapshot(); snap = true; }
         if (op.op === 'addSection' && !building) { building = true; document.body.classList.add('building'); }
         if (op.op === 'askQuestion' && replyText != null && !squash(replyText).includes(squash(op.question).slice(0, 40))) { // the reply forgot to ask it: ask it now
@@ -4047,6 +4072,7 @@ const app = (() => {
     const typingLeft = msg.querySelector('.typing'); if (typingLeft) typingLeft.remove();
     if (t.aborted || res.aborted) {
       if (building) document.body.classList.remove('building');
+      if (t.retracted) { L.end({ aborted: true, retracted: true }); clearTimeout(t.resume); turn = null; setBusy(false); return; } // replaced by the longer phrase
       finishInterrupted(msg, doneOps, total);
       L.end({ aborted: true });
       turn = null; setBusy(false); return;

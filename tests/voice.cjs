@@ -215,6 +215,10 @@ async function open(browser, speed) {
     await ask('Who is it for, college kids or families?');
     await sayE('college kids');
     check('echo: a short answer that repeats one of Moss\'s options is kept', /^college kids$/i.test((await users()).at(-1)), (await users()).at(-1));
+    const nB = (await users()).length; const tB = Date.now();
+    await pe.evaluate(() => window.__say('make the headline punchier'));
+    await pe.waitForFunction((n) => document.querySelectorAll('.msg.user').length > n, nB, { timeout: 3000 });
+    check('early send (browser): a finished phrase goes ~0.6 s after it is final, not after 1.4 s of silence', Date.now() - tB < 1100, `${Date.now() - tB} ms`);
     check('no page errors (echo)', errE.length === 0, errE.join(' | '));
   }
 
