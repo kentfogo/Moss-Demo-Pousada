@@ -70,8 +70,9 @@ export async function retrieve(name, queries, tr, env = process.env, topK = 3) {
   const end = tr && tr.start('knowledge.query', { index: name, queries: queries.length });
   const results = await Promise.all(queries.map((q) => c.query(name, q, { topK }).catch(() => ({ docs: [] }))));
   const seen = new Set(); const out = [];
+  const rawBest = Math.max(0, ...results.flatMap((r) => (r.docs || []).filter((d) => d.id !== '__meta').map((d) => d.score)));
   results.forEach((r) => (r.docs || []).forEach((d) => { if (d.id === '__meta' || seen.has(d.id) || d.score < KNOWLEDGE.minScore) return; seen.add(d.id); out.push({ text: d.text, kind: d.metadata && d.metadata.kind, score: Math.round(d.score * 1000) / 1000 }); }));
-  if (end) end({ passages: out.length, best: out[0] ? out[0].score : null });
+  if (end) end({ passages: out.length, best: out[0] ? out[0].score : null, topScore: Math.round(rawBest * 1000) / 1000, minScore: KNOWLEDGE.minScore });
   return out;
 }
 
