@@ -2,7 +2,22 @@
 
 For the next session. The work started on branch `claude/relaxed-fermat-rr1j2j` (PR kentfogo/Moss-Demo-Pousada#1) and continues on `claude/retro-md-continuation-y29ff4`, which holds everything. `npm test` runs 11 suites, all green.
 
-## Pick up here (after the "make it faster" session, 2026-11-12)
+## Pick up here (paused 2026-11-12, end of the "make it faster" session)
+Everything is on `claude/retro-md-continuation-y29ff4`. `npm test` runs 12 suites, all green. The user runs the app locally (`npm start`, port 3001), with Moss and Deepgram keys in `.env`. The Deepgram key has the Member role, and `npm start` prints ✓ for both.
+
+**Next, in order:**
+1. **The user's voice run:** 10 turns from `docs/voice-measurement.md`, then paste the **Voice report**. It checks the echo fix, early send and take-back, and instant commands live. Then speed up the largest stage. Likely speech synthesis: stream Aura over a WebSocket, cache the openers, start speaking the first words sooner.
+2. **Going public (user decides):**
+   - A new public repository with clean history.
+   - Decide about `references/`, `PROMPT.md`, `Critic prompt.md`, `design-log.md` and `RETRO.md`.
+   - Add a LICENSE (`@inferedge/moss` is PolyForm Shield).
+   - Re-record `replays/pousada.json` first (it predates streamed planning questions and instant commands), then enable Pages.
+3. **Session-minutes idle test:** does an idle server with indexes loaded accrue minutes? If yes, move site facts to Inference retrieval (`X-Moss-Indexes`) and unload idle indexes.
+4. **Ask Moss** the questions below.
+5. **Optional speed work:** a wider router, shorter edit output, tokens/s per model for builds, pre-built suggestion chips, region pinning.
+6. **When ready:** open a new PR to `main` (kentfogo/Moss-Demo-Pousada#1 is the old branch).
+
+## Session log: the "make it faster" session (2026-11-12)
 **Done this session:**
 - **Parallel build** (`api/_fanout.js`):
   - The worker plans the page and sends each section as a brief: type, layout, at most 18 words of facts.
