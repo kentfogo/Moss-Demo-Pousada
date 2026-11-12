@@ -441,6 +441,21 @@ process.env = saved;
   check('degenerate: normal replies (even long, pretty-printed, repetitive data) pass', degenerate(fine) === null && degenerate('{"reply":"ok"}') === null && degenerate('Sure! '.repeat(50)) === 'no JSON' && degenerate('{"a":"' + 'ab'.repeat(60)) === 'repeating');
 }
 
+// 14f. startup checks (server.mjs): Moss keys, and whether the Deepgram key can mint listening tokens
+{
+  const { checkServices } = await import('../api/_checks.js');
+  const net = (moss, dg) => async (url) => /deepgram/.test(url) ? { ok: dg === 200, status: dg, json: async () => ({ access_token: 'x', expires_in: 30 }) } : { ok: moss === 200, status: moss, json: async () => ({}) };
+  const e = { MOSS_PROJECT_ID: 'p', MOSS_PROJECT_KEY: 'k', DEEPGRAM_API_KEY: 'd' };
+  let l = await checkServices(e, net(200, 200));
+  check('checks: both fine', l.every((x) => x.ok) && /keys accepted/.test(l[0].text) && /listening and speech OK/.test(l[1].text));
+  l = await checkServices(e, net(401, 403));
+  check('checks: refused Moss keys, and a Deepgram key below Member say what to fix', /refused \(401\)/.test(l[0].text) && /Member role/.test(l[1].text) && !l[0].ok && !l[1].ok, l.map((x) => x.text).join(' | '));
+  l = await checkServices({}, net(200, 200));
+  check('checks: no keys at all', /no keys/.test(l[0].text) && /no key: voice uses the browser/.test(l[1].text));
+  let sentBody = null; await checkServices(e, async (url, init) => { if (!/deepgram/.test(url)) sentBody = JSON.parse(init.body); return { ok: true, status: 200, json: async () => ({ access_token: 'x' }) }; });
+  check('checks: the Moss check is a real 1-token call (GET /v1/models accepts any key)', sentBody && sentBody.max_tokens === 1);
+}
+
 // 15. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');
 check('compactState keeps flow names only', JSON.stringify(compactState({ flows: [{ name: 'Booking', nodes: [1, 2] }] }).flows) === '["Booking"]');

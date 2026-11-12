@@ -224,6 +224,8 @@ With 1 and 2, the expected server-side times on Vercel are a talker first token 
 - **Deepgram:** the key needs the Member role to mint live-listening tokens. The user still has to swap the key.
 - **Kokoro:** the real model is untested here; the headless check was blocked by the permission classifier.
 - **Test servers:** must ignore the page's warm-up ping (`{warm:true}`).
+- **Moss `GET /v1/models` is public:** it answers 200 with no key or a wrong one, so it can't check keys. The startup check (`api/_checks.js`) makes a 1-token call instead.
+- **Deepgram key role:** a key below Member still speaks (Aura) but can't mint listening tokens. Listening then falls back to Chrome's recognizer, with no echo cancellation, and Moss heard itself on speakers. `npm start` now prints a ✓/✗ line for Moss and Deepgram.
 - **Bench:**
   - Moss's server-sent events put spaces after colons (`"content": "Hi"`), so match them loosely.
   - From a Node child process, curl can't write `-D /dev/stderr` (exit 23). Use `-D -` and parse the headers from stdout.

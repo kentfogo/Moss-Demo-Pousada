@@ -82,7 +82,9 @@ const server = http.createServer(async (req, res) => {
 
 server.keepAliveTimeout = 65_000; // outlive typical load-balancer idle timeouts, so browser connections are reused too
 const port = Number(process.env.PORT || 3000);
-server.listen(port, () => {
-  const ready = process.env.MOSS_PROJECT_ID && process.env.MOSS_PROJECT_KEY;
-  console.log(`Moss Builder on http://localhost:${port}${ready ? '' : '  (no Moss keys: the offline demo agent answers; see .env.example)'}`);
+server.listen(port, async () => {
+  console.log(`Moss Builder on http://localhost:${port}`);
+  if (process.env.SKIP_CHECKS) return;
+  const { checkServices } = await import('./api/_checks.js');
+  for (const l of await checkServices()) console.log(`  ${l.ok ? '✓' : '✗'} ${l.name}: ${l.text}`);
 });
