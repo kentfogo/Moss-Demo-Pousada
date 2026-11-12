@@ -37,6 +37,9 @@ const SCRIPTS = {
     [12, 'done', { streamed: false, routed: true }],
   ],
   fail: [[0, 'error', { error: 'Moss inference returned 500', status: 502 }]],
+  brokeoff: [[0, 'error', { error: 'Moss\'s reply broke off (whitespace run)', status: 502 }]],
+  drop: [[0, 'CUT']],
+  notset: [[0, 'error', { error: 'Moss inference is not configured (set MOSS_PROJECT_ID and MOSS_PROJECT_KEY).', status: 503 }]],
   // the talker's words stream in (replyPart) well before the full reply
   parts: [
     [0, 'replyPart', { text: 'Sure,' }],
@@ -73,7 +76,7 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       const body = JSON.parse(b); if (body.warm) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"warm":false}'); }
       seen.push({ body, accept: req.headers.accept });
-      const key = body.mode === 'mock' ? 'mock' : /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' :  /explode/.test(body.message) ? 'fail' :  /burst/.test(body.message) ? 'burst' : /streamy/.test(body.message) ? 'parts' : 'build';
+      const key = body.mode === 'mock' ? 'mock' : /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' :  /explode/.test(body.message) ? 'fail' :  /burst/.test(body.message) ? 'burst' : /brokeoff/.test(body.message) ? 'brokeoff' : /dropit/.test(body.message) ? 'drop' : /notset/.test(body.message) ? 'notset' : /streamy/.test(body.message) ? 'parts' : 'build';
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const t0 = Date.now(); const send = (ev, data) => res.write(`event: ${ev}\ndata: ${JSON.stringify({ ...data, t: Date.now() - t0 })}\n\n`);
       send('hello', {});
@@ -201,6 +204,20 @@ const server = http.createServer((req, res) => {
   check('the switch remembers the choice', (await pk.evaluate(() => localStorage.getItem('moss-voice'))) === 'browser' && (await pk.evaluate(() => window.moss.voice.engine())) === 'browser');
   check('no page errors (Kokoro)', errK.length === 0, errK.join(' | '));
   await ctxK.close();
+
+  // fallback notices say what actually happened
+  const pf = await browser.newPage(); await pf.goto(`${base}/?speed=0.03`);
+  const lastAgent = () => pf.locator('.msg.agent .text:not(.after)').last().innerText();
+  const sayF = async (t) => { await pf.evaluate((m) => window.moss.app.send(m), t); await pf.waitForTimeout(50); await pf.evaluate(() => window.moss.app.whenIdle()); };
+  await sayF('build a bakery brokeoff'); const nBroke = await lastAgent();
+  check('fallback: a Moss reply that broke off says so (not "unreachable")', /Moss didn’t answer this time \(its reply broke off\)/.test(nBroke) && /offline demo agent/.test(nBroke) && !/reachable/.test(nBroke), nBroke.slice(0, 110));
+  await sayF('again brokeoff'); check('fallback: a one-off Moss failure is said every time', /didn’t answer this time/.test(await lastAgent()));
+  await sayF('dropit please'); const nDrop = await lastAgent();
+  check('fallback: a dropped connection says the connection dropped', /connection to the server dropped/.test(nDrop), nDrop.slice(0, 90));
+  await sayF('dropit again'); check('fallback: …once, not every turn', !/connection to the server dropped/.test(await lastAgent()));
+  await sayF('notset now'); const nSet = await lastAgent();
+  check('fallback: missing keys say Moss isn\'t set up on this server', /isn’t set up on this server/.test(nSet), nSet.slice(0, 90));
+  await pf.close();
 
   // the reply's first words show while the rest is still on its way
   const pp = await browser.newPage(); await pp.goto(`${base}/?speed=0.03&debug`);

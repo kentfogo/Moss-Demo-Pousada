@@ -1774,7 +1774,16 @@ const agent = (() => {
      Everything the model returns is normalized before it can touch the page. */
   const REMOTE = /^https?:$/.test(location.protocol) && !new URLSearchParams(location.search).has('offline');
   const turns = [];
-  let remoteDisabled = false, warned = false;
+  let remoteDisabled = false; const warned = new Set(); // fallback notices already shown, by kind
+  /** Why the offline agent answered, in words: setup, connection, rate limit, or a Moss reply that failed this time. */
+  function fallbackNote(err) {
+    const m = String((err && err.message) || ''); const st = err && err.status;
+    if ((st === 503 && /not configured/i.test(m)) || st === 404) return { kind: 'setup', text: 'Moss isn’t set up on this server yet (it needs a Moss project id and key), so the offline demo agent answered.' };
+    if (st === 429) return { kind: 'busy', text: 'That was a lot of requests in a short time, so the offline demo agent answered. Give it a minute.' };
+    if ((err && err.network) || (!st && /failed to fetch|networkerror|load failed|network|stream broke/i.test(m))) return { kind: 'server', text: 'The connection to the server dropped, so the offline demo agent answered.' };
+    const detail = /broke off/i.test(m) ? 'its reply broke off' : /returned 5\d\d|returned 4\d\d/i.test(m) ? 'it returned an error' : 'something went wrong on its side';
+    return { kind: 'moss', always: true, text: `Moss didn’t answer this time (${detail}), so the offline demo agent did. Try again?` };
+  }
   const UNDO_RE = /^\s*(undo|revert)\b|\bundo\b|take that back|go back a step/;
 
   // Commands that never need the model: undo, view switches, going to an existing page.
@@ -1811,7 +1820,7 @@ const agent = (() => {
       if (r.ok && streaming && /event-stream/.test(r.headers.get('content-type') || '')) return await readStream(r, message, state, Object.assign({}, opts, { sentAt: tReq, mockMode: mode === 'mock' }), L);
       const json = await r.json().catch(() => ({}));
       if (L && json.timing) L.server(json.timing, Math.max(tReq, performance.now() - (json.serverMs || 0)));
-      if (!r.ok) { if (r.status === 503 || r.status === 404) remoteDisabled = true; throw new Error(json.error || `HTTP ${r.status}`); }
+      if (!r.ok) { if (r.status === 503 || r.status === 404) remoteDisabled = true; throw Object.assign(new Error(json.error || `HTTP ${r.status}`), { status: r.status }); }
       if (json.route) return await routed(json.route, message, state, opts);
       if (mode === 'mock') prepareMock(json, state, opts.scraped);
       const res = normalize(json, state, message);
@@ -1827,7 +1836,8 @@ const agent = (() => {
       if (err && err.name === 'AbortError') return { reply: '', ops: [], aborted: true };
       console.warn('Moss inference unavailable, using the offline agent:', err.message);
       const res = await localRespond(message, state, { mode, scraped: opts.scraped });
-      if (!warned) { warned = true; res.reply = `Moss inference isn’t reachable (${err.message}), so the offline demo agent answered. ${res.reply}`; }
+      const why = fallbackNote(err);
+      if (why.always || !warned.has(why.kind)) { warned.add(why.kind); res.reply = `${why.text} ${res.reply}`; }
       return res;
     }
   }
@@ -1872,11 +1882,11 @@ const agent = (() => {
       }
     } catch (e) {
       if (e && e.name === 'AbortError') throw e;
-      err = { error: e.message || 'stream broke' };
+      err = { error: e.message || 'stream broke', network: true };
     }
     if (L && done) L.note({ streamed: done.streamed !== false, routed: !!done.routed });
     if (route) return await routed(route, message, state, opts);
-    if (err && reply == null && !anyOp) { if (err.status === 503) remoteDisabled = true; throw new Error(err.error); }
+    if (err && reply == null && !anyOp) { if (err.status === 503) remoteDisabled = true; throw Object.assign(new Error(err.error), { status: err.status, network: !!err.network }); }
     if (isMock && !sawMocks && anyOp) { const sc = opts.scraped || {}; n.push({ op: 'setMocks', source: sc.url, looks: mockLooks(detectKind(`${sc.name || ''} ${sc.title || ''} ${sc.description || ''}`.toLowerCase()), sc.brandHue, sc.name || 'site') }).forEach((o) => opts.onOp(o)); }
     const fin = n.finish({ reply: reply || '', after: done && done.after, suggestions: done && done.suggestions });
     fin.rest.forEach((o) => opts.onOp(o));
