@@ -3828,6 +3828,8 @@ const app = (() => {
     $('#latClose').addEventListener('click', () => latency.toggle(false));
     $('#latCopy').addEventListener('click', async () => { const j = latency.json(); try { await navigator.clipboard.writeText(j); $('#latCopy').textContent = 'Copied'; } catch (e) { console.log(j); $('#latCopy').textContent = 'Logged to console'; } setTimeout(() => ($('#latCopy').textContent = 'Copy JSON'), 1500); });
     voice.onTiming((e) => latency.tts(e));
+    // warm the Moss router (embedding model + intent index) while you're still reading the start screen
+    if (agent.isRemote()) setTimeout(() => fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"warm":true}' }).catch(() => {}), 1200);
     if (new URLSearchParams(location.search).has('debug')) latency.toggle(true);
     $('#photoInput').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; const tgt = photoTarget; e.target.value = ''; if (f) placePhoto(tgt, f); });
     $('#siteSections').addEventListener('click', (e) => {

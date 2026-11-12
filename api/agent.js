@@ -12,7 +12,7 @@
 import { guard } from './_guard.js';
 import { trace } from './_trace.js';
 import { createScanner } from './_jsonScan.js';
-import { route } from './_moss.js';
+import { route, warm } from './_moss.js';
 
 export const config = { maxDuration: 60 };
 
@@ -321,6 +321,12 @@ export default async function handler(req, res) {
   if (guard(req, res, { methods: ['POST'], bucket: 'agent' })) return;
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'invalid JSON' }); } }
+  // the page pings once when it opens, so the router's model and index are loaded before the first edit
+  if (body && body.warm === true) {
+    let ok = false; try { ok = process.env.MOSS_ROUTER !== 'off' && await warm(tr, process.env); } catch (e) { tr.add('router.error', tr.now(), tr.now(), { error: String(e && e.message).slice(0, 160) }); }
+    res.setHeader('cache-control', 'no-store');
+    return res.status(200).json({ warm: ok, timing: tr.spans, serverMs: tr.now() });
+  }
   const message = typeof body?.message === 'string' ? body.message.trim() : '';
   if (!message) return res.status(400).json({ error: 'message is required' });
   if (message.length > MAX_MESSAGE) return res.status(413).json({ error: 'message too long' });

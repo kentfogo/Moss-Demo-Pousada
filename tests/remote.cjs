@@ -46,7 +46,7 @@ const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {
-      const json = JSON.parse(body); requests.push(json);
+      const json = JSON.parse(body); if (json.warm) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{}'); } requests.push(json);
       const m = json.message.toLowerCase();
       if (m.includes('slow')) { setTimeout(() => { try { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(REPLIES.about)); } catch (e) {} }, 2500); return; }
       if (m.includes('fail')) { res.writeHead(500, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ error: 'Moss inference returned 500' })); }

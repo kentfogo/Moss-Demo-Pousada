@@ -45,7 +45,8 @@ const server = http.createServer((req, res) => {
   if (url === '/api/agent') {
     let b = ''; req.on('data', (c) => (b += c));
     req.on('end', async () => {
-      const body = JSON.parse(b); seen.push({ body, accept: req.headers.accept });
+      const body = JSON.parse(b); if (body.warm) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"warm":false}'); }
+      seen.push({ body, accept: req.headers.accept });
       const key = /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' : /explode/.test(body.message) ? 'fail' : 'build';
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const t0 = Date.now(); const send = (ev, data) => res.write(`event: ${ev}\ndata: ${JSON.stringify({ ...data, t: Date.now() - t0 })}\n\n`);

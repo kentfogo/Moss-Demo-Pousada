@@ -207,7 +207,7 @@ const fakeMoss = (scoreFor) => { const f = { created: [], loads: 0, queries: 0, 
   async createIndex(name, docs) { f.created.push({ name, n: docs.length, sample: docs[0] }); f.exists = true; return { indexName: name, docCount: docs.length }; },
   async query(name, q) { f.queries++; return { docs: scoreFor(q) }; } }; return f; };
 const doc = (canonical, score) => ({ id: 'x', text: 'x', score, metadata: { canonical } });
-const fm = fakeMoss((q) => /pop/.test(q) ? [doc('Make it lively', 0.91), doc('Add some animation', 0.7)] : /colour behind/.test(q) ? [doc('Accent background on the {section}', 0.71), doc('Dark background on the {section}', 0.66)] : /tie/.test(q) ? [doc('Bigger buttons', 0.9), doc('Smaller buttons', 0.885)] : [doc('Undo', 0.31)]);
+const fm = fakeMoss((q) => /pop/.test(q) ? [doc('Make it lively', 0.91), doc('Add some animation', 0.7)] : /colour behind/.test(q) ? [doc('Accent background on the {section}', 0.71), doc('Dark background on the {section}', 0.66)] : /tie/.test(q) ? [doc('Glow on hover', 0.9), doc('Lift on hover', 0.885)] : [doc('Undo', 0.31)]);
 mossMod.setClient(fm);
 const { trace } = await import('../api/_trace.js');
 let tr0 = trace();
@@ -216,7 +216,11 @@ check('router: a missing intent index is built once, then loaded', fm.created.le
 check('router: a confident match runs the command (high)', d1.decision === 'high' && d1.canonical === 'Make it lively');
 const loads = fm.loads; await mossMod.route('make it pop', trace(), {});
 check('router: the index stays loaded in a warm instance', fm.loads === loads);
-check('router: a middle score becomes hints, a low one nothing, a near tie is not trusted', (await mossMod.route('brand colour behind it', trace(), {})).decision === 'mid' && (await mossMod.route('add a pricing page', trace(), {})).decision === 'low' && (await mossMod.route('tie', trace(), {})).decision === 'mid');
+check('router: a middle score becomes hints, a low one nothing, a near tie is not trusted', (await mossMod.route('brand colour behind it', trace(), {})).decision === 'mid' && (await mossMod.route('add a pricing page', trace(), {})).decision === 'low' && (await mossMod.route('tie: glow or lift on hover', trace(), {})).decision === 'mid');
+const opp = fakeMoss(() => [doc('Smaller buttons', 0.944), doc('Bigger buttons', 0.82)]); opp.exists = true; mossMod.setClient(opp);
+const dOpp = await mossMod.route('the buttons need to be bigger', trace(), {});
+check('router: keyword guards veto an opposite the embedding confused (bigger ≠ smaller)', dOpp.decision === 'high' && dOpp.canonical === 'Bigger buttons', JSON.stringify(dOpp));
+mossMod.setClient(fm); fm.exists = true;
 check('router: one best score per command', JSON.stringify(mossMod.rank([doc('A', 0.5), doc('A', 0.8), doc('B', 0.6)])) === '[{"canonical":"A","score":0.8},{"canonical":"B","score":0.6}]');
 // in the handler: on for edits, off while planning or when the page already tried it
 Object.assign(process.env, env('moss-test')); delete process.env.MOSS_ROUTER;

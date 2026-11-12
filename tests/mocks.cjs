@@ -33,7 +33,7 @@ let scrapeFail = false;
 const server = http.createServer((req, res) => {
   const [url, qs] = req.url.split('?');
   if (url === '/api/scrape') { seen.scrape.push(new URLSearchParams(qs).get('url')); if (scrapeFail) { res.writeHead(422, { 'content-type': 'application/json' }); return res.end('{"error":"That link is not a web page."}'); } res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(SCRAPED)); }
-  if (url === '/api/agent') { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { seen.agent.push(JSON.parse(b)); res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(MODEL)); }); return; }
+  if (url === '/api/agent') { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { if (JSON.parse(b).warm) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{}'); } seen.agent.push(JSON.parse(b)); res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(MODEL)); }); return; }
   if (url === '/api/voice-token') { res.writeHead(503); return res.end('{}'); }
   const file = url === '/' ? 'moss-builder.html' : decodeURIComponent(url).replace(/^\/+/, '');
   const full = path.join(ROOT, file);

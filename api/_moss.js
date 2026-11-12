@@ -2,7 +2,7 @@
 // The client loads an index once per warm function instance and queries it in memory (sub-millisecond search; the
 // query is embedded on this machine). Index files and the embedding model are cached under /tmp (the only writable
 // path on Vercel). Credentials are the same Moss project id and key used for inference.
-import { INTENTS, INTENT_INDEX, intentDocs } from './_intents.js';
+import { INTENTS, INTENT_INDEX, intentDocs, eligible } from './_intents.js';
 
 let clientP = null;
 const loaded = new Map(); // index name → Promise (loaded once per instance)
@@ -54,15 +54,15 @@ export function ensureIndex(c, name, docs, tr, span = 'index.load') {
 export const isLoaded = (name) => loaded.has(name);
 
 /* ------------------------------------------------------------ intent router */
-export const THRESHOLDS = { high: 0.82, mid: 0.6, margin: 0.03 };
+export const THRESHOLDS = { high: 0.75, mid: 0.55, margin: 0.03, coldBudgetMs: 250 };
 export function thresholds(env = process.env) {
-  return { high: Number(env.ROUTER_HIGH) || THRESHOLDS.high, mid: Number(env.ROUTER_MID) || THRESHOLDS.mid, margin: THRESHOLDS.margin };
+  return { high: Number(env.ROUTER_HIGH) || THRESHOLDS.high, mid: Number(env.ROUTER_MID) || THRESHOLDS.mid, margin: THRESHOLDS.margin, coldBudgetMs: THRESHOLDS.coldBudgetMs };
 }
 
-/** Best score per command, from the top matches. */
-export function rank(docs) {
+/** Best score per command, from the top matches; with a message, commands it contradicts are dropped (hybrid: semantic + keyword guards). */
+export function rank(docs, message) {
   const best = new Map();
-  (docs || []).forEach((d) => { const c = d.metadata && d.metadata.canonical; if (c && (!best.has(c) || best.get(c) < d.score)) best.set(c, d.score); });
+  (docs || []).forEach((d) => { const c = d.metadata && d.metadata.canonical; if (c && (message == null || eligible(c, message)) && (!best.has(c) || best.get(c) < d.score)) best.set(c, d.score); });
   return [...best.entries()].map(([canonical, score]) => ({ canonical, score })).sort((a, b) => b.score - a.score);
 }
 /** high: run the command without the LLM · mid: give the LLM hints · low: nothing. Near-ties drop to mid. */
@@ -73,12 +73,22 @@ export function decide(ranked, th) {
   return { decision: 'mid', top: ranked.slice(0, 3) };
 }
 
+/** Warm the router (model + index) without routing anything. */
+export async function warm(tr, env = process.env) {
+  const c = await client(env); if (!c) return false;
+  await ensureIndex(c, INTENT_INDEX, intentDocs, tr, 'router.load');
+  return true;
+}
 export async function route(message, tr, env = process.env) {
   const c = await client(env); if (!c) return null;
-  await ensureIndex(c, INTENT_INDEX, intentDocs, tr, 'router.load');
+  const th = thresholds(env);
+  // a cold instance needs seconds to load the model and index: don't make this turn wait; it loads meanwhile
+  const ready = ensureIndex(c, INTENT_INDEX, intentDocs, tr, 'router.load');
+  const loadedNow = await Promise.race([ready.then(() => true), new Promise((r) => setTimeout(() => r(false), th.coldBudgetMs))]);
+  if (!loadedNow) { ready.catch(() => {}); if (tr) tr.add('router.cold', tr.now(), tr.now(), { skipped: true }); return { decision: 'cold', top: [] }; }
   const end = tr && tr.start('router.query');
-  const res = await c.query(INTENT_INDEX, message, { topK: 6 });
-  const d = decide(rank(res.docs), thresholds(env));
+  const res = await c.query(INTENT_INDEX, message, { topK: 8 });
+  const d = decide(rank(res.docs, message), th);
   if (end) end({ score: d.top[0] ? Math.round(d.top[0].score * 1000) / 1000 : null, decision: d.decision, best: d.top[0] && d.top[0].canonical });
   return d;
 }

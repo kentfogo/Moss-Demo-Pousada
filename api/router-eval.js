@@ -32,10 +32,10 @@ export default async function handler(req, res) {
     const rows = [];
     for (const [q, expect] of EVAL) {
       const t0 = performance.now();
-      const r = await c.query(INTENT_INDEX, q, { topK: 6 });
+      const r = await c.query(INTENT_INDEX, q, { topK: 8 });
       const ms = performance.now() - t0;
-      const ranked = rank(r.docs);
-      rows.push({ q, expect, top: ranked[0], second: ranked[1], ms: Math.round(ms * 10) / 10 });
+      const ranked = rank(r.docs, q); const raw = rank(r.docs);
+      rows.push({ q, expect, top: ranked[0], second: ranked[1], rawTop: raw[0], ms: Math.round(ms * 10) / 10 });
     }
     const times = rows.map((r) => r.ms).sort((a, b) => a - b);
     res.setHeader('cache-control', 'no-store');
@@ -43,6 +43,7 @@ export default async function handler(req, res) {
       index: INTENT_INDEX, spans: tr.spans,
       queryMs: { p50: times[Math.floor(times.length / 2)], p95: times[Math.floor(times.length * 0.95)], max: times.at(-1) },
       byThreshold: evaluate(rows),
+      semanticOnly: evaluate(rows.map((r) => ({ ...r, top: r.rawTop, second: null }))),
       positives: rows.filter((r) => r.expect).map((r) => ({ q: r.q, expect: r.expect, got: r.top && r.top.canonical, score: r.top && Math.round(r.top.score * 1000) / 1000 })),
       negatives: rows.filter((r) => !r.expect).map((r) => ({ q: r.q, got: r.top && r.top.canonical, score: r.top && Math.round(r.top.score * 1000) / 1000 })),
     });
