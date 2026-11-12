@@ -8,12 +8,16 @@
 //   MOSS_MODEL        optional  default "moss/fastlane-1"
 //   MOSS_BASE_URL     optional  default "https://inference.moss.dev/v1" ("/chat/completions" is appended)
 //   MOSS_TEMPERATURE  optional  default 0.4
+//   MOSS_REPLY_CACHE  optional  "off" sends X-Moss-Cache: off (for recordings: no free answers to repeated requests)
+//   MOSS_TALKER_LEAD_MS optional default 30: how much earlier the talker is sent than the worker (0 = together)
+//   MOSS_FANOUT       optional  "off" builds in one serial stream instead of the parallel build (api/_fanout.js)
 
 import { guard } from './_guard.js';
 import { trace } from './_trace.js';
 import { createScanner } from './_jsonScan.js';
 import { route, warm } from './_moss.js';
 import * as knowledge from './_knowledge.js';
+import { createFanout, fanoutApplies, plannerNote, WRITER_TOKENS } from './_fanout.js';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
@@ -53,6 +57,8 @@ export const MAX_RETRY_WAIT_MS = 3000;
  * arrives before any body. A Retry-After over MAX_RETRY_WAIT_MS returns the refusal as is.
  */
 export async function postMoss(fetchImpl, url, init, tr, label = 'inference') {
+  // MOSS_REPLY_CACHE=off: Moss's reply cache answers a repeated request for free; recordings and benchmarks turn it off
+  if (process.env.MOSS_REPLY_CACHE === 'off') init = { ...init, headers: { ...(init.headers || {}), 'x-moss-cache': 'off' } };
   const r = await fetchImpl(url, init);
   if (r.status !== 429 && r.status !== 503) return r;
   const ra = r.headers && r.headers.get ? r.headers.get('retry-after') : null;
@@ -420,10 +426,48 @@ export async function prime(directions, env = process.env, fetchImpl = fetch, tr
   if (!token || env.MOSS_PRIME === 'off') return false;
   const dirs = Array.isArray(directions) && JSON.stringify(directions).length < MAX_STATE ? directions : [];
   const end = tr ? tr.start('prime') : null;
-  const r = await fetchImpl(`${base}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ model, messages: [{ role: 'system', content: systemPrompt(dirs) }, { role: 'user', content: 'ready?' }], max_tokens: 1 }) });
+  // X-Moss-Cache: off — the prime is the same request every time, and a reply-cache hit would skip the prompt cache
+  const r = await fetchImpl(`${base}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'x-moss-cache': 'off' }, body: JSON.stringify({ model, messages: [{ role: 'system', content: systemPrompt(dirs) }, { role: 'user', content: 'ready?' }], max_tokens: 1 }) });
   const j = await r.json().catch(() => ({}));
   if (end) end({ status: r.status, ...usageMeta(j && j.usage) });
   return r.ok;
+}
+
+/**
+ * One section writer of a parallel build (api/_fanout.js): the shared system prompt (cached) plus a short tail.
+ * Returns the section's data object.
+ */
+export async function writeSection(args, tail, env = process.env, fetchImpl = fetch, tr, maxTokens) {
+  const out = await writeOne(args, tail, env, fetchImpl, tr, 'section', maxTokens);
+  const op = Array.isArray(out.ops) ? out.ops.find((o) => o && o.op === 'addSection' && o.section) : null;
+  const data = (op && op.section.data) || out.data || null;
+  if (!data || typeof data !== 'object') throw new Error('section writer returned no data');
+  return data;
+}
+/** The look writer of a first parallel build: returns the setDesign op. */
+export async function writeDesign(args, tail, env = process.env, fetchImpl = fetch, tr) {
+  const out = await writeOne(args, tail, env, fetchImpl, tr, 'design');
+  const op = Array.isArray(out.ops) ? out.ops.find((o) => o && o.op === 'setDesign' && o.design) : null;
+  if (!op) throw new Error('look writer returned no setDesign');
+  return op;
+}
+/** The suggestNext writer of a parallel build: returns the suggestNext op. */
+export async function writeNext(args, tail, env = process.env, fetchImpl = fetch, tr) {
+  const out = await writeOne(args, tail, env, fetchImpl, tr, 'next');
+  const op = Array.isArray(out.ops) ? out.ops.find((o) => o && o.op === 'suggestNext') : null;
+  if (!op) throw new Error('next writer returned no suggestNext');
+  return op;
+}
+async function writeOne(args, tail, env, fetchImpl, tr, label, maxTokens = WRITER_TOKENS) {
+  const { token, base, model } = mossSettings(env);
+  const body = { model, messages: [{ role: 'system', content: systemPrompt(args.directions) }, { role: 'user', content: tail }], max_tokens: Math.min(maxTokens, WRITER_TOKENS), temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' } };
+  const r = await postMoss(fetchImpl, `${base}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(body) }, tr, label);
+  if (!r.ok) throw Object.assign(new Error(`${label} writer ${r.status}`), { status: r.status });
+  const j = await r.json();
+  const c = j?.choices?.[0];
+  let out = null; try { out = extractJSON(c?.message?.content); } catch {}
+  if (!out || (!out.ops && !out.data)) throw new Error(`${label} writer: no usable JSON (finish ${c?.finish_reason}, ${(c?.message?.content || '').length} chars: ${String(c?.message?.content || '').slice(0, 80)})`);
+  return out;
 }
 
 /** Turn arguments from the request body. */
@@ -525,12 +569,28 @@ export default async function handler(req, res) {
       // fast talker + full worker in parallel: the first spoken words come from the tiny call
       const split = process.env.MOSS_SPLIT !== 'off' && SPLIT_PHASES.includes(phaseOf(args.state || {}, args.mode));
       let replied = false;
-      const onEvent = (ev, data) => { if (ev === 'reply') { if (replied || (split && !data.reply)) return; replied = true; } send(ev, data); };
+      // parallel build: the worker plans the sections, writers fill them in at the same time (api/_fanout.js)
+      const phase = phaseOf(args.state || {}, args.mode);
+      const fan = fanoutApplies(phase, args.message, process.env) ? createFanout({
+        state: args.state || {}, tr, recentDirections: args.recentDirections, emit: (op) => send('op', { op }),
+        write: ({ tail, maxTokens }) => writeSection(args, tail, process.env, fetch, tr, maxTokens),
+        ...(phase === 'autobuild' ? { writeDesign: ({ tail }) => writeDesign(args, tail, process.env, fetch, tr), writeNext: ({ tail }) => writeNext(args, tail, process.env, fetch, tr) } : {}),
+      }) : null;
+      const onEvent = (ev, data) => {
+        if (ev === 'reply') { if (replied || (split && !data.reply)) return; replied = true; }
+        if (ev === 'op' && fan) return fan.push(data.op);
+        send(ev, data);
+      };
       const talker = split ? talk(args, process.env, fetch, tr).then((text) => { if (text && !replied) { replied = true; send('reply', { reply: text, talker: true }); } }).catch((e) => tr.add('talker.error', tr.now(), tr.now(), { error: String(e.message).slice(0, 120) })) : null;
-      const out = await callMoss(args, process.env, fetch, { tr, stream: true, extra: pre.extra, onEvent, spoken: split });
+      // Moss batches concurrent requests, so a tiny talker sent alongside the worker waits for the worker's prompt to be
+      // read (measured: talker alone 95 ms, together 150 ms). A 30 ms head start gives it 105 ms; the worker loses ~10.
+      const lead = talker ? Number(process.env.MOSS_TALKER_LEAD_MS ?? 30) : 0;
+      if (lead > 0) await new Promise((r) => setTimeout(r, lead));
+      const out = await callMoss(args, process.env, fetch, { tr, stream: true, extra: (pre.extra || '') + (fan ? plannerNote(phase === 'autobuild') : ''), onEvent, spoken: split });
+      if (fan) { const t0 = tr.now(); const st = await fan.finish(); tr.add('fanout.drain', t0, tr.now(), st); }
       if (talker) await talker;
       if (!replied) send('reply', { reply: out.reply || out.after || '' });
-      send('done', { after: out.after, suggestions: out.suggestions, streamed: out.streamed, split });
+      send('done', { after: out.after, suggestions: out.suggestions, streamed: out.streamed, split, ...(fan ? { fanout: fan.stats() } : {}) });
     }
     if (pre.route) send('done', { streamed: false, routed: true });
   } catch (err) {

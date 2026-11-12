@@ -988,6 +988,11 @@ const SPEED = (() => { const n = parseFloat(new URLSearchParams(location.search)
 document.documentElement.style.setProperty('--speed', String(SPEED || 0.001));
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const wait = (ms) => new Promise((r) => setTimeout(r, reducedMotion.matches ? Math.min(ms * SPEED, 40) : ms * SPEED));
+/* Build pacing: a section's entrance plays in full when nothing is waiting, and shortens when sections are queued
+   behind it (parallel builds deliver several at once), so the animation never holds the page back. */
+let paceNow = () => 1; // set by the turn that is applying ops; read at every step, so a running entrance speeds up too
+const paceFor = (backlog, ended) => (backlog > 0 ? 0.2 : ended ? 0.35 : 1);
+const paced = (ms) => wait(ms * paceNow());
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -3432,12 +3437,12 @@ const app = (() => {
         setStatus(`Building · ${SECTION_META[op.section.type].label}`, true);
         $('#stageCap').textContent = `${String(page.sections.length).padStart(2, '0')} · ${SECTION_META[op.section.type].label.toLowerCase()}`;
         isoScene.render({ enter: id }); isoScene.setActive(id);
-        await wait(430); sound.play('tick');
-        await wait(260); sound.play('rise');
-        await wait(420);
+        await paced(430); sound.play('tick');
+        await paced(260); sound.play('rise');
+        await paced(420);
         renderTabs(); renderer.render({ animateId: id }); flowCanvas.render();
         sound.play('click'); scrollToSection(id);
-        await wait(520); done();
+        await paced(520); done();
         if (PAUSE_AFTER && page.sections.length >= PAUSE_AFTER) { window.__mossPaused = true; await new Promise(() => {}); }
         break;
       }
@@ -3770,7 +3775,7 @@ const app = (() => {
     // Ops are applied as they arrive (streamed) or all at once (local / one-shot). One undo step covers the whole turn.
     const squash = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const queue = []; let wake = null, ended = false, replyText = null, replyShown = null, snap = false, building = false, total = 0;
-    const doneOps = [];
+    const doneOps = []; let oneShot = false; // one-shot answers (offline agent, non-streamed) keep the full build animation
     const onReply = (r) => {
       if (replyText != null || t.aborted) return;
       clearTimeout(ack);
@@ -3794,7 +3799,9 @@ const app = (() => {
           replyText = `${replyText} ${op.question}`.trim(); msg.querySelector('.text').textContent = replyText; if (spoken) voice.speak(op.question);
         }
         const a0 = performance.now();
+        paceNow = () => (oneShot ? 1 : paceFor(queue.length, ended));
         await applyOp(op, msg); doneOps.push(op);
+        paceNow = () => 1;
         L.span('apply ops', 'apply', a0, performance.now(), { op: op.op + (op.section ? ':' + op.section.type : '') });
       }
     })();
@@ -3824,7 +3831,7 @@ const app = (() => {
       const askedQ = (res.ops || []).find((o) => o.op === 'askQuestion');
       if (askedQ && !squash(res.reply).includes(squash(askedQ.question).slice(0, 40))) res.reply = `${(res.reply || '').trim()} ${askedQ.question}`.trim();
       onReply(res.reply);
-      (res.ops || []).forEach(onOp);
+      oneShot = true; (res.ops || []).forEach(onOp);
     }
     ended = true; if (wake) { wake(); wake = null; }
     if (replyShown) await replyShown;

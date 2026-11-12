@@ -37,6 +37,14 @@ const SCRIPTS = {
     [12, 'done', { streamed: false, routed: true }],
   ],
   fail: [[0, 'error', { error: 'Moss inference returned 500', status: 502 }]],
+  // a parallel build: the writers' sections land together
+  burst: [
+    [0, 'reply', { reply: 'Building Crumb.' }],
+    [10, 'op', { op: { op: 'setBusiness', business: { name: 'Crumb', kind: 'bakery', place: 'Leeds', primary: 'Order' } } }],
+    [12, 'op', { op: { op: 'addPage', page: { id: 'home', name: 'Home' }, navigate: true } }],
+    ...['hero', 'features', 'testimonials', 'pricing', 'faq', 'cta', 'stats', 'footer'].map((t, i) => [60 + i, 'op', { op: sec(t, {}) }]),
+    [80, 'done', { streamed: true }],
+  ],
   mock: [
     [0, 'reply', { reply: 'Three looks for Crumb.' }],
     [50, 'op', { op: { op: 'setBusiness', business: { name: 'Crumb Bakery', kind: 'bakery', place: 'Leeds' } } }],
@@ -57,7 +65,7 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       const body = JSON.parse(b); if (body.warm) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"warm":false}'); }
       seen.push({ body, accept: req.headers.accept });
-      const key = body.mode === 'mock' ? 'mock' : /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' : /explode/.test(body.message) ? 'fail' : 'build';
+      const key = body.mode === 'mock' ? 'mock' : /lively|pop|alive/.test(body.message) && !body.noRoute ? 'route' : /faq/.test(body.message) ? 'broken' :  /explode/.test(body.message) ? 'fail' : /burst/.test(body.message) ? 'burst' : 'build';
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const t0 = Date.now(); const send = (ev, data) => res.write(`event: ${ev}\ndata: ${JSON.stringify({ ...data, t: Date.now() - t0 })}\n\n`);
       send('hello', {});
@@ -185,6 +193,14 @@ const server = http.createServer((req, res) => {
   check('the switch remembers the choice', (await pk.evaluate(() => localStorage.getItem('moss-voice'))) === 'browser' && (await pk.evaluate(() => window.moss.voice.engine())) === 'browser');
   check('no page errors (Kokoro)', errK.length === 0, errK.join(' | '));
   await ctxK.close();
+
+  // a burst of sections (parallel build) at normal speed: the entrances shorten so the page keeps up
+  const pb = await browser.newPage(); await pb.goto(`${base}/?debug`);
+  await pb.fill('#introInput', 'burst build a bakery'); const tb = Date.now(); await pb.press('#introInput', 'Enter');
+  await pb.waitForTimeout(100); await pb.evaluate(() => window.moss.app.whenIdle());
+  const burstMs = Date.now() - tb; const nb = await pb.evaluate(() => window.moss.pageModel.get().pages[0].sections.length);
+  check('a burst of 8 streamed sections is built quickly, not one full entrance after another', nb === 8 && burstMs < 6000, `${nb} sections in ${burstMs} ms (full entrances: ~13,000 ms)`);
+  await pb.close();
 
   // phone: the panel fits
   const ctx2 = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });

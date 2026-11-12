@@ -2,7 +2,61 @@
 
 For the next session. The work started on branch `claude/relaxed-fermat-rr1j2j` (PR kentfogo/Moss-Demo-Pousada#1) and continues on `claude/retro-md-continuation-y29ff4`, which holds everything. `npm test` runs 11 suites, all green.
 
-## Pick up here (after the "replace Vercel" session, 2026-11-12)
+## Pick up here (after the "make it faster" session, 2026-11-12)
+**Done this session:**
+- **Parallel build** (`api/_fanout.js`):
+  - The worker plans the page and sends each section as a brief: type, layout, at most 18 words of facts.
+  - Writers fill sections at the same time, one per section, each starting the moment its brief arrives. On a first build, one more writer handles the look (`setDesign`) and one the next pages (`suggestNext`).
+  - Ops still reach the page in planned order.
+  - Up to 8 writers at once. Per-type output caps, so a looping writer fails fast. A failed writer leaves a default section with its brief as the title.
+  - Applies to "just build it" and to edits that ask for a new page or a rebuild. `MOSS_FANOUT=off` turns it off.
+- **Page pacing:** a section's entrance animation is 1.63 s. It now plays in full only when nothing is queued behind it: 20% while sections wait, 35% for the last one. One-shot answers (offline agent) keep the full animation.
+- **Talker head start** (`MOSS_TALKER_LEAD_MS`, default 30): the worker is sent 30 ms after the talker. See **Batching** below.
+- **Cache alignment:**
+  - `scripts/cache-align.mjs` measures the padding that ends the system prompt on an 800-token block (251 tokens today).
+  - It writes `api/_cache-align.json`, keyed by a hash of the prompt. Any prompt or library edit turns the padding off until the script is re-run.
+- **429 retry:** `postMoss` waits for `Retry-After` (up to 3 s) and retries once, for the talker, the worker, the writers and the prime. It also covers 503s that carry `Retry-After`.
+- **HTTP/2 to Moss** (`allowH2`, `MOSS_HTTP2=off` to disable): parallel writers share connections.
+- **Reply cache:** `MOSS_REPLY_CACHE=off` sends `X-Moss-Cache: off` on every call; use it for recordings. The warm-up prime always bypasses the reply cache.
+- **Tooling:** `MOSS_DEBUG=connections` logs each new outgoing connection. `npm run bench` has real-turn variants (new history on every call). `scripts/record.cjs` prints server-done and whole-turn times.
+- **New recording** (`replays/pousada.json`): reply cache off, parallel build, aligned prompt.
+
+**Measured, same message, serial against parallel:**
+
+| | Serial | Parallel |
+|---|---|---|
+| First build, server done (4 businesses, direct) | 10.3–13.0 s (one broke: invalid JSON at 17 s) | 4.8–6.2 s, no errors |
+| First section (hero) on the page | 2.1–3.2 s | 2.6–3.0 s (about 0.4 s later: planner brief, then writer) |
+| First build, whole turn on screen (recording) | 18.1 s | 8.2 s |
+| "Add a page for our rooms", whole turn | 12.4 s | 6.6 s |
+
+**Edits after cache alignment** (`npm run bench`, real turns):
+- **First token:** 118 ms p50 / 150 ms p95 aligned, against 193 / 268 ms unaligned.
+- **In the recording:** worker 168–176 ms. That includes the 30 ms talker lead and history.
+
+**Correction:** the earlier "talker 41–45 ms" figures were Moss's **reply cache**, answering a repeated request for free (identical recordings, identical curl probes). With the reply cache off, the talker takes about 95 ms alone.
+
+**Batching:**
+- Moss processes concurrent requests together. A talker sent with an edit waits for the edit's prompt: 150 ms against 95 ms alone, and equal to the edit's first token.
+- A 30 ms head start brings the talker to 105 ms (93–97 ms in the recording) and costs the worker about 10 ms. The talker went from 184–209 to 93–97 ms in recordings.
+
+**Rate limits** (`https://docs.moss.dev/docs/inference/errors-and-limits.md#limits`, read 2026-11-12):
+- **Per project, fastlane-1:** 120 requests a minute sustained, a **burst of 10**, 600,000 input tokens a minute, and 262,144 tokens of context shared by prompt, retrieved facts and reply.
+- **Vendor models:** 300 requests a minute, burst 50.
+- **Headers on every reply:** `x-ratelimit-{limit,remaining,reset}-{requests,tokens}` (the tokens ones on fastlane-1 only).
+- **Burst test:** 16 concurrent calls gave 10 × 200 and 6 × 429. The 429 carried `retry-after: 1`, `x-ratelimit-remaining-requests: 0` and `x-ratelimit-reset-requests: 5s`.
+- **Errors:** `rate_limit_exceeded` (wait for `Retry-After`); `usage_limit_exceeded` (credits ran out, so don't retry); `503 server_overloaded` and others (wait for `Retry-After`).
+- **Retries:** Moss's SDKs retry twice, waiting for `Retry-After` when it's 60 s or less, and never retry a started stream.
+- **What it means for us:** a parallel build sends about 12 requests in about 3 s (talker, planner, look, next pages, 8 sections). That fits the burst plus refill, and the one retry covers the edges. More than one simultaneous build per project will hit 429s.
+
+**Next:**
+1. **Stream the talker's reply to the page.** The reply appears only when the talker has finished its sentence (on screen ~250 ms, talker first token ~95 ms). Sending the first words at once would save about 90–150 ms on every turn.
+2. **Hero first.** In a parallel build the hero lands about 0.4 s later than serially. Let the planner write the hero in full (it passes straight through) and brief only the rest, or start a hero writer from setBusiness.
+3. **Going public** (the user decides): a new public repository with clean history; decide about `references/`, `PROMPT.md`, `Critic prompt.md`, `design-log.md` and `RETRO.md`; add a LICENSE (`@inferedge/moss` is PolyForm Shield); enable Pages.
+4. **Voice to voice:** measure in a real browser. Then start turns on interim transcripts, stream TTS and cache the openers (see the speed plan in the chat).
+5. **Ask Moss** the questions below.
+
+## Earlier: the "replace Vercel" session (done)
 **Decisions:** Vercel is gone. The app is one Node server (`npm start`, `server.mjs`). Sharing happens through a **replay link** (free to watch) plus a **public repository** people can clone and run with their own Moss keys. No hosted live server for now.
 
 **Done this session:**
@@ -21,7 +75,7 @@ For the next session. The work started on branch `claude/relaxed-fermat-rr1j2j` 
 - **Router:** 5–26 ms. Page-local commands take about 124 ms on screen.
 - **Variance:** the first recording had a ~190 ms talker on every turn and never reproduced. Probably Moss-side.
 
-**Next:**
+**Next (at the time):**
 1. **Going public** (the user decides): make a new public repository with clean history rather than flipping this one. History is 35 MB and includes a period when `node_modules` was tracked.
    - Decide what stays: `references/` (screenshots and GIFs of other products), `PROMPT.md`, `Critic prompt.md`, `design-log.md`, `RETRO.md`.
    - Add a LICENSE. `@inferedge/moss` is PolyForm Shield.
@@ -138,8 +192,9 @@ With 1 and 2, the expected server-side times on Vercel are a talker first token 
 
 ## Questions for Moss
 - Which region? (Pin the Vercel function next to it.)
-- Is the prefix cache in 800-token blocks, with nothing cached under 800? How long does a prefix stay cached, and can it be pinned or warmed explicitly?
-- What are the rate limits? We saw 429s on about 2% of back-to-back calls. Do 429 replies carry `Retry-After`?
+- The prefix cache works in 800-token blocks (confirmed by experiment), and only whole matching blocks are reused. Is that documented, and will it stay 800? Can a prefix be pinned or warmed explicitly? (Ours stays cached for at least 10 minutes.)
+- Concurrent requests are batched: a 250-token request sent with a 6,000-token one waits for the large prompt (95 → 150 ms). Is there a priority or latency tier for small requests?
+- Can the burst limit (10) be raised for a project that fans one turn out to about 12 parallel calls?
 - What keep-alive timeout does the edge allow, and is HTTP/2 to the API recommended for reuse?
 - Are short-lived browser tokens planned?
 - What's the output speed of fastlane-1? (We measured about 130 tokens/s.)

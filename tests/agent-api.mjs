@@ -363,6 +363,48 @@ process.env = saved;
   check('retry: the talker retries a 429', said === 'Sure, on it.' && f.calls === 2);
 }
 
+// 14d. parallel build (api/_fanout.js)
+{
+  const fo = await import('../api/_fanout.js');
+  const { writeSection: ws } = await import('../api/agent.js');
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  check('fanout: applies to first builds and new-page edits only', fo.fanoutApplies('autobuild', 'x', {}) && fo.fanoutApplies('edit', 'add a page for our rooms', {}) && fo.fanoutApplies('edit', 'start over', {}) && !fo.fanoutApplies('edit', 'make the headline punchier', {}) && !fo.fanoutApplies('guided', 'x', {}) && !fo.fanoutApplies('autobuild', 'x', { MOSS_FANOUT: 'off' }));
+  check('fanout: the planner note asks for briefs, and on a first build leaves the look and next pages out', /NO "data"/.test(fo.plannerNote(false)) && !/setDesign/.test(fo.plannerNote(false)) && /Do NOT send setDesign or suggestNext/.test(fo.plannerNote(true)));
+  // writers finish out of order; the page still gets the planned order
+  const emitted = []; let live = 0, peak = 0;
+  const delays = { hero: 60, features: 10, faq: 30, footer: 5 };
+  const fan = fo.createFanout({ state: { pages: [] }, emit: (op) => emitted.push(op), maxWriters: 3,
+    write: async ({ section, tail }) => { live++; peak = Math.max(peak, live); await wait(delays[section.type] || 1); live--; if (section.type === 'faq') throw new Error('boom'); if (!/BUSINESS: \{"name":"Maré"/.test(tail) || !/THE REST OF THE PAGE/.test(tail)) throw new Error('bad tail'); return { title: section.type + ' copy' }; },
+    writeDesign: async ({ tail }) => { await wait(40); return /LOOK WRITER/.test(tail) ? { op: 'setDesign', design: { direction: 'hospitality', hue: 190 } } : null; },
+    writeNext: async () => { await wait(5); return { op: 'suggestNext', pages: [] }; } });
+  fan.push({ op: 'setBusiness', business: { name: 'Maré', kind: 'pousada' } });
+  fan.push({ op: 'addPage', page: { id: 'home', name: 'Home' } });
+  for (const t of ['hero', 'features', 'faq']) fan.push({ op: 'addSection', page: 'home', section: { type: t, variant: t === 'hero' ? 'split' : undefined, brief: t + ' brief' } });
+  fan.push({ op: 'addSection', page: 'home', section: { type: 'stats', data: { items: [['9', 'rooms']] } } }); // planner wrote it in full
+  fan.push({ op: 'addSection', page: 'home', section: { type: 'footer', brief: 'footer brief' } });
+  const st = await fan.finish();
+  const seq = emitted.map((o) => o.op + (o.section ? ':' + o.section.type : ''));
+  check('fanout: ops reach the page in planned order (look after setBusiness, next pages last)', JSON.stringify(seq) === JSON.stringify(['setBusiness', 'setDesign', 'addPage', 'addSection:hero', 'addSection:features', 'addSection:faq', 'addSection:stats', 'addSection:footer', 'suggestNext']), seq.join(' '));
+  const hero = emitted.find((o) => o.section && o.section.type === 'hero');
+  check('fanout: a writer\'s data goes in, with the planned layout, and the brief never reaches the page', hero.section.data.title === 'hero copy' && hero.section.data.variant === 'split' && !('brief' in hero.section));
+  check('fanout: a failed writer still leaves its section (brief as title)', emitted.find((o) => o.section && o.section.type === 'faq').section.data.title === 'faq brief' && st.failed === 1);
+  check('fanout: a section the planner wrote in full passes through', st.passedThrough === 1 && emitted.find((o) => o.section && o.section.type === 'stats').section.data.items[0][0] === '9');
+  check('fanout: at most maxWriters run at once', peak <= 3, `peak ${peak}`);
+  // the planner sent its own look and next pages anyway: the writers' versions are dropped
+  const em2 = []; const fan2 = fo.createFanout({ emit: (op) => em2.push(op), write: async () => ({ title: 'x' }), writeDesign: async () => ({ op: 'setDesign', design: { hue: 1 } }), writeNext: async () => ({ op: 'suggestNext', pages: [] }) });
+  fan2.push({ op: 'setBusiness', business: { name: 'B' } }); fan2.push({ op: 'setDesign', design: { hue: 2 } }); fan2.push({ op: 'suggestNext', pages: [1] });
+  await fan2.finish();
+  check('fanout: no duplicate look or next pages when the planner sent them', em2.filter((o) => o.op === 'setDesign').length === 1 && em2.find((o) => o.op === 'setDesign').design.hue === 2 && em2.filter((o) => o.op === 'suggestNext').length === 1);
+  // a writer call: shared (cached) system prompt, JSON mode, the section's data out of the addSection op
+  const sent = []; const fakeF = async (url, init) => { sent.push(JSON.parse(init.body)); return { status: 200, ok: true, headers: new Headers(), json: async () => ({ choices: [{ message: { content: '{"reply":"","ops":[{"op":"addSection","page":"home","section":{"type":"faq","data":{"title":"Good to know"}}}]}' }, finish_reason: 'stop' }] }) }; };
+  const lib3 = [{ id: 'hospitality', name: 'Hospitality' }];
+  const data = await ws({ directions: lib3 }, 'SECTION WRITER tail', env('moss-test'), fakeF);
+  check('writer: same system prompt as a turn, JSON mode, returns the section data', data.title === 'Good to know' && sent[0].messages[0].content === buildMessages({ message: 'x', state: {}, directions: lib3 })[0].content && sent[0].response_format.type === 'json_object' && sent[0].max_tokens === fo.WRITER_TOKENS);
+  const cut = async () => ({ status: 200, ok: true, headers: new Headers(), json: async () => ({ choices: [{ message: { content: '{"reply":"","ops":[{"op":"addSection","section":{"type":"faq","data":{"items":[["a' }, finish_reason: 'length' }] }) });
+  let msg = ''; try { await ws({ directions: lib3 }, 't', env('moss-test'), cut); } catch (e) { msg = e.message; }
+  check('writer: a cut-off reply fails with the reason (finish length)', /finish length/.test(msg), msg);
+}
+
 // 15. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');
 check('compactState keeps flow names only', JSON.stringify(compactState({ flows: [{ name: 'Booking', nodes: [1, 2] }] }).flows) === '["Booking"]');

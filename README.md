@@ -119,6 +119,15 @@ Server spans are placed on the page's clock using the server time carried on eve
 - Every turn that reaches Moss gets a badge (bottom left): Moss's time to first token, and when the reply was on screen. Click it for the waterfall.
 - `.github/workflows/pages.yml` publishes the page and the replays to GitHub Pages. The root URL opens the `pousada` replay.
 
+## Speed: how a turn is made fast
+
+- **Two calls per turn.** A tiny "talker" call writes the one-line spoken reply while the worker writes the page ops. The talker goes out 30 ms first: Moss batches concurrent requests, and a small one sent alongside a large one waits for the large prompt.
+- **Parallel builds** (`api/_fanout.js`). For a first build or a new page, the worker plans the sections as short briefs and writers fill them in at the same time, each starting when its brief arrives. Ops still reach the page in order. A full build takes about 5 s instead of about 11 s.
+- **Prompt cache.** Moss caches prompts in 800-token blocks. The system prompt is the same on every call and padded to end on a block, so all of it is cached and only the turn's own tail is read. Run `node scripts/cache-align.mjs` after editing the prompt or the design library.
+- **Warm-up.** When the page opens, the server loads the router, opens the connection to Moss and primes the prompt cache.
+- **Rate limits.** fastlane-1 allows a burst of 10 requests per project. 429 and 503 replies with `Retry-After` are retried once.
+- **Page pacing.** A section's entrance plays in full when nothing waits behind it, and shortens when sections arrive together.
+
 ## Run and deploy
 
 `npm start` runs `server.mjs`: one Node process serving the page and `/api/*`. It reads `.env`, and `PORT` (default 3000). It runs anywhere Node 22 or a container runs. For the lowest latency:
@@ -144,6 +153,12 @@ Settings (in `.env` or your host's secrets; see `.env.example`):
    | `KNOWLEDGE_MIN` | optional relevance cut-off for site facts, default `0.25` |
 
    | `MOSS_PRIME` | optional, `off` skips priming Moss's prompt cache on the warm-up ping |
+   | `MOSS_FANOUT` | optional, `off` builds pages in one serial stream instead of in parallel |
+   | `MOSS_TALKER_LEAD_MS` | optional, default `30`: how much earlier the spoken reply's call goes out than the worker's |
+   | `MOSS_CACHE_ALIGN` | optional, `off` drops the system prompt's cache padding (see `scripts/cache-align.mjs`) |
+   | `MOSS_REPLY_CACHE` | optional, `off` sends `X-Moss-Cache: off` (for recordings and benchmarks) |
+   | `MOSS_HTTP2` | optional, `off` uses HTTP/1.1 to Moss |
+   | `MOSS_DEBUG` | optional, `connections` logs every new outgoing connection |
    | `PORT` | optional, default `3000` |
 
    The server calls `POST <base>/chat/completions` with `Authorization: Bearer <project id>:<project key>`.

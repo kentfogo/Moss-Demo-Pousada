@@ -18,7 +18,7 @@ const SCRIPT = {
     'make the buttons bigger',
     'add a page for our rooms',
   ],
-}[NAME];
+}[NAME.replace(/-.*$/, '')];
 if (!SCRIPT) { console.error(`no script named ${NAME}`); process.exit(1); }
 
 (async () => {
@@ -33,8 +33,8 @@ if (!SCRIPT) { console.error(`no script named ${NAME}`); process.exit(1); }
     await page.press(input, 'Enter');
     await page.waitForTimeout(100);
     await page.evaluate(() => window.moss.app.whenIdle());
-    const s = await page.evaluate(() => { const t = window.moss.latency.turns().at(-1); const d = (n) => { const x = t.spans.find((y) => y.name === n); return x ? Math.round(x.end - x.start) : null; }; const m = t.marks.find((y) => y.name === 'reply shown'); return { talker: d('talker.ttft'), worker: d('inference.ttft'), router: d('router.query'), shown: m ? Math.round(m.at - t.t0) : null }; });
-    console.log(`${i + 1}. ${text.slice(0, 48).padEnd(48)} talker ${s.talker ?? '–'} · worker ${s.worker ?? '–'} · router ${s.router ?? '–'} · on screen ${s.shown ?? '–'} ms`);
+    const s = await page.evaluate(() => { const t = window.moss.latency.turns().at(-1); const d = (n) => { const x = t.spans.find((y) => y.name === n); return x ? Math.round(x.end - x.start) : null; }; const m = t.marks.find((y) => y.name === 'reply shown'); const ops = t.spans.filter((y) => y.name === 'apply ops'); return { talker: d('talker.ttft'), worker: d('inference.ttft'), router: d('router.query'), shown: m ? Math.round(m.at - t.t0) : null, serverDone: d('inference.total') != null ? Math.round(Math.max(...t.spans.filter((y) => y.server).map((y) => y.end)) - t.t0) : null, total: t.end ? Math.round(t.end - t.t0) : null }; });
+    console.log(`${i + 1}. ${text.slice(0, 48).padEnd(48)} talker ${s.talker ?? '–'} · worker ${s.worker ?? '–'} · router ${s.router ?? '–'} · on screen ${s.shown ?? '–'} · server done ${s.serverDone ?? '–'} · turn ${s.total ?? '–'} ms`);
     await page.waitForTimeout(800);
   }
   const data = await page.evaluate(() => window.moss.recorder.data());

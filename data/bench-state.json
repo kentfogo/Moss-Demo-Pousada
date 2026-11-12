@@ -64,7 +64,7 @@
     "name": "Home",
     "sections": [
      {
-      "id": "her97401",
+      "id": "herkg9x1",
       "type": "hero",
       "data": {
        "eyebrow": "Independent studio · Brooklyn",
@@ -103,7 +103,7 @@
       }
      },
      {
-      "id": "fea97402",
+      "id": "feakg9x2",
       "type": "features",
       "data": {
        "eyebrow": "What we do",
@@ -134,7 +134,7 @@
       }
      },
      {
-      "id": "tes97403",
+      "id": "teskg9x3",
       "type": "testimonials",
       "data": {
        "eyebrow": "Clients",
@@ -160,7 +160,7 @@
       }
      },
      {
-      "id": "pri97404",
+      "id": "prikg9x4",
       "type": "pricing",
       "data": {
        "eyebrow": "Pricing",
@@ -203,7 +203,7 @@
       }
      },
      {
-      "id": "faq97405",
+      "id": "faqkg9x5",
       "type": "faq",
       "data": {
        "eyebrow": "FAQ",
@@ -229,7 +229,7 @@
       }
      },
      {
-      "id": "cta97406",
+      "id": "ctakg9x6",
       "type": "cta",
       "data": {
        "eyebrow": "Next step",
@@ -246,7 +246,7 @@
       }
      },
      {
-      "id": "foo97407",
+      "id": "fookg9x7",
       "type": "footer",
       "data": {
        "blurb": "Careful work, done properly.",

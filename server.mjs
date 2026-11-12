@@ -22,7 +22,9 @@ if (existsSync(path.join(ROOT, '.env'))) {
 }
 
 // Long keep-alive for every outgoing fetch (Node's default drops idle connections after 4 s). Honour HTTPS_PROXY if set.
-const keep = { keepAliveTimeout: 60_000, keepAliveMaxTimeout: 600_000, connections: 32 };
+// allowH2: Moss speaks HTTP/2, so the talker, the planner and a build's parallel section writers share one connection
+// instead of opening (and handshaking) one each. MOSS_HTTP2=off falls back to HTTP/1.1.
+const keep = { keepAliveTimeout: 60_000, keepAliveMaxTimeout: 600_000, connections: 32, allowH2: process.env.MOSS_HTTP2 !== 'off' };
 setGlobalDispatcher(process.env.HTTPS_PROXY || process.env.https_proxy ? new EnvHttpProxyAgent(keep) : new Agent(keep));
 
 // MOSS_DEBUG=connections logs every new outgoing connection (each one costs a TCP + TLS handshake)
