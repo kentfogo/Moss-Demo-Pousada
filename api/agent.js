@@ -12,6 +12,7 @@
 import { guard } from './_guard.js';
 import { trace } from './_trace.js';
 import { createScanner } from './_jsonScan.js';
+import { route } from './_moss.js';
 
 export const config = { maxDuration: 60 };
 
@@ -290,14 +291,30 @@ export async function callMoss({ message, state, history, directions, recentDire
 
 /** Turn arguments from the request body. */
 function argsOf(body, message) {
-  return { message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live, mode: ['plan', 'autopilot', 'mock'].includes(body.mode) ? body.mode : undefined, scraped: body.mode === 'mock' && body.scraped && typeof body.scraped === 'object' ? body.scraped : undefined };
+  return { message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live, mode: ['plan', 'autopilot', 'mock'].includes(body.mode) ? body.mode : undefined, noRoute: body.noRoute === true, scraped: body.mode === 'mock' && body.scraped && typeof body.scraped === 'object' ? body.scraped : undefined };
 }
 
 /**
  * Work done before inference (the intent router and site knowledge, added in later steps). Returns
  * { route } to answer without the model, or { extra } to add to the prompt. Replaceable in tests.
  */
-export const hooks = { async prepare(/* args, tr, env */) { return {}; } };
+export const hooks = {
+  async prepare(args, tr, env) {
+    const out = {};
+    // Intent router: only while editing a built site, for short messages, and not when the page already tried it.
+    const phase = phaseOf(args.state || {}, args.mode);
+    const words = args.message.split(/\s+/).length;
+    if (env.MOSS_ROUTER !== 'off' && !args.noRoute && ['edit', 'guided'].includes(phase) && words <= 16) {
+      try {
+        const r = await route(args.message, tr, env);
+        if (r && r.decision === 'high') return { route: { canonical: r.canonical, score: Math.round(r.score * 1000) / 1000 }, meta: { router: 'high' } };
+        if (r && r.decision === 'mid') out.extra = `LIKELY COMMANDS (from the intent router; use one only if it fits the message): ${r.top.map((t) => `"${t.canonical}" (${t.score.toFixed(2)})`).join(', ')}. They map to setDesign (motion, button, nav) or setSectionStyle ops.\n\n`;
+        out.meta = { router: r ? r.decision : 'off' };
+      } catch (e) { tr.add('router.error', tr.now(), tr.now(), { error: String(e && e.message).slice(0, 160) }); }
+    }
+    return out;
+  },
+};
 
 export default async function handler(req, res) {
   const tr = trace();

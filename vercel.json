@@ -2,6 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [{ "source": "/", "destination": "/moss-builder.html" }],
   "headers": [
-    { "source": "/api/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
-  ]
+    { "source": "/api/((?!scrape).*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
+  ],
+  "functions": {
+    "api/*.js": {
+      "excludeFiles": "{node_modules/onnxruntime-node/bin/napi-v3/darwin/**,node_modules/onnxruntime-node/bin/napi-v3/win32/**,node_modules/onnxruntime-node/bin/napi-v3/linux/arm64/**,node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_cuda.so,node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_tensorrt.so,node_modules/onnxruntime-web/**,node_modules/@deepgram/**}"
+    }
+  }
 }

@@ -1,0 +1,31 @@
+// Held-out phrases for tuning the intent router's thresholds (none of these are in api/_intents.js).
+// expect: the canonical command, or null when the request needs the model.
+export const EVAL = [
+  ['can you animate it more', 'Make it lively'], ['give it some bounce', 'Make it lively'], ['more motion everywhere', 'Make it lively'], ['make the page feel energetic', 'Make it lively'], ['crank up the animations', 'Make it lively'],
+  ['add gentle animations', 'Add some animation'], ['subtle fade ins please', 'Add some animation'], ['a touch of animation', 'Add some animation'], ['tone down the movement', 'Add some animation'],
+  ['remove all the animations', 'No animations'], ['make everything still', 'No animations'], ['no more moving stuff', 'No animations'], ['disable the motion effects', 'No animations'],
+  ['play the animation again', 'Replay the animation'], ['show me the entrance once more', 'Replay the animation'],
+  ['give the buttons only a border', 'Outline buttons'], ['outlined buttons please', 'Outline buttons'], ['buttons without fill', 'Outline buttons'],
+  ['pale tinted buttons', 'Soft buttons'], ['make the buttons look like plain links', 'Ghost buttons'], ['use filled solid buttons', 'Solid buttons'],
+  ['enlarge the buttons', 'Bigger buttons'], ['make the buttons huge', 'Bigger buttons'], ['the buttons need to be bigger', 'Bigger buttons'],
+  ['shrink the buttons', 'Smaller buttons'], ['make buttons glow on hover', 'Glow on hover'], ['hovering should make buttons rise', 'Lift on hover'],
+  ['make the menu float like a pill', 'Floating nav'], ['simplify the header', 'Minimal nav'], ['center the logo and menu', 'Centered nav'],
+  ['make the header stick to the top', 'Sticky nav'], ['the nav should stay visible while scrolling', 'Sticky nav'], ['let the header scroll off', 'Unstick the nav'],
+  ['make the pricing section dark', 'Dark background on the {section}'], ['dark mode for the faq section', 'Dark background on the {section}'], ['put the testimonials on a black background', 'Dark background on the {section}'],
+  ['give the faq a brand colored background', 'Accent background on the {section}'], ['color the cta background with our accent', 'Accent background on the {section}'],
+  ['make the pricing background white again', 'Plain background on the {section}'],
+  ['add more breathing room to the faq', 'More space around the {section}'], ['more whitespace around the pricing', 'More space around the {section}'],
+  ['make the hero tighter', 'Less space around the {section}'], ['reduce the padding on the features', 'Less space around the {section}'],
+  ['round off the pricing corners', 'Round the {section} corners'], ['give the cta square corners', 'Square the {section} corners'], ['center everything in the features', 'Center the {section}'],
+  ['add my photo', 'Add a photo to the {section?}'], ['upload an image of my storefront', 'Add a photo to the {section?}'],
+  ['undo that', 'Undo'], ['go back one step', 'Undo'], ['I liked the previous version better', 'Undo'],
+  ['show the flow map', 'Show the map'], ['back to the website preview', 'Back to the page'],
+  // needs the model
+  ['make the headline punchier', null], ['add a pricing page', null], ['change the colours to navy and orange', null], ['rewrite the about text', null],
+  ['add an faq about delivery times', null], ['make it more premium', null], ['I run a bakery in Leeds', null], ['what should I add next', null],
+  ['move the testimonials above the features', null], ['build a booking page', null], ["make the hero say we're open on sundays", null], ['add our phone number to the footer', null],
+  ['use a serif font', null], ['make the headline bigger', null], ['darker colours overall', null], ['add a gallery of our work', null],
+  ['make it feel more luxurious', null], ['translate the page to portuguese', null], ['add a contact form', null], ['can you add three customer reviews', null],
+  ['remove the pricing section', null], ['map the checkout flow', null], ['make the footer simpler', null], ['change the business name to Ember', null],
+  ['the hero text is too long', null], ['swap the order of the faq and the cta', null], ['add a section about our team', null], ['make the stats bigger', null],
+];

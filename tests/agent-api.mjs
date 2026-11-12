@@ -30,7 +30,7 @@ const server = http.createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, r));
 const base = `http://127.0.0.1:${server.address().port}/v1`;
-const env = (model) => ({ MOSS_PROJECT_ID: 'proj_123', MOSS_PROJECT_KEY: 'key_abc', MOSS_BASE_URL: base + '/', MOSS_MODEL: model });
+const env = (model) => ({ MOSS_PROJECT_ID: 'proj_123', MOSS_PROJECT_KEY: 'key_abc', MOSS_BASE_URL: base + '/', MOSS_MODEL: model, MOSS_ROUTER: 'off' });
 const state = { business: { name: 'Pousada Maré', kind: 'pousada', copy: { big: 'x'.repeat(5000) } }, pages: [{ id: 'home', name: 'Home', sections: [{ id: 'her1', type: 'hero', data: { headline: 'Hi', punchy: ['a'], punchIx: 1 } }] }], currentPage: 'home' };
 
 // 1. happy path
@@ -200,7 +200,43 @@ check('…also on the JSON path, with timing', jr.code === 200 && jr.body.route.
 ag.hooks.prepare = savedPrep;
 process.env = saved;
 
-// 13. helpers
+// 13. intent router (Moss index #1) with a fake Moss client
+const mossMod = await import('../api/_moss.js');
+const fakeMoss = (scoreFor) => { const f = { created: [], loads: 0, queries: 0, exists: false,
+  async loadIndex(name) { f.loads++; if (!f.exists) throw new Error(`Index ${name} not found`); return name; },
+  async createIndex(name, docs) { f.created.push({ name, n: docs.length, sample: docs[0] }); f.exists = true; return { indexName: name, docCount: docs.length }; },
+  async query(name, q) { f.queries++; return { docs: scoreFor(q) }; } }; return f; };
+const doc = (canonical, score) => ({ id: 'x', text: 'x', score, metadata: { canonical } });
+const fm = fakeMoss((q) => /pop/.test(q) ? [doc('Make it lively', 0.91), doc('Add some animation', 0.7)] : /colour behind/.test(q) ? [doc('Accent background on the {section}', 0.71), doc('Dark background on the {section}', 0.66)] : /tie/.test(q) ? [doc('Bigger buttons', 0.9), doc('Smaller buttons', 0.885)] : [doc('Undo', 0.31)]);
+mossMod.setClient(fm);
+const { trace } = await import('../api/_trace.js');
+let tr0 = trace();
+let d1 = await mossMod.route('make it pop', tr0, {});
+check('router: a missing intent index is built once, then loaded', fm.created.length === 1 && fm.created[0].name === mossMod.INTENT_INDEX && fm.created[0].n > 100 && fm.created[0].sample.metadata.canonical && tr0.spans.some((x) => x.name === 'index.build') && tr0.spans.some((x) => x.name === 'router.load'));
+check('router: a confident match runs the command (high)', d1.decision === 'high' && d1.canonical === 'Make it lively');
+const loads = fm.loads; await mossMod.route('make it pop', trace(), {});
+check('router: the index stays loaded in a warm instance', fm.loads === loads);
+check('router: a middle score becomes hints, a low one nothing, a near tie is not trusted', (await mossMod.route('brand colour behind it', trace(), {})).decision === 'mid' && (await mossMod.route('add a pricing page', trace(), {})).decision === 'low' && (await mossMod.route('tie', trace(), {})).decision === 'mid');
+check('router: one best score per command', JSON.stringify(mossMod.rank([doc('A', 0.5), doc('A', 0.8), doc('B', 0.6)])) === '[{"canonical":"A","score":0.8},{"canonical":"B","score":0.6}]');
+// in the handler: on for edits, off while planning or when the page already tried it
+Object.assign(process.env, env('moss-test')); delete process.env.MOSS_ROUTER;
+let q0 = fm.queries; let calls1 = seen.length;
+let hr = sseRes(); await handler({ method: 'POST', headers: { host: 'a.app', accept: 'text/event-stream' }, body: { message: 'make it pop', state: home } }, hr);
+let hev = parseSSE(hr.chunks);
+check('handler: a router hit skips inference and reports the router span', hev.some((e) => e.event === 'route' && e.data.canonical === 'Make it lively') && seen.length === calls1 && hev.some((e) => e.event === 'span' && e.data.span.name === 'router.query' && e.data.span.meta.decision === 'high'));
+await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'brand colour behind the pricing please', state: home } }, mockRes());
+check('handler: a middle score adds LIKELY COMMANDS to the prompt', seen.at(-1).json.messages.at(-1).content.includes('LIKELY COMMANDS') && seen.at(-1).json.messages.at(-1).content.includes('Accent background on the {section}'));
+q0 = fm.queries;
+await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'make it pop', state: { pages: [] } } }, mockRes());
+await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'make it pop', state: home, noRoute: true } }, mockRes());
+check('handler: no router while planning, or when the page asks for the model (noRoute)', fm.queries === q0);
+fm.query = async () => { throw new Error('moss down'); };
+let jr2 = mockRes(); await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'make it pop', state: home } }, jr2);
+check('handler: a router failure falls through to inference, recorded as a span', jr2.code === 200 && jr2.body.ops.length === 1 && jr2.body.timing.some((x) => x.name === 'router.error'));
+mossMod.setClient(null);
+process.env = saved;
+
+// 14. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');
 check('compactState keeps flow names only', JSON.stringify(compactState({ flows: [{ name: 'Booking', nodes: [1, 2] }] }).flows) === '["Booking"]');
 
