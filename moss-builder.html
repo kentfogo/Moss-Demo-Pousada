@@ -3098,7 +3098,7 @@ const latency = (() => {
   const turns = [];
   let cur = null, last = null, open = false, raf = 0;
   const now = () => performance.now();
-  const GROUP = (name) => /^router|^knowledge|^crawl|^index|^scrape|local command/.test(name) ? 'retrieval' : /^inference|reply received/.test(name) ? 'inference' : /^request/.test(name) ? 'network' : /^apply|reply shown/.test(name) ? 'apply' : /^tts|audio/.test(name) ? 'voice' : /speech/.test(name) ? 'speech' : 'other';
+  const GROUP = (name) => /^router|^knowledge|^crawl|^index|^scrape|local command/.test(name) ? 'retrieval' : /^inference|^talker|reply received/.test(name) ? 'inference' : /^request/.test(name) ? 'network' : /^apply|reply shown/.test(name) ? 'apply' : /^tts|audio/.test(name) ? 'voice' : /speech/.test(name) ? 'speech' : 'other';
   const NULL = { span() {}, mark() {}, server() {}, note() {}, end() {} };
 
   function begin(text, o = {}) {
@@ -3148,7 +3148,7 @@ const latency = (() => {
   function schedule() { if (!open || raf) return; raf = requestAnimationFrame(() => { raf = 0; render(); }); }
   function rowHTML(tr, r, scale) {
     const meta = r.meta || {};
-    const extra = meta.score != null ? ` · ${Number(meta.score).toFixed(2)}` : meta.cached ? ' · cached' : meta.streamed === false ? ' · not streamed' : '';
+    const extra = meta.score != null ? ` · ${Number(meta.score).toFixed(2)}` : meta.promptTokens != null ? ` · ${meta.cachedTokens != null ? `${meta.cachedTokens}/` : ''}${meta.promptTokens} tok cached` : meta.cached ? ' · cached' : meta.streamed === false ? ' · not streamed' : '';
     const label = r.name === 'apply ops' ? `apply ${r.segs.length} op${r.segs.length > 1 ? 's' : ''}` : r.name;
     const segs = r.segs.map((sp) => `<i class="seg" style="left:${(((sp.start - tr.t0) / scale) * 100).toFixed(2)}%;width:${Math.max(0.4, ((sp.end - sp.start) / scale) * 100).toFixed(2)}%" title="${esc(`${sp.name}${sp.meta && sp.meta.op ? ' · ' + sp.meta.op : ''}: ${ms(sp.end - sp.start)} (at +${ms(sp.start - tr.t0)})`)}"></i>`).join('');
     return `<div class="lat-row g-${r.group}"><span class="nm" title="${esc(r.name)}${r.server ? ' (server)' : ''}">${esc(label)}${esc(extra)}</span><span class="v">${ms(r.end - r.start)}</span><span class="track">${segs}</span></div>`;

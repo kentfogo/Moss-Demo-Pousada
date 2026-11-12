@@ -144,15 +144,42 @@ export function phaseOf(state = {}, mode) {
   return 'edit';
 }
 
-/** Compact the client state so the prompt stays small: no copy library, just what the model needs. */
-export function compactState(state = {}) {
+// Section names people use, for picking which sections a request touches (mirrors the page's own aliases).
+const SECTION_ALIASES = {
+  hero: ['hero', 'header', 'headline', 'banner', 'tagline', 'top of the page'], features: ['features', 'feature', 'benefits', 'amenities', 'highlights', 'services'],
+  testimonials: ['testimonials', 'testimonial', 'reviews', 'quotes', 'social proof'], pricing: ['pricing', 'prices', 'plans', 'rates'], faq: ['faq', 'faqs', 'questions'],
+  cta: ['cta', 'call to action', 'closing'], footer: ['footer', 'bottom'], text: ['story', 'about', 'text'], stats: ['stats', 'numbers'], contact: ['contact'], booking: ['booking', 'reservation'],
+  steps: ['steps', 'how it works', 'process'], gallery: ['gallery', 'photos', 'portfolio'], logos: ['logos', 'press'], callStrip: ['call strip', 'call bar', 'phone strip'],
+};
+const COPY_WORDS = /\b(headline|copy|wording|words|text|tagline|title|punchier|shorter|longer|rewrite|tone|sentence)\b/i;
+/** Which sections a message is about: named sections, a named page's sections, or the hero for copy edits. */
+export function focusOf(message, pages, currentPage) {
+  const low = String(message || '').toLowerCase();
+  const out = new Set();
+  const named = Object.entries(SECTION_ALIASES).filter(([, al]) => al.some((a) => new RegExp(`(^|[^a-z])${a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z])`).test(low))).map(([t]) => t);
+  const mentioned = pages.filter((p) => new RegExp(`@?\\b${p.name.toLowerCase().replace(/[^a-z0-9 ]/g, '')}\\b( page)?`).test(low) && (low.includes('@' + p.name.toLowerCase()) || low.includes(p.name.toLowerCase() + ' page')));
+  const scope = mentioned.length ? mentioned : pages.filter((p) => p.id === currentPage);
+  scope.forEach((p) => (p.sections || []).forEach((s) => { if (named.includes(s.type) || (mentioned.length && !named.length)) out.add(s.id); }));
+  if (!out.size && COPY_WORDS.test(low)) { const p = pages.find((x) => x.id === currentPage) || pages[0]; const h = p && (p.sections || []).find((s) => s.type === 'hero'); if (h) out.add(h.id); }
+  return out;
+}
+const titleOf = (d) => String((d && (d.headline || d.title || d.label || d.name)) || '').slice(0, 60);
+
+/**
+ * Compact the client state so the prompt stays small. With a message, only the sections it touches carry their data;
+ * the rest are an outline (id, type, title), which is enough to reorder, delete or refer to them.
+ */
+export function compactState(state = {}, message) {
   const pages = Array.isArray(state.pages) ? state.pages : [];
+  const focus = message == null ? null : focusOf(message, pages, state.currentPage || 'home');
+  const styleTurn = message == null || STYLE_RE.test(message);
   return {
     business: state.business ? { name: state.business.name, kind: state.business.kind, place: state.business.place } : null,
     currentPage: state.currentPage || 'home',
-    palette: state.palette || 'ice',
-    design: state.design && typeof state.design === 'object' ? { direction: state.design.direction, name: state.design.name, colors: state.design.colors, swatches: state.design.swatches, type: state.design.type, shape: state.design.shape, variants: state.design.variants, art: state.design.art } : null,
-    pages: pages.map((p) => ({ id: p.id, name: p.name, sections: (p.sections || []).map((s) => ({ id: s.id, type: s.type, data: stripLocal(s.data) })) })),
+    design: state.design && typeof state.design === 'object' ? (styleTurn
+      ? { direction: state.design.direction, name: state.design.name, colors: state.design.colors, swatches: state.design.swatches, type: state.design.type, shape: state.design.shape, variants: state.design.variants, art: state.design.art, motion: state.design.motion }
+      : { direction: state.design.direction, name: state.design.name }) : null,
+    pages: pages.map((p) => ({ id: p.id, name: p.name, sections: (p.sections || []).map((s) => (focus && !focus.has(s.id) ? { id: s.id, type: s.type, title: titleOf(s.data) } : { id: s.id, type: s.type, data: stripLocal(s.data) })) })),
     links: Array.isArray(state.links) ? state.links : [],
     flows: (Array.isArray(state.flows) ? state.flows : []).map((f) => f.name),
     plan: state.plan && typeof state.plan === 'object' ? (() => {
@@ -193,19 +220,35 @@ const STYLE_RE = /\b(colou?rs?|palette|font|type(face)?|look|style|theme|vibe|fe
 /** The design library is the biggest part of the prompt; send it only when the turn can choose or change a look. */
 export function needsLibrary(phase, message) { return ['interview', 'review', 'autobuild', 'mock'].includes(phase) || STYLE_RE.test(message || ''); }
 
-export function buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped }) {
+/**
+ * The fixed system message: the rules, every phase and the design library. It is identical on every call, so Moss's
+ * prefix cache (moss/fastlane-1 keeps "a repeated system prompt") can skip re-reading it; only the short tail is new.
+ */
+export function systemPrompt(directions) {
+  const lib = (Array.isArray(directions) ? directions : []).slice(0, 12).map((d) => ({ id: d.id, name: d.name, mood: d.mood, fits: d.fits, palette: d.palette, colors: d.colors, type: d.type, shape: d.shape, variants: d.variants, art: d.art }));
+  const phases = Object.entries(PHASES).map(([k, v]) => `### ${k}\n${v}`).join('\n\n');
+  return `${SYSTEM_PROMPT}\n\nPHASES (the last message names the current one; follow only that phase):\n${phases}${lib.length ? `\n\nDIRECTIONS:\n${JSON.stringify(lib)}\nFONTS: ${FONT_LIST}` : ''}`;
+}
+
+export function buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped, spoken }) {
   const phase = phaseOf(state, mode);
   const turns = (Array.isArray(history) ? history : []).slice(-6)
     .filter((t) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string')
-    .map((t) => ({ role: t.role, content: t.content.slice(0, 1500) }));
-  return [
-    { role: 'system', content: `${SYSTEM_PROMPT}\n\n${PHASES[phase]}` },
-    ...turns,
-    { role: 'user', content: `${needsLibrary(phase, message) ? designContext(directions, recentDirections) : ''}${scraped && phase === 'mock' ? `SCRAPED SITE (facts to use; never invent beyond them):\n${JSON.stringify(scraped).slice(0, 5000)}\n\n` : ''}${live ? 'VOICE: live spoken conversation. Keep reply under 20 words and "after" under 15 words; they are read aloud. Put detail in the page, not the speech.\n\n' : ''}STATE:\n${JSON.stringify(compactState(state))}\n\nMESSAGE:\n${message}` },
-  ];
+    .map((t) => ({ role: t.role, content: t.content.slice(0, 400) }));
+  const rec = (Array.isArray(recentDirections) ? recentDirections : []).filter((x) => typeof x === 'string').slice(0, 4);
+  const tail = [
+    `CURRENT PHASE: ${phase}`,
+    needsLibrary(phase, message) && rec.length ? `RECENT DIRECTIONS (avoid unless asked): ${rec.join(', ')}` : '',
+    spoken ? 'SPOKEN ALREADY: the user has just heard a short spoken acknowledgement. Set "reply" to "" and put the one-sentence outcome in "after".' : '',
+    live ? 'VOICE: live spoken conversation. Keep reply under 20 words and "after" under 15 words; they are read aloud. Put detail in the page, not the speech.' : '',
+    scraped && phase === 'mock' ? `SCRAPED SITE (facts to use; never invent beyond them):\n${JSON.stringify(scraped).slice(0, 5000)}` : '',
+    `STATE:\n${JSON.stringify(compactState(state, message))}`,
+    `MESSAGE:\n${message}`,
+  ].filter(Boolean).join('\n\n');
+  return [{ role: 'system', content: systemPrompt(directions) }, ...turns, { role: 'user', content: tail }];
 }
 
-/** Read an OpenAI-style SSE stream and yield the text deltas. */
+/** Read an OpenAI-style SSE stream and yield the text deltas (and, last, a { usage } object when the server sends one). */
 async function* deltas(body) {
   const reader = body.getReader(); const dec = new TextDecoder(); let buf = '';
   for (;;) {
@@ -218,7 +261,10 @@ async function* deltas(body) {
       if (!line.startsWith('data:')) continue;
       const data = line.slice(5).trim();
       if (data === '[DONE]') return;
-      try { const j = JSON.parse(data); const d = j?.choices?.[0]?.delta?.content ?? j?.choices?.[0]?.message?.content; if (d) yield d; } catch {}
+      let j; try { j = JSON.parse(data); } catch { continue; }
+      const d = j?.choices?.[0]?.delta?.content ?? j?.choices?.[0]?.message?.content;
+      if (d) yield d;
+      if (j && j.usage) yield { usage: j.usage };
     }
   }
 }
@@ -236,9 +282,9 @@ export async function callMoss({ message, state, history, directions, recentDire
     throw Object.assign(new Error(`Moss inference is not configured (set MOSS_PROJECT_ID and MOSS_PROJECT_KEY). Moss variables visible to this deployment: ${seen.length ? seen.join(', ') : 'none'}`), { status: 503 });
   }
   const tr = opts.tr; const emit = opts.onEvent || (() => {});
-  const messages = buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped });
+  const messages = buildMessages({ message, state, history, directions, recentDirections, live, mode, scraped, spoken: !!opts.spoken });
   if (opts.extra) messages[messages.length - 1].content = opts.extra + messages[messages.length - 1].content;
-  const payload = { model, messages, max_tokens: MAX_TOKENS[phaseOf(state, mode)] || 900, temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' }, ...(opts.stream ? { stream: true } : {}) };
+  const payload = { model, messages, max_tokens: MAX_TOKENS[phaseOf(state, mode)] || 900, temperature: Number(env.MOSS_TEMPERATURE ?? 0.4), response_format: { type: 'json_object' }, ...(opts.stream ? { stream: true, stream_options: { include_usage: true } } : {}) };
   const post = (body) => fetchImpl(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(opts.stream ? { accept: 'text/event-stream' } : {}) },
@@ -248,7 +294,7 @@ export async function callMoss({ message, state, history, directions, recentDire
   const tInf = tr ? tr.now() : 0;
   let r = await post(payload);
   if (r.status === 400 || r.status === 422) { // some OpenAI-compatible servers reject response_format; retry without it
-    const { response_format, ...plain } = payload;
+    const { response_format, stream_options, ...plain } = payload;
     r = await post(plain);
   }
   if (endReq) endReq({ status: r.status });
@@ -257,11 +303,12 @@ export async function callMoss({ message, state, history, directions, recentDire
     throw Object.assign(new Error(`Moss inference returned ${r.status}${detail ? ': ' + detail : ''}`), { status: 502 });
   }
   const streamed = !!opts.stream && /text\/event-stream/i.test(r.headers?.get?.('content-type') || '') && !!r.body;
-  let content = '';
+  let content = ''; let usage = null;
   const sent = { reply: false, ops: 0 };
   if (streamed) {
     const scan = createScanner(); let first = true;
     for await (const d of deltas(r.body)) {
+      if (typeof d !== 'string') { usage = d.usage; continue; }
       if (first && tr) { tr.add('inference.ttft', tInf, tr.now()); first = false; }
       content += d;
       for (const ev of scan.push(d)) {
@@ -272,8 +319,9 @@ export async function callMoss({ message, state, history, directions, recentDire
   } else {
     const json = await r.json();
     content = json?.choices?.[0]?.message?.content;
+    usage = json && json.usage;
   }
-  if (tr) tr.add('inference.total', tInf, tr.now(), { streamed, chars: (content || '').length });
+  if (tr) tr.add('inference.total', tInf, tr.now(), { streamed, chars: (content || '').length, ...usageMeta(usage) });
   const out = extractJSON(content);
   const result = {
     reply: typeof out.reply === 'string' ? out.reply : '',
@@ -288,6 +336,39 @@ export async function callMoss({ message, state, history, directions, recentDire
     result.ops.slice(sent.ops).forEach((op) => emit('op', { op }));
   }
   return result;
+}
+
+/** Prompt, cached-prefix and output tokens, as Moss reports them (Chat Completions or Responses field names). */
+export function usageMeta(u) {
+  if (!u || typeof u !== 'object') return {};
+  const prompt = u.prompt_tokens ?? u.input_tokens; const out = u.completion_tokens ?? u.output_tokens;
+  const cached = (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) ?? (u.input_tokens_details && u.input_tokens_details.cached_tokens);
+  return { promptTokens: prompt, cachedTokens: cached, outputTokens: out };
+}
+
+/* ------------------------------------------------------------------ the talker
+   A tiny, separate call that only says what Moss is about to do, so the user hears Moss while the full answer (the
+   ops) is still being written. Tiny fixed prompt → short time to first token, and its prefix is always cached. */
+export const TALKER_PROMPT = `You are the voice of Moss, a website builder working live with the user on their landing page. Reply with ONE short spoken sentence, under 14 words, saying what you are about to do for their request, like "Sure, adding a FAQ to your home page." or "On it, making the headline punchier." Plain words only: no questions, no lists, no markdown, no emoji, no promises of details you don't know. If the request is unclear, say "Let me take a look at that."`;
+export const SPLIT_PHASES = ['edit', 'guided', 'autobuild', 'mock'];
+export async function talk({ message, state, mode }, env = process.env, fetchImpl = fetch, tr) {
+  const { token, base, model } = mossSettings(env);
+  const site = state && state.business && state.business.name ? `Site: ${state.business.name}${state.business.kind ? ` (${state.business.kind})` : ''}.` : 'Site: a new one.';
+  const body = { model: env.MOSS_TALKER_MODEL || model, messages: [{ role: 'system', content: TALKER_PROMPT }, { role: 'user', content: `${site}${mode === 'mock' ? ' They asked for a redesign of their existing site.' : ''} Request: ${message}` }], max_tokens: 40, temperature: 0.3, stream: true };
+  const t0 = tr ? tr.now() : 0;
+  const r = await fetchImpl(`${base}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, accept: 'text/event-stream' }, body: JSON.stringify(body) });
+  if (!r.ok) throw Object.assign(new Error(`talker ${r.status}`), { status: r.status });
+  let text = '', first = true, usage = null;
+  if (/text\/event-stream/i.test(r.headers?.get?.('content-type') || '') && r.body) {
+    for await (const d of deltas(r.body)) {
+      if (typeof d !== 'string') { usage = d.usage; continue; }
+      if (first && tr) { tr.add('talker.ttft', t0, tr.now()); first = false; }
+      text += d;
+    }
+  } else { const j = await r.json(); text = j?.choices?.[0]?.message?.content || ''; usage = j && j.usage; }
+  text = text.replace(/\s+/g, ' ').replace(/^["'“]|["'”]$/g, '').trim().slice(0, 160);
+  if (tr) tr.add('talker.total', t0, tr.now(), { chars: text.length, ...usageMeta(usage) });
+  return text;
 }
 
 /** Turn arguments from the request body. */
@@ -384,8 +465,15 @@ export default async function handler(req, res) {
     if (pre.meta) send('meta', pre.meta);
     if (pre.route) send('route', pre.route);
     else {
-      const out = await callMoss(args, process.env, fetch, { tr, stream: true, extra: pre.extra, onEvent: send });
-      send('done', { after: out.after, suggestions: out.suggestions, streamed: out.streamed });
+      // fast talker + full worker in parallel: the first spoken words come from the tiny call
+      const split = process.env.MOSS_SPLIT !== 'off' && SPLIT_PHASES.includes(phaseOf(args.state || {}, args.mode));
+      let replied = false;
+      const onEvent = (ev, data) => { if (ev === 'reply') { if (replied || (split && !data.reply)) return; replied = true; } send(ev, data); };
+      const talker = split ? talk(args, process.env, fetch, tr).then((text) => { if (text && !replied) { replied = true; send('reply', { reply: text, talker: true }); } }).catch((e) => tr.add('talker.error', tr.now(), tr.now(), { error: String(e.message).slice(0, 120) })) : null;
+      const out = await callMoss(args, process.env, fetch, { tr, stream: true, extra: pre.extra, onEvent, spoken: split });
+      if (talker) await talker;
+      if (!replied) send('reply', { reply: out.reply || out.after || '' });
+      send('done', { after: out.after, suggestions: out.suggestions, streamed: out.streamed, split });
     }
     if (pre.route) send('done', { streamed: false, routed: true });
   } catch (err) {

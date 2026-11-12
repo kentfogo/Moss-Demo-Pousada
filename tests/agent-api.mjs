@@ -17,11 +17,17 @@ const server = http.createServer((req, res) => {
     if (json.model === 'strict' && json.response_format) { res.writeHead(400); return res.end('response_format not supported'); }
     if (json.model === 'down') { res.writeHead(500); return res.end('boom'); }
     const content = '```json\n' + JSON.stringify({ reply: 'Adding a FAQ.', ops: [{ op: 'addSection', page: 'home', section: { type: 'faq', data: { title: 'Good to know' } } }], suggestions: ['Warmer colors'] }) + '\n```';
+    if (json.stream && /^You are the voice of Moss/.test(json.messages[0].content)) { // the talker: one short sentence, as text
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      ['Sure, adding ', 'two sections ', 'now.'].forEach((t) => res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: t } }] })}\n\n`));
+      res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 120, completion_tokens: 6, prompt_tokens_details: { cached_tokens: 110 } } })}\n\n`);
+      res.write('data: [DONE]\n\n'); return res.end();
+    }
     if (json.stream && json.model !== 'nostream') { // token stream, a few characters at a time
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const body2 = JSON.stringify({ reply: 'Two sections, "quoted".', ops: [{ op: 'addSection', page: 'home', section: { type: 'faq', data: { title: 'A { brace' } } }, { op: 'addSection', page: 'home', section: { type: 'cta', data: { title: 'Go' } } }], after: 'Done.', suggestions: ['More'] });
       const parts = body2.match(/.{1,7}/gs);
-      let k = 0; const tick = () => { if (k < parts.length) { res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: parts[k++] } }] })}\n\n`); setTimeout(tick, 2); } else { res.write('data: [DONE]\n\n'); res.end(); } };
+      let k = 0; const tick = () => { if (k < parts.length) { res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: parts[k++] } }] })}\n\n`); setTimeout(tick, 2); } else { res.write(`data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 5000, completion_tokens: 90, prompt_tokens_details: { cached_tokens: 4700 } } })}\n\n`); res.write('data: [DONE]\n\n'); res.end(); } };
       return tick();
     }
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -41,7 +47,7 @@ check('sends Bearer <project id>:<project key> and model', req1.auth === 'Bearer
 check('asks for JSON mode', req1.json.response_format && req1.json.response_format.type === 'json_object');
 check('system prompt first, history kept, foreign roles dropped', req1.json.messages[0].role === 'system' && req1.json.messages[1].content === 'earlier' && req1.json.messages.length === 3);
 const lastUser = req1.json.messages.at(-1).content;
-check('state is compacted (no copy library, no local helpers)', !lastUser.includes('xxxxx') && !lastUser.includes('punchIx') && lastUser.includes('"headline":"Hi"'));
+check('state is compacted: no copy library or local helpers; untouched sections are an outline', !lastUser.includes('xxxxx') && !lastUser.includes('punchIx') && lastUser.includes('"title":"Hi"') && !lastUser.includes('"headline":"Hi"'));
 check('parses fenced JSON reply', out.reply === 'Adding a FAQ.' && out.ops.length === 1 && out.suggestions[0] === 'Warmer colors');
 
 // 2. server without JSON mode: retry without response_format
@@ -117,7 +123,12 @@ const lib = [{ id: 'hospitality', name: 'Hospitality', mood: 'warm', fits: 'hote
 await callMoss({ message: 'add a faq', state: home, directions: lib }, env('moss-test'));
 check('edit turns skip the design library and cap output', !seen.at(-1).json.messages.at(-1).content.includes('DIRECTIONS:') && seen.at(-1).json.max_tokens === MAX_TOKENS.edit);
 await callMoss({ message: 'make it warmer colours', state: home, directions: lib }, env('moss-test'));
-check('style requests still get the library', seen.at(-1).json.messages.at(-1).content.includes('DIRECTIONS:'));
+check('the design library sits in the fixed system message, identical across turns and phases', seen.at(-1).json.messages[0].content.includes('DIRECTIONS:') && seen.at(-1).json.messages[0].content === seen.at(-2).json.messages[0].content && bm({ message: 'hi', state: { pages: [] }, directions: lib })[0].content === bm({ message: 'make the faq dark', state: home, directions: lib })[0].content);
+const focusState = { currentPage: 'home', pages: [{ id: 'home', name: 'Home', sections: [{ id: 'h1', type: 'hero', data: { headline: 'Bread' } }, { id: 'f1', type: 'faq', data: { title: 'Q', items: [['a', 'b']] } }, { id: 'p1', type: 'pricing', data: { title: 'Prices', plans: [] } }] }] };
+const ft = JSON.parse(bm({ message: 'make the faq answers shorter', state: focusState }).at(-1).content.split('STATE:\n')[1].split('\n\nMESSAGE')[0]).pages[0].sections;
+check('only the sections a request names carry their data (the faq), the rest are an outline', ft.find((x) => x.id === 'f1').data && !ft.find((x) => x.id === 'p1').data && ft.find((x) => x.id === 'p1').title === 'Prices');
+const ft2 = JSON.parse(bm({ message: 'make the headline punchier', state: focusState }).at(-1).content.split('STATE:\n')[1].split('\n\nMESSAGE')[0]).pages[0].sections;
+check('a copy edit with no section named focuses the hero', ft2.find((x) => x.id === 'h1').data && !ft2.find((x) => x.id === 'f1').data);
 await callMoss({ message: 'hi', state: { pages: [] }, directions: lib }, env('moss-test'));
 check('interview turns get a small budget', seen.at(-1).json.max_tokens === 350 && needsLibrary('interview', 'hi'));
 const hist = Array.from({ length: 12 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: 't' + i }));
@@ -197,6 +208,17 @@ check('SSE: event-stream headers and a hello first', /text\/event-stream/.test(s
 check('SSE: reply comes before the ops, ops one by one, then done', names.indexOf('reply') < names.indexOf('op') && names.filter((n) => n === 'op').length === 2 && names.at(-1) === 'done' && ev.find((e) => e.event === 'op').data.op.section.data.title === 'A { brace', names.join());
 const spanNames = ev.filter((e) => e.event === 'span').map((e) => e.data.span.name);
 check('SSE: inference spans (request, time to first token, total) with server times', ['inference.request', 'inference.ttft', 'inference.total'].every((n) => spanNames.includes(n)) && ev.every((e) => typeof e.data.t === 'number') && ev.find((e) => e.event === 'done').data.streamed === true, spanNames.join());
+const replies = ev.filter((e) => e.event === 'reply');
+check('talker: an edit gets one spoken reply from the tiny call, before the ops', replies.length === 1 && replies[0].data.talker === true && replies[0].data.reply === 'Sure, adding two sections now.' && names.indexOf('reply') < names.indexOf('op'), JSON.stringify(replies.map((r) => r.data.reply)));
+const workerReq = seen.filter((x) => x.json.stream && !/^You are the voice/.test(x.json.messages[0].content)).at(-1).json;
+check('talker: the worker is told the acknowledgement was spoken (reply left empty)', workerReq.messages.at(-1).content.includes('SPOKEN ALREADY') && ev.find((e) => e.event === 'done').data.split === true);
+const talkerReq = seen.filter((x) => /^You are the voice/.test(x.json.messages[0].content)).at(-1).json;
+check('talker: a tiny call (short fixed prompt, 40 tokens max)', talkerReq.max_tokens === 40 && JSON.stringify(talkerReq.messages).length < 1200);
+const tSpans = ev.filter((e) => e.event === 'span').map((e) => e.data.span);
+check('talker and worker both show in the waterfall, with token usage incl. cached prefix', tSpans.some((x) => x.name === 'talker.ttft') && tSpans.find((x) => x.name === 'talker.total').meta.cachedTokens === 110 && tSpans.find((x) => x.name === 'inference.total').meta.cachedTokens === 4700);
+const tCalls = seen.filter((x) => /^You are the voice/.test(x.json.messages[0].content)).length;
+sr = sseRes(); await handler({ method: 'POST', headers: { host: 'a.app', accept: 'text/event-stream' }, body: { message: 'I run a bakery', state: { pages: [] } } }, sr);
+check('talker: not used while planning (the reply carries the question)', seen.filter((x) => /^You are the voice/.test(x.json.messages[0].content)).length === tCalls && parseSSE(sr.chunks).filter((e) => e.event === 'reply').length === 1);
 process.env.MOSS_MODEL = 'nostream';
 sr = sseRes(); await handler({ method: 'POST', headers: { host: 'a.app', accept: 'text/event-stream' }, body: { message: 'add a faq', state: home } }, sr);
 ev = parseSSE(sr.chunks);
