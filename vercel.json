@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/moss-builder.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/((?!scrape|speak).*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ],
+  "functions": {
+    "api/*.js": {
+      "excludeFiles": "node_modules/{onnxruntime-node/bin/napi-v3/{darwin,win32,linux/arm64}/**,onnxruntime-node/bin/napi-v3/linux/x64/*{cuda,tensorrt}*,onnxruntime-web/**,@deepgram/**}"
+    }
+  }
+}
