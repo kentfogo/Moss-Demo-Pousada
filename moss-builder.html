@@ -314,7 +314,7 @@ body:not(.started) .frame-wrap { display: none; }
 .lat-row .seg { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--g, #888); min-width: 2px; }
 .lat-row.marks .track { background: none; }
 .lat-row .mk { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink-3); }
-.g-speech { --g: #a78bfa; } .g-network { --g: #94a3b8; } .g-retrieval { --g: #10b981; } .g-inference { --g: #f59e0b; } .g-apply { --g: #3b82f6; } .g-voice { --g: #ec4899; } .g-other, .g-total { --g: #64748b; }
+.g-speech { --g: #a78bfa; } .g-network { --g: #94a3b8; } .g-retrieval { --g: #10b981; } .g-inference { --g: #f59e0b; } .g-apply { --g: #3b82f6; } .g-voice { --g: #ec4899; } .g-local { --g: #6366f1; } .g-other, .g-total { --g: #64748b; }
 .lat-legend i { background: var(--g); }
 .lat-stats { border-top: 1px solid var(--line); max-height: 30%; overflow: auto; padding: 4px 12px 8px; }
 .lat-stats table { width: 100%; border-collapse: collapse; font: 11px var(--f-mono); }
@@ -1585,8 +1585,10 @@ const agent = (() => {
 
   async function localRespond(message, state, opts = {}) {
     if (opts.mode === 'mock' && opts.scraped) { await wait(200); return mockFromScrape(opts.scraped, state); }
-    { const q = quickStyle(message.trim().toLowerCase(), state); if (q) { await wait(120); return q; } }
-    await wait(260);
+    // opts.instant: an instant command in the live app (no server call), so no pause. The pauses below make the offline
+    // demo agent feel like it is thinking when it stands in for Moss.
+    { const q = quickStyle(message.trim().toLowerCase(), state); if (q) { if (!opts.instant) await wait(120); return q; } }
+    if (!opts.instant) await wait(260);
     const text = message.trim();
     const low = text.toLowerCase();
     const refs = parseMentions(text, state);
@@ -1788,6 +1790,13 @@ const agent = (() => {
 
   // Commands that never need the model: undo, view switches, going to an existing page.
   const VIEW_RE = /^(show (me )?(the )?)?(flow|page) view$|^(back to|switch to|open) (the )?(flow|page)( view)?$|^(show|open|see) (me )?(the )?map$|^(back to|show me|show) the page$/;
+  /** The page a spoken word means: its id or name, or else the one page whose name contains it ("hours" → "Opening hours"). */
+  function pageFor(word, state) {
+    const w = String(word || '').toLowerCase().replace(/^@/, ''); if (!w) return null;
+    const exact = state.pages.find((p) => p.id === w || p.name.toLowerCase() === w); if (exact) return exact;
+    const part = state.pages.filter((p) => p.name.toLowerCase().split(/[\s-]+/).includes(w) || p.id.split('-').includes(w));
+    return part.length === 1 ? part[0] : null;
+  }
   function isLocalCommand(low, state) {
     const l = low.replace(/[.!?]/g, '').trim();
     if (UNDO_RE.test(l) || VIEW_RE.test(l)) return true;
@@ -1795,17 +1804,17 @@ const agent = (() => {
     const del = l.match(/^(delete|remove|get rid of|drop)\s+(the\s+)?@?([a-z][\w-]*)\s+page$/);
     if (del && del[3] !== 'home' && state.pages.find((p) => p.id === del[3])) return true;
     if (/^(clear|wipe|empty)\s+(the\s+)?@?[a-z][\w-]*\s+page$/.test(l)) return true;
-    const go = l.match(/^(go to|open|show( me)?|take me to)\s+(the\s+)?@?([a-z][\w-]*)(\s+page)?$/);
-    return !!(go && state.pages.find((p) => p.name.toLowerCase() === go[4] || p.id === go[4]));
+    const go = l.match(/^(go to|open|show( me)?|take ?me to)\s+(the\s+)?@?([a-z][\w-]*)(\s+page)?$/);
+    return !!(go && pageFor(go[4], state));
   }
   async function respond(message, state, opts = {}) {
     const low = message.trim().toLowerCase();
     const mode = modeOf(low, state, opts);
-    const asMention = (m) => m.replace(/^(go to|open|show( me)?|take me to)\s+(the\s+)?([A-Za-z][\w-]*)/i, (all, a, b, c, word) => (state.pages.some((p) => p.name.toLowerCase() === word.toLowerCase() || p.id === word.toLowerCase()) ? `${a} @${word}` : all));
+    const asMention = (m) => m.replace(/^(go to|open|show( me)?|take ?me to)\s+(the\s+)?([A-Za-z][\w-]*)/i, (all, a, b, c, word) => { const pg = pageFor(word, state); return pg ? `${/^take ?me/i.test(a) ? 'take me to' : a} @${pg.id}` : all; });
     const L = opts.lat || null; // latency recorder for this turn
     if (!REMOTE || remoteDisabled || (mode !== 'mock' && isLocalCommand(low, state))) {
-      const t0 = performance.now(); const res = await localRespond(asMention(message), state, { mode, scraped: opts.scraped });
-      if (L) L.span('local command', 'retrieval', t0, performance.now(), { model: 'none' });
+      const t0 = performance.now(); const res = await localRespond(asMention(message), state, { mode, scraped: opts.scraped, instant: REMOTE && !remoteDisabled });
+      if (L) L.span('local command', 'local', t0, performance.now(), { model: 'none' });
       return res;
     }
     try {
@@ -3202,7 +3211,7 @@ const latency = (() => {
   const turns = [];
   let cur = null, last = null, open = false, raf = 0;
   const now = () => performance.now();
-  const GROUP = (name) => /^router|^knowledge|^crawl|^index|^scrape|local command/.test(name) ? 'retrieval' : /^inference|^talker|reply received/.test(name) ? 'inference' : /^request/.test(name) ? 'network' : /^apply|reply shown/.test(name) ? 'apply' : /^tts|audio/.test(name) ? 'voice' : /speech/.test(name) ? 'speech' : 'other';
+  const GROUP = (name) => /local command/.test(name) ? 'local' : /^router|^knowledge|^crawl|^index|^scrape/.test(name) ? 'retrieval' : /^inference|^talker|reply received/.test(name) ? 'inference' : /^request/.test(name) ? 'network' : /^apply|reply shown/.test(name) ? 'apply' : /^tts|audio/.test(name) ? 'voice' : /speech/.test(name) ? 'speech' : 'other';
   const NULL = { span() {}, mark() {}, server() {}, note() {}, end() {} };
 
   function begin(text, o = {}) {
@@ -3249,7 +3258,8 @@ const latency = (() => {
      matter most, so each gets a row and a headline number even when it's zero. */
   const CATS = [
     { key: 'speech', label: 'Turn detection', hint: 'from the end of your speech to the request', test: (n) => /^speech end|^you stopped|^last words heard/.test(n) },
-    { key: 'retrieval', label: 'Retrieval', hint: 'Moss search: the intent router and site facts', test: (n) => /^router\.(query|load)$|^knowledge|^index\.|^scrape|^crawl|^local command$/.test(n) },
+    { key: 'retrieval', label: 'Retrieval', hint: 'Moss search: the intent router and site facts', test: (n) => /^router\.(query|load)$|^knowledge|^index\.|^scrape|^crawl/.test(n) },
+    { key: 'local', label: 'On the page', hint: 'answered in the browser, with no server call', test: (n) => /^local command$/.test(n) },
     { key: 'inference', label: 'Inference', hint: 'Moss model calls; the darker part is the wait for the first token', test: (n) => /^(inference|talker)\.(ttft|total)$|^section\.|^(design|next)\.writer$|\.retry$/.test(n) },
     { key: 'network', label: 'Network', hint: 'browser to server and back', test: (n) => /^request → first byte$/.test(n) },
     { key: 'apply', label: 'Page', hint: 'putting the changes on the page', test: (n) => /^apply ops$/.test(n) },
@@ -3270,6 +3280,7 @@ const latency = (() => {
       inference: inf.length ? Math.max(...inf.map((x) => x.end)) - Math.min(...inf.map((x) => x.start)) : null, calls, routed,
       screen: shown ? shown.at - tr.t0 : null, total: tr.end ? durOf(tr) : null,
       voice: voiceOf(tr),
+      local: (() => { const x = tr.spans.find((y) => y.name === 'local command'); return x ? x.end - x.start : null; })(),
     };
   }
   /** Voice to voice: from the end of your speech to Moss's first audio, and where the time went. */
@@ -3355,7 +3366,7 @@ const latency = (() => {
   function tiles(tr) {
     const sm = summary(tr);
     const tile = (cls, label, v, sub) => `<div class="lat-tile g-${cls}"><span>${label}</span><b>${v}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
-    return `<div class="lat-tiles">${tile('retrieval', 'Retrieval', sm.retrieval != null ? ms(sm.retrieval) : '–', sm.retrieval != null ? sm.retrievalWhat : 'none')}${tile('inference', 'Moss first token', sm.firstToken != null ? ms(sm.firstToken) : '–', sm.routed ? 'no model call' : '')}${tile('inference', 'Inference', sm.inference != null ? ms(sm.inference) : '–', sm.calls > 1 ? `${sm.calls} calls` : '')}${sm.voice ? tile('voice', 'Voice to voice', ms(sm.voice.v2v), `you stop → Moss speaks${sm.voice.trueEnd ? '' : ' (from transcript)'}`) : tile('apply', 'Reply on screen', sm.screen != null ? ms(sm.screen) : '–', '')}</div>`;
+    return `<div class="lat-tiles">${tile('retrieval', 'Retrieval', sm.retrieval != null ? ms(sm.retrieval) : '–', sm.retrieval != null ? sm.retrievalWhat : 'none')}${sm.local != null && sm.firstToken == null ? tile('local', 'On the page', ms(sm.local), 'no server call') : tile('inference', 'Moss first token', sm.firstToken != null ? ms(sm.firstToken) : '–', sm.routed ? 'no model call' : '')}${tile('inference', 'Inference', sm.inference != null ? ms(sm.inference) : '–', sm.calls > 1 ? `${sm.calls} calls` : '')}${sm.voice ? tile('voice', 'Voice to voice', ms(sm.voice.v2v), `you stop → Moss speaks${sm.voice.trueEnd ? '' : ' (from transcript)'}`) : tile('apply', 'Reply on screen', sm.screen != null ? ms(sm.screen) : '–', '')}</div>`;
   }
   function render() {
     const panel = $('#latPanel'); if (!panel || panel.hidden) return;

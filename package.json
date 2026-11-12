@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node tests/agent-api.mjs && node tests/remote.cjs && node tests/voice.cjs && node tests/voice-deepgram.cjs && node tests/plan.cjs && node tests/mocks.cjs && node tests/style.cjs && node tests/latency.cjs && node tests/variety.cjs && node tests/functional.cjs && node tests/replay.cjs",
+    "test": "node tests/agent-api.mjs && node tests/remote.cjs && node tests/voice.cjs && node tests/voice-deepgram.cjs && node tests/plan.cjs && node tests/mocks.cjs && node tests/style.cjs && node tests/latency.cjs && node tests/variety.cjs && node tests/functional.cjs && node tests/replay.cjs && node tests/instant.cjs",
     "bench": "node scripts/bench-state.cjs && node scripts/bench.mjs",
     "record": "node scripts/record.cjs"
   },
