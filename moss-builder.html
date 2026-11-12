@@ -321,6 +321,22 @@ body:not(.started) .frame-wrap { display: none; }
 .lat-stats th { text-align: left; color: var(--ink-3); font-weight: 500; padding: 4px 0; }
 .lat-stats td { padding: 2px 0; } .lat-stats td i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--g); margin-right: 6px; }
 .lat-empty { color: var(--ink-3); padding: 12px 0; }
+.lat-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0 6px; }
+.lat-tile { border: 1px solid var(--line); border-left: 3px solid var(--g); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.lat-tile span { color: var(--ink-3); font-size: 10.5px; }
+.lat-tile b { font: 600 16px/1.2 var(--f-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.lat-tile small { color: var(--ink-3); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lat-row.simple { height: 26px; grid-template-columns: 170px 62px 1fr; }
+.lat-row.simple .nm { color: var(--ink); font-weight: 500; display: flex; flex-direction: column; line-height: 1.15; }
+.lat-row.simple .nm small { font-weight: 400; color: var(--ink-3); font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+.lat-row.simple .v { color: var(--ink); font-size: 11.5px; }
+.lat-row.simple .track { height: 12px; }
+.lat-row.g-inference .seg { opacity: .55; }
+.lat-row .seg.ft, .lat-legend i.ft { opacity: 1; background: color-mix(in srgb, var(--g) 60%, #000); }
+.lat-raw { margin-top: 4px; }
+.lat-raw > summary { cursor: pointer; color: var(--ink-3); font: 10.5px var(--f-mono); list-style: none; padding: 2px 0; }
+.lat-raw > summary::before { content: '▸ '; } .lat-raw[open] > summary::before { content: '▾ '; }
+@media (max-width: 720px) { .lat-tiles { grid-template-columns: repeat(2, 1fr); } .lat-row.simple { grid-template-columns: 110px 54px 1fr; } }
 #latencyBtn[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
 @media (max-width: 720px) { .lat-panel { left: 8px; right: 8px; width: auto; bottom: 8px; max-height: 60vh; } .lat-row { grid-template-columns: 110px 54px 1fr; } .lat-legend { display: none; } }
 /* mocks switcher, style drawer, section toolbar, photo slots (builder chrome) */
@@ -848,7 +864,7 @@ if (new URLSearchParams(location.search).has('replay')) { const f = window.fetch
 <body>
 <div id="app">
   <aside class="lat-panel glass" id="latPanel" hidden aria-label="Latency waterfall">
-    <div class="lat-h"><b>Latency</b><span class="lat-legend"><i class="g-speech"></i>speech<i class="g-network"></i>network<i class="g-retrieval"></i>retrieval<i class="g-inference"></i>inference<i class="g-apply"></i>build<i class="g-voice"></i>voice</span><span class="lat-voice" id="latVoice"></span><button type="button" class="chip" id="latCopy">Copy JSON</button><button type="button" class="icon-btn" id="latClose" aria-label="Close latency">×</button></div>
+    <div class="lat-h"><b>Latency</b><span class="lat-legend"><i class="g-retrieval"></i>retrieval<i class="g-inference ft"></i>first token<i class="g-inference"></i>inference<i class="g-network"></i>network<i class="g-apply"></i>page</span><span class="lat-voice" id="latVoice"></span><button type="button" class="chip" id="latCopy">Copy JSON</button><button type="button" class="icon-btn" id="latClose" aria-label="Close latency">×</button></div>
     <div class="lat-turns" id="latTurns"></div>
     <div class="lat-stats" id="latStats"></div>
   </aside>
@@ -3142,6 +3158,32 @@ const latency = (() => {
     });
     return [...map.values()].map((r) => ({ ...r, start: Math.min(...r.segs.map((x) => x.start)), end: Math.max(...r.segs.map((x) => x.end)) }));
   }
+  /* The simple view: every span falls into one of a few plain categories. Retrieval and inference are the two that
+     matter most, so each gets a row and a headline number even when it's zero. */
+  const CATS = [
+    { key: 'speech', label: 'Turn detection', hint: 'from the end of your speech to the request', test: (n) => /^speech end/.test(n) },
+    { key: 'retrieval', label: 'Retrieval', hint: 'Moss search: the intent router and site facts', test: (n) => /^router\.(query|load)$|^knowledge|^index\.|^scrape|^crawl|^local command$/.test(n) },
+    { key: 'inference', label: 'Inference', hint: 'Moss model calls; the darker part is the wait for the first token', test: (n) => /^(inference|talker)\.(ttft|total)$|^section\.|^(design|next)\.writer$|\.retry$/.test(n) },
+    { key: 'network', label: 'Network', hint: 'browser to server and back', test: (n) => /^request → first byte$/.test(n) },
+    { key: 'apply', label: 'Page', hint: 'putting the changes on the page', test: (n) => /^apply ops$/.test(n) },
+    { key: 'voice', label: 'Voice', hint: 'first audio of the spoken reply', test: (n) => /^first audio/.test(n) },
+  ];
+  const union = (spans) => { let tot = 0, end = -Infinity; spans.slice().sort((a, b) => a.start - b.start).forEach((x) => { const st = Math.max(x.start, end); if (x.end > st) tot += x.end - st; end = Math.max(end, x.end); }); return tot; };
+  /** Headline numbers for a turn: retrieval, Moss first token, inference, reply on screen, total. */
+  function summary(tr) {
+    const of = (key) => tr.spans.filter((x) => CATS.find((c) => c.key === key).test(x.name) && x.end > x.start);
+    const ret = of('retrieval'); const inf = of('inference');
+    const ttfts = tr.spans.filter((x) => /^(inference|talker)\.ttft$/.test(x.name));
+    const calls = tr.spans.filter((x) => /^(inference|talker)\.total$|^section\.|^(design|next)\.writer$/.test(x.name)).length;
+    const shown = tr.marks.find((m) => m.name === 'reply shown');
+    const routed = tr.spans.some((x) => x.name === 'router.query') && !inf.length;
+    return {
+      retrieval: ret.length ? union(ret) : null, retrievalWhat: [...new Set(ret.map((x) => (/^router/.test(x.name) ? 'intent router' : /^knowledge/.test(x.name) ? 'site facts' : /^local/.test(x.name) ? 'on the page' : 'site read')))].join(' + '),
+      firstToken: ttfts.length ? Math.min(...ttfts.map((x) => x.end - x.start)) : null,
+      inference: inf.length ? Math.max(...inf.map((x) => x.end)) - Math.min(...inf.map((x) => x.start)) : null, calls, routed,
+      screen: shown ? shown.at - tr.t0 : null, total: tr.end ? durOf(tr) : null,
+    };
+  }
   function percentile(arr, p) { if (!arr.length) return null; const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor((p / 100) * a.length))]; }
   /** p50 / p95 per row name over the kept turns (the "apply ops" row uses its whole extent). */
   function stats() {
@@ -3152,6 +3194,12 @@ const latency = (() => {
     out.push({ name: 'turn total', group: 'total', n: totals.length, p50: percentile(totals, 50), p95: percentile(totals, 95) });
     return out;
   }
+  /** p50 / p95 of the headline numbers. */
+  function simpleStats() {
+    const sms = turns.map(summary);
+    const row = (name, group, pick) => { const v = sms.map(pick).filter((x) => x != null); return { name, group, n: v.length, p50: percentile(v, 50), p95: percentile(v, 95) }; };
+    return [row('Retrieval', 'retrieval', (x) => x.retrieval), row('Moss first token', 'inference', (x) => x.firstToken), row('Inference', 'inference', (x) => x.inference), row('Reply on screen', 'apply', (x) => x.screen), row('Turn total', 'total', (x) => x.total)];
+  }
   const ms = (v) => (v == null ? '–' : v >= 1000 ? (v / 1000).toFixed(2) + ' s' : Math.round(v) + ' ms');
   function schedule() { if (!open || raf) return; raf = requestAnimationFrame(() => { raf = 0; render(); }); }
   function rowHTML(tr, r, scale) {
@@ -3160,6 +3208,31 @@ const latency = (() => {
     const label = r.name === 'apply ops' ? `apply ${r.segs.length} op${r.segs.length > 1 ? 's' : ''}` : r.name;
     const segs = r.segs.map((sp) => `<i class="seg" style="left:${(((sp.start - tr.t0) / scale) * 100).toFixed(2)}%;width:${Math.max(0.4, ((sp.end - sp.start) / scale) * 100).toFixed(2)}%" title="${esc(`${sp.name}${sp.meta && sp.meta.op ? ' · ' + sp.meta.op : ''}: ${ms(sp.end - sp.start)} (at +${ms(sp.start - tr.t0)})`)}"></i>`).join('');
     return `<div class="lat-row g-${r.group}"><span class="nm" title="${esc(r.name)}${r.server ? ' (server)' : ''}">${esc(label)}${esc(extra)}</span><span class="v">${ms(r.end - r.start)}</span><span class="track">${segs}</span></div>`;
+  }
+  const pct = (v, scale) => ((v / scale) * 100).toFixed(2);
+  function simpleRow(tr, cat, scale) {
+    const spans = tr.spans.filter((x) => cat.test(x.name) && x.end > x.start);
+    if (!spans.length && cat.key !== 'retrieval' && cat.key !== 'inference') return '';
+    const sm = summary(tr); let value = '', note = '', segs = '';
+    if (cat.key === 'inference') {
+      if (!spans.length) { value = '–'; note = sm.routed ? 'none: the router answered' : 'none'; }
+      else {
+        const calls = spans.filter((x) => !/ttft$/.test(x.name));
+        segs = calls.map((x) => `<i class="seg" style="left:${pct(x.start - tr.t0, scale)}%;width:${Math.max(0.4, pct(x.end - x.start, scale))}%" title="${esc(`${x.name}: ${ms(x.end - x.start)}`)}"></i>`).join('')
+          + spans.filter((x) => /ttft$/.test(x.name)).map((x) => `<i class="seg ft" style="left:${pct(x.start - tr.t0, scale)}%;width:${Math.max(0.4, pct(x.end - x.start, scale))}%" title="${esc(`${x.name.replace('.ttft', '')} first token: ${ms(x.end - x.start)}`)}"></i>`).join('');
+        value = ms(sm.inference); note = `first token ${ms(sm.firstToken)}${sm.calls > 1 ? ` · ${sm.calls} calls` : ''}`;
+      }
+    } else {
+      segs = spans.map((x) => `<i class="seg" style="left:${pct(x.start - tr.t0, scale)}%;width:${Math.max(0.4, pct(x.end - x.start, scale))}%" title="${esc(`${x.name}: ${ms(x.end - x.start)}`)}"></i>`).join('');
+      value = spans.length ? ms(union(spans)) : '–';
+      note = cat.key === 'retrieval' ? (spans.length ? sm.retrievalWhat : 'none this turn') : cat.key === 'apply' ? `${spans.length} change${spans.length === 1 ? '' : 's'}` : '';
+    }
+    return `<div class="lat-row simple g-${cat.key}" title="${esc(cat.hint)}"><span class="nm">${esc(cat.label)}${note ? `<small>${esc(note)}</small>` : ''}</span><span class="v">${value}</span><span class="track">${segs}</span></div>`;
+  }
+  function tiles(tr) {
+    const sm = summary(tr);
+    const tile = (cls, label, v, sub) => `<div class="lat-tile g-${cls}"><span>${label}</span><b>${v}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
+    return `<div class="lat-tiles">${tile('retrieval', 'Retrieval', sm.retrieval != null ? ms(sm.retrieval) : '–', sm.retrieval != null ? sm.retrievalWhat : 'none')}${tile('inference', 'Moss first token', sm.firstToken != null ? ms(sm.firstToken) : '–', sm.routed ? 'no model call' : '')}${tile('inference', 'Inference', sm.inference != null ? ms(sm.inference) : '–', sm.calls > 1 ? `${sm.calls} calls` : '')}${tile('apply', 'Reply on screen', sm.screen != null ? ms(sm.screen) : '–', '')}</div>`;
   }
   function render() {
     const panel = $('#latPanel'); if (!panel || panel.hidden) return;
@@ -3171,9 +3244,9 @@ const latency = (() => {
       const rs = rows(tr);
       const marks = tr.marks.map((m) => `<i class="mk" style="left:${(((m.at - tr.t0) / scale) * 100).toFixed(2)}%" title="${esc(m.name)} at +${ms(m.at - tr.t0)}"></i>`).join('');
       const tag = tr.meta.route ? (tr.meta.route.used ? `router · ${Number(tr.meta.route.score).toFixed(2)}` : 'router miss') : tr.meta.streamed === false ? 'not streamed' : tr.spans.some((x) => x.name === 'local command') ? 'local' : '';
-      return `<details class="lat-turn" ${i === 0 ? 'open' : ''}><summary><span class="q">${esc(tr.text)}</span>${tag ? `<span class="tag">${esc(tag)}</span>` : ''}<b>${tr.end ? ms(total) : '…'}</b></summary><div class="lat-rows">${rs.map((r) => rowHTML(tr, r, scale)).join('')}<div class="lat-row marks"><span class="nm">marks</span><span class="v"></span><span class="track">${marks}</span></div></div></details>`;
+      return `<details class="lat-turn" ${i === 0 ? 'open' : ''}><summary><span class="q">${esc(tr.text)}</span>${tag ? `<span class="tag">${esc(tag)}</span>` : ''}<b>${tr.end ? ms(total) : '…'}</b></summary>${tiles(tr)}<div class="lat-rows">${CATS.map((c) => simpleRow(tr, c, scale)).join('')}</div><details class="lat-raw"><summary>All steps</summary><div class="lat-rows">${rs.map((r) => rowHTML(tr, r, scale)).join('')}<div class="lat-row marks"><span class="nm">marks</span><span class="v"></span><span class="track">${marks}</span></div></div></details></details>`;
     }).join('');
-    $('#latStats').innerHTML = `<table><thead><tr><th>Step</th><th>n</th><th>p50</th><th>p95</th></tr></thead><tbody>${stats().map((s) => `<tr class="g-${s.group}"><td><i></i>${esc(s.name)}</td><td>${s.n}</td><td>${ms(s.p50)}</td><td>${ms(s.p95)}</td></tr>`).join('')}</tbody></table>`;
+    $('#latStats').innerHTML = `<table><thead><tr><th>Over ${turns.length} turn${turns.length === 1 ? '' : 's'}</th><th>n</th><th>p50</th><th>p95</th></tr></thead><tbody>${simpleStats().map((s) => `<tr class="g-${s.group}"><td><i></i>${esc(s.name)}</td><td>${s.n}</td><td>${ms(s.p50)}</td><td>${ms(s.p95)}</td></tr>`).join('')}</tbody></table>`;
   }
   function toggle(on) {
     const panel = $('#latPanel'); open = on == null ? panel.hidden : !!on;
@@ -3181,7 +3254,7 @@ const latency = (() => {
     if (open) render();
   }
   function json() { return JSON.stringify(turns.map((tr) => ({ text: tr.text, at: tr.at, totalMs: Math.round(durOf(tr)), meta: tr.meta, spans: rows(tr).map((r) => ({ name: r.name, group: r.group, startMs: Math.round(r.start - tr.t0), ms: Math.round(r.end - r.start), parts: r.segs.length, ...(r.meta ? { meta: r.meta } : {}) })), marks: tr.marks.map((m) => ({ name: m.name, atMs: Math.round(m.at - tr.t0) })) })), null, 2); }
-  return { begin, tts, stats, toggle, render, json, turns: () => turns, NULL };
+  return { begin, tts, stats, simpleStats, summary, toggle, render, json, turns: () => turns, NULL };
 })();
 
 const app = (() => {
@@ -4132,6 +4205,7 @@ window.moss = { app, agent, pageModel, renderer, isoScene, flowCanvas, theme, so
 <style>
 #latBadge { position: fixed; left: 72px; bottom: 16px; z-index: 1000; font: 500 12.5px/1.3 Inter, system-ui, sans-serif; color: var(--ink); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); border-radius: 999px; padding: 7px 12px; cursor: pointer; max-width: calc(100vw - 32px); }
 #latBadge b { color: var(--accent); font-variant-numeric: tabular-nums; }
+.lat-panel:not([hidden]) ~ #latBadge { display: none; } /* the open panel shows the same numbers */
 #latBadge.pop { animation: latPop .5s ease; }
 @keyframes latPop { 0% { transform: translateY(6px); opacity: 0; } 100% { transform: none; opacity: 1; } }
 #replayBar, #recSave { position: fixed; z-index: 1001; top: 10px; left: 50%; transform: translateX(-50%); font: 500 13px/1.35 Inter, system-ui, sans-serif; color: var(--ink); background: var(--bg); border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); border-radius: 999px; padding: 6px 6px 6px 14px; display: flex; align-items: center; gap: 10px; box-shadow: 0 6px 24px rgb(0 0 0 / .08); max-width: calc(100vw - 32px); }
