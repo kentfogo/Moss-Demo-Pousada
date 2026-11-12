@@ -1781,7 +1781,7 @@ const agent = (() => {
       const tReq = performance.now();
       const r = await fetch('/api/agent', {
         method: 'POST', headers: { 'content-type': 'application/json', ...(streaming ? { accept: 'text/event-stream' } : {}) }, signal: opts.signal,
-        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-6), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections(), live: !!opts.live, mode, ...(opts.noRoute ? { noRoute: true } : {}), ...(mode === 'mock' && opts.scraped ? { scraped: opts.scraped } : {}) }),
+        body: JSON.stringify({ message, state: slimState(state), history: turns.slice(-6), directions: window.MossSite ? MossSite.library() : [], recentDirections: recentDirections(), live: !!opts.live, mode, ...(opts.noRoute ? { noRoute: true } : {}), ...(state.business && state.business.siteIndex ? { siteIndex: state.business.siteIndex } : {}), ...(mode === 'mock' && opts.scraped ? { scraped: opts.scraped } : {}) }),
       });
       if (L) L.span('request → first byte', 'network', tReq, performance.now(), { status: r.status });
       if (r.ok && streaming && /event-stream/.test(r.headers.get('content-type') || '')) return await readStream(r, message, state, Object.assign({}, opts, { sentAt: tReq }), L);
@@ -3709,6 +3709,7 @@ const app = (() => {
         const r = await fetch('/api/scrape?url=' + encodeURIComponent(site), { signal: t.controller.signal });
         const j = await r.json().catch(() => ({}));
         L.span('scrape site', 'retrieval', s0, performance.now(), { site, status: r.status, cached: j.index && j.index.cached });
+        if (j.timing) L.server(j.timing, Math.max(s0, performance.now() - (j.serverMs || 0)));
         if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
         scraped = j; done(); setStatus('Designing three looks', true);
       } catch (e) { if (e.name !== 'AbortError') scrapeErr = /^HTTP|Failed to fetch|NetworkError|Load failed/.test(e.message) ? 'reading sites only works on the deployed builder' : e.message; }
@@ -3737,6 +3738,8 @@ const app = (() => {
     }
     turn = null;
     if (res.broken) { const li = document.createElement('li'); li.className = 'done'; li.innerHTML = `<span class="st">${icon('check')}</span><span class="k">stopped part-way</span><span>${esc(`${doneOps.length} change${doneOps.length === 1 ? '' : 's'} kept · undo removes them`)}</span>`; msg.querySelector('.log').appendChild(li); }
+    // remember which knowledge index belongs to this site, so later edits can pull its real facts
+    if (scraped && scraped.index && scraped.index.name && pageModel.get().business) pageModel.get().business.siteIndex = scraped.index.name;
     // a fresh set of mocks: show it from the top, with its entrance
     if (doneOps.some((o) => o.op === 'setMocks')) { $('#pageView').scrollTo({ top: 0, behavior: 'instant' }); renderer.replay(); }
     const curP = pageModel.current(); isoScene.setActive(curP && curP.sections.length ? curP.sections[curP.sections.length - 1].id : null);

@@ -13,6 +13,7 @@ import { guard } from './_guard.js';
 import { trace } from './_trace.js';
 import { createScanner } from './_jsonScan.js';
 import { route, warm } from './_moss.js';
+import * as knowledge from './_knowledge.js';
 
 export const config = { maxDuration: 60 };
 
@@ -291,7 +292,13 @@ export async function callMoss({ message, state, history, directions, recentDire
 
 /** Turn arguments from the request body. */
 function argsOf(body, message) {
-  return { message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live, mode: ['plan', 'autopilot', 'mock'].includes(body.mode) ? body.mode : undefined, noRoute: body.noRoute === true, scraped: body.mode === 'mock' && body.scraped && typeof body.scraped === 'object' ? body.scraped : undefined };
+  return { message, state: body.state, history: body.history, directions: body.directions, recentDirections: body.recentDirections, live: !!body.live, mode: ['plan', 'autopilot', 'mock'].includes(body.mode) ? body.mode : undefined, noRoute: body.noRoute === true, siteIndex: typeof body.siteIndex === 'string' && /^site-[a-z0-9-]{1,60}$/.test(body.siteIndex) ? body.siteIndex : undefined, ...scrapedOf(body) };
+}
+/** The scrape summary for the prompt; passages and index details are kept aside for retrieval. */
+function scrapedOf(body) {
+  if (body.mode !== 'mock' || !body.scraped || typeof body.scraped !== 'object') return {};
+  const { passages, index, timing, serverMs, ...summary } = body.scraped;
+  return { scraped: summary, scrapedPassages: Array.isArray(passages) ? passages.slice(0, 60) : [], scrapedIndex: index && typeof index.name === 'string' ? index : null };
 }
 
 /**
@@ -312,9 +319,24 @@ export const hooks = {
         out.meta = { router: r ? r.decision : 'off' };
       } catch (e) { tr.add('router.error', tr.now(), tr.now(), { error: String(e && e.message).slice(0, 160) }); }
     }
+    // Site knowledge: real facts for a mock build, and for later edits of a mocked site (only when relevant)
+    try {
+      let facts = [];
+      if (args.mode === 'mock' && args.scraped) {
+        const name = args.scrapedIndex && args.scrapedIndex.name;
+        if (name) facts = await knowledge.retrieve(name, MOCK_QUERIES, tr, env, 2);
+        if (!facts.length) facts = knowledge.byKind(args.scrapedPassages);
+        out.meta = Object.assign(out.meta || {}, { facts: facts.length, factsFrom: name && facts[0] && facts[0].score != null ? 'index' : 'passages' });
+      } else if (args.siteIndex && ['edit', 'guided'].includes(phase)) {
+        facts = await knowledge.retrieve(args.siteIndex, [args.message], tr, env, 3);
+        out.meta = Object.assign(out.meta || {}, { facts: facts.length });
+      }
+      if (facts.length) out.extra = (out.extra || '') + knowledge.factsBlock(facts);
+    } catch (e) { tr.add('knowledge.error', tr.now(), tr.now(), { error: String(e && e.message).slice(0, 160) }); }
     return out;
   },
 };
+const MOCK_QUERIES = ['services we offer', 'opening hours', 'customer reviews and testimonials', 'phone email address and service area', 'prices and rates', 'about the business, history and team'];
 
 export default async function handler(req, res) {
   const tr = trace();

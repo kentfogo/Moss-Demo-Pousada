@@ -54,7 +54,7 @@ export function ensureIndex(c, name, docs, tr, span = 'index.load') {
 export const isLoaded = (name) => loaded.has(name);
 
 /* ------------------------------------------------------------ intent router */
-export const THRESHOLDS = { high: 0.75, mid: 0.55, margin: 0.03, coldBudgetMs: 250 };
+export const THRESHOLDS = { high: 0.65, mid: 0.5, margin: 0.03, coldBudgetMs: 250 }; // from data/router-eval.md
 export function thresholds(env = process.env) {
   return { high: Number(env.ROUTER_HIGH) || THRESHOLDS.high, mid: Number(env.ROUTER_MID) || THRESHOLDS.mid, margin: THRESHOLDS.margin, coldBudgetMs: THRESHOLDS.coldBudgetMs };
 }

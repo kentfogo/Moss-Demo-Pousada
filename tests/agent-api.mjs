@@ -148,6 +148,8 @@ const site = http.createServer((q, s2) => {
   if (q.url === '/') { s2.writeHead(200, { 'content-type': 'text/html' }); return s2.end(fixture); }
   if (q.url === '/hop') { s2.writeHead(302, { location: '/' }); return s2.end(); }
   if (q.url === '/to-private') { s2.writeHead(302, { location: 'http://169.254.169.254/latest/meta-data' }); return s2.end(); }
+  if (q.url === '/services') { s2.writeHead(200, { 'content-type': 'text/html' }); return s2.end('<html><body><h2>Emergency plumbing</h2><p>We repair burst pipes, leaking taps and blocked drains across Austin, day or night, with upfront quotes.</p><h2>Opening hours</h2><p>Mon-Fri 8am-6pm, Saturday 9am-1pm, emergencies 24/7.</p></body></html>'); }
+  if (q.url === '/contact') { s2.writeHead(200, { 'content-type': 'text/html' }); return s2.end('<html><body><h1>Contact</h1><address>12 Lamar Blvd, Austin TX</address><p>Call 512-555-0142 or email hi@joes.example and we will get back to you within the hour.</p></body></html>'); }
   if (q.url === '/pdf') { s2.writeHead(200, { 'content-type': 'application/pdf' }); return s2.end('%PDF'); }
   if (q.url === '/huge') { s2.writeHead(200, { 'content-type': 'text/html' }); return s2.end('x'.repeat(2e6)); }
   s2.writeHead(404); s2.end();
@@ -165,6 +167,11 @@ const pdf = await viaTest('/pdf');
 check('non-HTML is refused', !pdf.ok && pdf.e.status === 422);
 const huge = await viaTest('/huge');
 check('pages over 1.5 MB are refused', !huge.ok && huge.e.status === 413);
+const crawled = await sc.scrape(at('/'), { lookup: local });
+check('crawl: home plus nav pages (services, contact), facts merged', crawled.summary.pages.length === 3 && crawled.summary.pages.some((pg) => /\/services$/.test(pg.url)) && crawled.summary.contact.address.includes('Lamar'), JSON.stringify(crawled.summary.pages.map((x) => x.url)));
+const kinds = new Set(crawled.passages.map((x) => x.kind));
+check('crawl: pages split into passages tagged by kind (service, hours, contact…)', crawled.passages.length >= 4 && kinds.has('hours') && kinds.has('contact') && crawled.passages.every((x) => x.text.length <= 590 && x.page), JSON.stringify(crawled.passages.map((x) => [x.kind, x.text.slice(0, 40)])));
+check('crawl: nav pages picked by priority, same site only', JSON.stringify(sc.pickPages('<nav><a href="/about">About</a><a href="https://evil.example/x">X</a><a href="/services">Services</a><a href="/blog">Blog</a><a href="/contact-us">Contact</a><a href="/faq">FAQ</a></nav>', new URL('https://joes.example/'), 3).map((x) => x.pathname)) === '["/services","/about","/contact-us"]');
 site.close();
 const mr2 = () => { const x = mockRes(); x.end = () => x; return x; };
 r = mr2(); await sc.default({ method: 'GET', headers: { host: 'a.app' }, query: { url: 'localhost' } }, r);
@@ -207,7 +214,7 @@ const fakeMoss = (scoreFor) => { const f = { created: [], loads: 0, queries: 0, 
   async createIndex(name, docs) { f.created.push({ name, n: docs.length, sample: docs[0] }); f.exists = true; return { indexName: name, docCount: docs.length }; },
   async query(name, q) { f.queries++; return { docs: scoreFor(q) }; } }; return f; };
 const doc = (canonical, score) => ({ id: 'x', text: 'x', score, metadata: { canonical } });
-const fm = fakeMoss((q) => /pop/.test(q) ? [doc('Make it lively', 0.91), doc('Add some animation', 0.7)] : /colour behind/.test(q) ? [doc('Accent background on the {section}', 0.71), doc('Dark background on the {section}', 0.66)] : /tie/.test(q) ? [doc('Glow on hover', 0.9), doc('Lift on hover', 0.885)] : [doc('Undo', 0.31)]);
+const fm = fakeMoss((q) => /pop/.test(q) ? [doc('Make it lively', 0.91), doc('Add some animation', 0.7)] : /colour behind/.test(q) ? [doc('Accent background on the {section}', 0.6), doc('Dark background on the {section}', 0.55)] : /tie/.test(q) ? [doc('Glow on hover', 0.9), doc('Lift on hover', 0.885)] : [doc('Undo', 0.31)]);
 mossMod.setClient(fm);
 const { trace } = await import('../api/_trace.js');
 let tr0 = trace();
@@ -240,7 +247,47 @@ check('handler: a router failure falls through to inference, recorded as a span'
 mossMod.setClient(null);
 process.env = saved;
 
-// 14. helpers
+// 14. site knowledge (Moss index #2) with a fake Moss client
+const kn = await import('../api/_knowledge.js');
+const now = Date.now();
+const kfake = { indexes: new Map([['site-old-1', { name: 'site-old-1', createdAt: new Date(now - 9e7).toISOString(), updatedAt: new Date(now - 9e7).toISOString(), status: 'Ready' }]]), deleted: [], created: [], qs: 0,
+  async getIndex(n) { const i = this.indexes.get(n); if (!i) throw new Error('not found'); return i; },
+  async listIndexes() { return [...this.indexes.values()]; },
+  async deleteIndex(n) { this.deleted.push(n); this.indexes.delete(n); return true; },
+  async createIndex(n, docs, o) { this.created.push({ n, docs }); o && o.onProgress && o.onProgress({ status: 'building' }); this.indexes.set(n, { name: n, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: 'Building', docs }); return new Promise((r) => setTimeout(() => { this.indexes.get(n).status = 'Ready'; r({}); }, 30)); },
+  async getDocs(n, o) { return (this.indexes.get(n).docs || []).filter((d) => o.docIds.includes(d.id)); },
+  async loadIndex(n) { if (!this.indexes.has(n)) throw new Error('not found'); return n; },
+  async query(n, q) { this.qs++; const docs = this.indexes.get(n).docs || []; return { docs: docs.map((d) => ({ ...d, score: d.id === '__meta' ? 0.9 : q.split(' ').some((w) => w.length > 3 && d.text.toLowerCase().includes(w)) ? 0.7 : 0.1 })) }; } };
+mossMod.setClient(kfake);
+check('knowledge: index names are per site', kn.siteIndexName('www.Joes-Plumbing.com') === 'site-joes-plumbing-com');
+let ktr = trace();
+check('knowledge: an unknown site is not fresh', !(await kn.lookup('joes.example', ktr)).fresh && ktr.spans.some((x) => x.name === 'knowledge.lookup'));
+const built = await kn.build('joes.example', crawled.passages, crawled.summary, ktr);
+check('knowledge: build uploads passages plus a summary doc, and reports the span', kfake.created[0].n === 'site-joes-example' && kfake.created[0].docs.some((d) => d.id === '__meta') && kfake.created[0].docs.length === crawled.passages.length + 1 && ktr.spans.some((x) => x.name === 'index.build'));
+await new Promise((r) => setTimeout(r, 60));
+check('knowledge: a site read within 24 h is reused (summary included)', (await kn.lookup('joes.example', trace())).fresh && (await kn.cachedSummary('site-joes-example')).name === crawled.summary.name);
+check('knowledge: the stale index is not fresh', !(await kn.lookup('old-1', trace())).fresh);
+const facts = await kn.retrieve('site-joes-example', ['opening hours'], ktr);
+check('knowledge: retrieval returns relevant passages only, never the summary doc', facts.length >= 1 && facts.every((f) => f.score >= kn.KNOWLEDGE.minScore && !/Site summary/.test(f.text)) && ktr.spans.some((x) => x.name === 'knowledge.query'));
+kfake.indexes.set('site-new-one', { name: 'site-new-one', status: 'Building', createdAt: new Date().toISOString(), docs: [{ id: 'p0', text: 'Opening hours Mon-Fri', metadata: { kind: 'hours' } }] });
+check('knowledge: an index still building returns nothing (and says so)', (await kn.retrieve('site-new-one', ['opening hours'], ktr)).length === 0 && ktr.spans.some((x) => x.name === 'knowledge.pending'));
+check('knowledge: without an index, passages are picked by kind', kn.byKind(crawled.passages).some((x) => x.kind === 'hours'));
+for (let i = 0; i < 52; i++) kfake.indexes.set(`site-x${i}`, { name: `site-x${i}`, createdAt: new Date(now - (60 - i) * 1000).toISOString(), status: 'Ready' });
+kfake.deleted.length = 0; await kn.build('joes.example', crawled.passages, crawled.summary, trace());
+check('knowledge: at most ~50 site indexes, oldest deleted first', kfake.deleted.includes('site-old-1') && kfake.deleted.includes('site-x0') && !kfake.deleted.includes('site-x51'), kfake.deleted.slice(0, 5).join());
+// in the agent: mock builds get SITE FACTS; edits on a mocked site only when relevant
+Object.assign(process.env, env('moss-test')); process.env.MOSS_ROUTER = 'off';
+await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'mock up joes.example', mode: 'mock', state: { pages: [] }, scraped: { ...crawled.summary, passages: crawled.passages, index: { name: 'site-joes-example', ready: true } } } }, mockRes());
+const mockPrompt = seen.at(-1).json.messages.at(-1).content;
+check('agent: a mock build gets SITE FACTS from the index, without sending all passages', mockPrompt.includes('SITE FACTS') && !mockPrompt.includes('"passages"'), mockPrompt.slice(0, 160));
+await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'put our opening hours in the footer', siteIndex: 'site-joes-example', state: home } }, mockRes());
+check('agent: a later edit pulls the relevant facts', seen.at(-1).json.messages.at(-1).content.includes('SITE FACTS'));
+await handler({ method: 'POST', headers: { host: 'a.app' }, body: { message: 'zzz qq', siteIndex: 'site-joes-example', state: home } }, mockRes());
+check('agent: an unrelated edit adds nothing', !seen.at(-1).json.messages.at(-1).content.includes('SITE FACTS'));
+mossMod.setClient(null);
+process.env = saved;
+
+// 15. helpers
 check('extractJSON tolerates prose around the object', extractJSON('Sure! {"reply":"ok","ops":[]} Hope that helps.').reply === 'ok');
 check('compactState keeps flow names only', JSON.stringify(compactState({ flows: [{ name: 'Booking', nodes: [1, 2] }] }).flows) === '["Booking"]');
 

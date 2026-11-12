@@ -11,8 +11,10 @@ import dns from 'node:dns';
 import zlib from 'node:zlib';
 import net from 'node:net';
 import { guard } from './_guard.js';
+import { trace } from './_trace.js';
+import * as knowledge from './_knowledge.js';
 
-export const config = { maxDuration: 20 };
+export const config = { maxDuration: 30 };
 export const LIMITS = { timeoutMs: 8000, maxBytes: 1.5e6, maxRedirects: 3, cssBytes: 300e3 };
 
 /* ------------------------------------------------------------ address checks */
@@ -162,25 +164,103 @@ export function extract(html, pageUrl, extraCss = '') {
   return out;
 }
 
-export async function scrape(input) {
-  const u = toUrl(input);
+/* ------------------------------------------------------------ passages (for the knowledge index) */
+const KIND_RE = [
+  ['hours', /\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b.*\d|\bopen(ing)? hours\b|\b\d{1,2}(:\d{2})?\s?(am|pm)\b/i],
+  ['contact', /(\+?\d[\d\s().-]{8,}\d)|@[\w-]+\.\w|\b(call|email|contact|address|visit us|located)\b/i],
+  ['price', /[$€£]\s?\d|\b\d+\s?(usd|eur|gbp)\b|\b(price|pricing|cost|rates?|from \$)\b/i],
+  ['review', /[“"].{30,}[”"]|\b(review|testimonial|stars?|recommend|customers? say)\b/i],
+  ['faq', /\?\s*$/],
+  ['service', /\b(service|repair|install|clean|we (do|offer|provide|fix)|menu|treatment|package)/i],
+];
+const kindOf = (heading, text) => { const t = `${heading} ${text}`; const hit = KIND_RE.find(([, re]) => re.test(t)); return hit ? hit[0] : 'about'; };
+/** Split a page into 200–500 character passages grouped under their heading, each tagged with a kind. */
+export function passages(html, pageUrl) {
+  const h = String(html || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style|noscript|svg|template|iframe|nav|header)[\s\S]*?<\/\1>/gi, ' ');
+  const blocks = all(h, /<(h[1-4]|p|li|blockquote|address|dt|dd|td|figcaption)[^>]*>([\s\S]*?)<\/\1>/gi).map((m) => ({ tag: m[1].toLowerCase(), text: text(m[2]) })).filter((b) => b.text.length > 2);
+  const out = []; let heading = '', buf = '';
+  const page = (() => { try { return new URL(pageUrl).pathname || '/'; } catch { return '/'; } })();
+  const flush = () => { const t = buf.trim(); if (t.length >= 40) out.push({ text: (heading ? heading + ': ' : '') + t.slice(0, 500), kind: kindOf(heading, t), page }); buf = ''; };
+  for (const b of blocks) {
+    if (/^h[1-4]$/.test(b.tag)) { flush(); heading = b.text.slice(0, 80); if (/\?$/.test(heading)) buf = ''; continue; }
+    if ((buf + ' ' + b.text).length > 480) flush();
+    buf += (buf ? ' ' : '') + b.text;
+  }
+  flush();
+  const seen = new Set();
+  return out.filter((p) => { const k = p.text.toLowerCase().slice(0, 120); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 40);
+}
+const NAV_PRIORITY = [/servic|menu|what-we-do|treatment|offer/i, /about|story|who-we/i, /contact|visit|location|find-us/i, /review|testimonial/i, /pric|rates|cost/i, /faq|questions/i];
+/** Up to n same-site pages from the nav, chosen by what usually holds the facts (services, about, contact…). */
+export function pickPages(html, base, n = 3) {
+  const nav = (String(html).match(/<nav[\s\S]*?<\/nav>/gi) || []).join(' ') || String(html).slice(0, 60000);
+  const links = all(nav, /<a[^>]+href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi).map((m) => { try { const u = new URL(m[1], base); return u.hostname === base.hostname && /^https?:$/.test(u.protocol) && !/\.(pdf|jpe?g|png|zip)$/i.test(u.pathname) && u.pathname !== base.pathname ? { u, label: text(m[2]) } : null; } catch { return null; } }).filter(Boolean);
+  const picked = []; const seen = new Set([base.pathname.replace(/\/$/, '')]);
+  for (const re of NAV_PRIORITY) {
+    const hit = links.find((l) => (re.test(l.u.pathname) || re.test(l.label)) && !seen.has(l.u.pathname.replace(/\/$/, '')));
+    if (hit) { seen.add(hit.u.pathname.replace(/\/$/, '')); picked.push(hit.u); }
+    if (picked.length >= n) break;
+  }
+  return picked;
+}
+const mergeLists = (a, b, n) => [...new Set([...(a || []), ...(b || [])])].slice(0, n);
+
+export const CRAWL = { budgetMs: 8000, pages: 3 };
+/**
+ * Read the home page plus up to 3 nav pages (in parallel, 8 s in total), merge their facts, and split everything
+ * into passages. opts.lookup is for tests only. tr records crawl spans for the latency waterfall.
+ */
+export async function scrape(input, opts = {}) {
+  const tr = opts.tr; const t0 = Date.now();
+  const u = input instanceof URL && opts.lookup ? input : toUrl(input); // a URL object only in tests (local fixture port)
   if (!u) throw Object.assign(new Error('That doesn\'t look like a public web address.'), { status: 400 });
-  const page = await fetchPage(u);
-  // up to two same-site stylesheets, for the brand colour; failures are fine
+  const endHome = tr && tr.start('crawl.page', { page: u.pathname || '/' });
+  const page = await fetchPage(u, { lookup: opts.lookup });
+  if (endHome) endHome({ bytes: page.body.length });
+  // up to two same-site stylesheets (brand colour) and three nav pages, all in parallel within the remaining budget
+  const left = () => Math.max(1500, CRAWL.budgetMs - (Date.now() - t0));
   const links = all(page.body, /<link[^>]+rel=["']?stylesheet["']?[^>]*>/gi).map((m) => (m[0].match(/href=["']([^"']+)["']/i) || [])[1]).filter(Boolean)
     .map((href) => { try { return new URL(href, page.url); } catch { return null; } }).filter((x) => x && x.hostname === page.url.hostname).slice(0, 2);
-  const css = (await Promise.all(links.map((l) => fetchPage(toUrl(l.href) || l, { html: false, maxBytes: LIMITS.cssBytes, timeoutMs: 4000, accept: 'text/css' }).then((r) => r.body).catch(() => '')))).join('\n');
-  return extract(page.body, page.url, css);
+  const inner = (opts.pages ?? CRAWL.pages) > 0 ? pickPages(page.body, page.url, opts.pages ?? CRAWL.pages) : [];
+  const [cssParts, innerPages] = await Promise.all([
+    Promise.all(links.map((l) => fetchPage(l, { html: false, maxBytes: LIMITS.cssBytes, timeoutMs: Math.min(4000, left()), accept: 'text/css', lookup: opts.lookup }).then((r) => r.body).catch(() => ''))),
+    Promise.all(inner.map((iu) => { const end = tr && tr.start('crawl.page', { page: iu.pathname }); return fetchPage(iu, { timeoutMs: Math.min(5000, left()), lookup: opts.lookup }).then((r) => { if (end) end({ bytes: r.body.length }); return r; }, (e) => { if (end) end({ error: String(e.message).slice(0, 60) }); return null; }); })),
+  ]);
+  const summary = extract(page.body, page.url, cssParts.join('\n'));
+  const pageList = [{ url: page.url.href, title: summary.title }];
+  let pass = passages(page.body, page.url);
+  innerPages.filter(Boolean).forEach((p) => {
+    const e = extract(p.body, p.url);
+    pageList.push({ url: p.url.href, title: e.title });
+    summary.items = mergeLists(summary.items, e.items, 16); summary.quotes = mergeLists(summary.quotes, e.quotes, 4); summary.prices = mergeLists(summary.prices, e.prices, 8); summary.hours = mergeLists(summary.hours, e.hours, 4);
+    summary.headings = mergeLists(summary.headings, e.headings, 14);
+    ['phone', 'email', 'address'].forEach((k) => { if (!summary.contact[k] && e.contact[k]) summary.contact[k] = e.contact[k]; });
+    pass = pass.concat(passages(p.body, p.url));
+  });
+  summary.pages = pageList;
+  return { summary, passages: pass.slice(0, 60) };
 }
 
 export default async function handler(req, res) {
   if (guard(req, res, { methods: ['GET'], bucket: 'scrape' })) return;
+  const tr = trace();
   const q = (req.query && req.query.url) || new URL(req.url, 'http://x').searchParams.get('url');
   try {
-    const out = await scrape(q);
-    res.setHeader('cache-control', 'public, s-maxage=3600, max-age=0');
-    return res.status(200).json(out);
+    const u = toUrl(q);
+    if (!u) throw Object.assign(new Error('That doesn\'t look like a public web address.'), { status: 400 });
+    const host = u.hostname;
+    // a site read in the last 24 hours: reuse its index and summary, skip the crawl
+    const known = await knowledge.lookup(host, tr).catch(() => null);
+    if (known && known.fresh) {
+      const summary = await knowledge.cachedSummary(known.name);
+      if (summary) { res.setHeader('cache-control', 'no-store'); return res.status(200).json({ ...summary, index: { name: known.name, cached: true, ready: known.info.status === 'Ready', status: known.info.status }, timing: tr.spans, serverMs: tr.now() }); }
+    }
+    const { summary, passages: pass } = await scrape(q, { tr });
+    let index = null;
+    try { index = await knowledge.build(host, pass, summary, tr); } catch (e) { tr.add('index.error', tr.now(), tr.now(), { error: String(e.message).slice(0, 120) }); }
+    res.setHeader('cache-control', 'no-store');
+    return res.status(200).json({ ...summary, passages: pass, index: index ? { name: index.name, cached: false, ready: index.ready, passages: index.passages } : null, timing: tr.spans, serverMs: tr.now() });
   } catch (e) {
-    return res.status(e.status && e.status >= 400 && e.status < 600 ? e.status : 502).json({ error: e.code === 'EBLOCKED' ? 'That address is not public.' : (e.message || 'Could not read that site.') });
+    return res.status(e.status && e.status >= 400 && e.status < 600 ? e.status : 502).json({ error: e.code === 'EBLOCKED' ? 'That address is not public.' : (e.message || 'Could not read that site.'), timing: tr.spans });
   }
 }
