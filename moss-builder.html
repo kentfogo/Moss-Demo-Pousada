@@ -2794,8 +2794,78 @@ const voice = (() => {
      Listening: the mic (with echo cancellation) streams to Deepgram's live transcription over a WebSocket.
      Speaking: /api/speak returns Aura audio that plays inside the page, so echo cancellation removes it from the mic. */
   const dg = { ready: false, tts: true, cfg: null, stream: null, gen: 0, tq: [], playing: null, fails: 0 };
+
+  /* ---- Kokoro (open-source TTS in the browser, opt-in): Kokoro-82M runs in a Web Worker (WASM, q8, ~92 MB once,
+     then cached by the browser; ?kokoro=webgpu uses WebGPU with the fp32 model). Same sentence queue as Aura. ---- */
+  const KOKORO_WORKER = `
+    let tts = null;
+    self.onmessage = async (e) => {
+      const m = e.data;
+      try {
+        if (m.type === 'load') {
+          const { KokoroTTS } = await import('https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/+esm');
+          tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', { dtype: m.device === 'webgpu' ? 'fp32' : 'q8', device: m.device, progress_callback: (p) => { if (p && p.status === 'progress') self.postMessage({ type: 'progress', file: p.file, loaded: p.loaded, total: p.total }); } });
+          self.postMessage({ type: 'ready', device: m.device });
+        } else if (m.type === 'speak') {
+          const audio = await tts.generate(m.text, { voice: m.voice || 'af_heart' });
+          const wav = await audio.toBlob().arrayBuffer();
+          self.postMessage({ type: 'audio', id: m.id, wav }, [wav]);
+        }
+      } catch (err) { self.postMessage({ type: 'error', id: m.id, error: String(err && err.message || err) }); }
+    };`;
+  const kk = { worker: null, state: 'off', progress: 0, files: {}, device: null, pending: new Map(), seq: 0, fails: 0, error: null, listeners: [] };
+  const kkEmit = () => kk.listeners.forEach((f) => { try { f(kokoroStatus()); } catch (e) {} });
+  const kokoroStatus = () => ({ state: kk.state, progress: kk.progress, device: kk.device, error: kk.error });
+  function kokoroLoad() {
+    if (kk.worker || !window.Worker) return;
+    kk.state = 'loading'; kk.progress = 0; kkEmit();
+    try {
+      const url = URL.createObjectURL(new Blob([KOKORO_WORKER], { type: 'text/javascript' }));
+      kk.worker = new Worker(url, { type: 'module' });
+    } catch (e) { kk.state = 'failed'; kk.error = e.message; kkEmit(); return; }
+    kk.worker.onmessage = (ev) => {
+      const m = ev.data || {};
+      if (m.type === 'progress') { kk.files[m.file] = [m.loaded, m.total]; const v = Object.values(kk.files); const tot = v.reduce((a, x) => a + (x[1] || 0), 0); kk.progress = tot ? Math.round((v.reduce((a, x) => a + (x[0] || 0), 0) / tot) * 100) : 0; kkEmit(); }
+      else if (m.type === 'ready') { kk.state = 'ready'; kk.device = m.device; kk.progress = 100; kkEmit(); }
+      else if (m.type === 'audio') { const p = kk.pending.get(m.id); if (p) { kk.pending.delete(m.id); p.resolve(new Blob([m.wav], { type: 'audio/wav' })); } }
+      else if (m.type === 'error') {
+        const p = m.id != null && kk.pending.get(m.id);
+        if (p) { kk.pending.delete(m.id); p.reject(new Error(m.error)); }
+        else { kk.state = 'failed'; kk.error = m.error; kkEmit(); }
+      }
+    };
+    kk.worker.onerror = (e) => { kk.state = 'failed'; kk.error = (e && e.message) || 'worker failed'; kkEmit(); };
+    const wantGpu = new URLSearchParams(location.search).get('kokoro') === 'webgpu' && !!navigator.gpu;
+    kk.worker.postMessage({ type: 'load', device: wantGpu ? 'webgpu' : 'wasm' });
+  }
+  function kokoroSynth(text) {
+    const k = 'kokoro:' + text.toLowerCase();
+    if (audioCache.has(k)) { dg.cacheHits = (dg.cacheHits || 0) + 1; return audioCache.get(k); }
+    const id = ++kk.seq;
+    const p = new Promise((resolve, reject) => { kk.pending.set(id, { resolve, reject }); kk.worker.postMessage({ type: 'speak', id, text, voice: 'af_heart' }); });
+    audioCache.set(k, p); p.catch(() => audioCache.delete(k));
+    return p;
+  }
+  function sayKokoro(t, at) { sentences(t).forEach((x) => { const audio = kokoroSynth(x); audio.catch(() => {}); dg.tq.push({ text: x, audio, gen: dg.gen, at, engine: 'kokoro' }); }); pump(); }
+  /* which voice speaks: the person's pick (Aura / Kokoro / Browser), falling back when it isn't available */
+  let pref = (() => { const q = new URLSearchParams(location.search).get('voice'); if (['aura', 'kokoro', 'browser'].includes(q)) return q; try { return localStorage.getItem('moss-voice') || 'auto'; } catch (e) { return 'auto'; } })();
+  const auraOk = () => (dg.ready || dg.speakOnly) && dg.tts;
+  function engine() {
+    if (pref === 'kokoro' && kk.state === 'ready') return 'kokoro';
+    if (pref === 'browser' && synth) return 'browser';
+    return auraOk() ? 'aura' : 'browser';
+  }
+  function setEngine(name) {
+    pref = ['aura', 'kokoro', 'browser', 'auto'].includes(name) ? name : 'auto';
+    try { localStorage.setItem('moss-voice', pref); } catch (e) {}
+    if (pref === 'kokoro') { kk.fails = 0; if (kk.state === 'failed') { kk.worker = null; } kokoroLoad(); }
+    kkEmit();
+  }
+  if (pref === 'kokoro') setTimeout(kokoroLoad, 0);
   const dgLive = () => !!(live && live.ws);
-  async function init() {
+  let initP = null;
+  function init() { return initP || (initP = initOnce()); } // called from more than one place; one token request
+  async function initOnce() {
     if (!/^https?:$/.test(location.protocol) || new URLSearchParams(location.search).has('browservoice') || !navigator.mediaDevices || !window.MediaRecorder) return false;
     try {
       const r = await fetch('/api/voice-token', { cache: 'no-store' });
@@ -2904,7 +2974,10 @@ const voice = (() => {
     const item = dg.tq.shift(); if (item.gen !== dg.gen) return pump();
     let blob;
     try { blob = await item.audio; dg.fails = 0; }
-    catch (e) { if (++dg.fails >= 2) dg.tts = false; sayBrowser(item.text); return pump(); }
+    catch (e) {
+      if (item.engine === 'kokoro') { if (++kk.fails >= 2) { kk.state = 'failed'; kk.error = e.message; kkEmit(); } if (auraOk()) { sayDeepgram(item.text, item.at); } else sayBrowser(item.text, item.at); return pump(); }
+      if (++dg.fails >= 2) dg.tts = false; sayBrowser(item.text); return pump();
+    }
     if (item.gen !== dg.gen) return pump();
     const url = URL.createObjectURL(blob); const a = new Audio(url); dg.playing = a;
     markSpeaking(item.text);
@@ -2952,7 +3025,7 @@ const voice = (() => {
   // Moss never starts talking while you are: lines wait for a quiet moment (live mode only).
   function speak(text) {
     const t = forSpeech(text);
-    if ((!synth && !(dg.ready && dg.tts)) || !t || !sound.isEnabled()) return;
+    if ((!synth && !(dg.ready && dg.tts) && kk.state !== 'ready') || !t || !sound.isEnabled()) return;
     if (!live) return say(t);
     queue.push({ t, at: performance.now() }); flush();
   }
@@ -2970,7 +3043,7 @@ const voice = (() => {
   }
   let timingHook = null;
   const timing = (e) => { if (timingHook) try { timingHook(e); } catch (x) {} };
-  function say(t, at = performance.now()) { if ((dg.ready || dg.speakOnly) && dg.tts) sayDeepgram(t, at); else sayBrowser(t, at); }
+  function say(t, at = performance.now()) { const e = engine(); if (e === 'kokoro') sayKokoro(t, at); else if (e === 'aura') sayDeepgram(t, at); else sayBrowser(t, at); }
   function sayBrowser(t, at = performance.now()) {
     if (!synth) return;
     const u = new SpeechSynthesisUtterance(t);
@@ -2988,7 +3061,7 @@ const voice = (() => {
     if (synth) synth.cancel();
     speech.until = Math.min(speech.until, Date.now());
   }
-  return { init, backend: () => (dg.ready ? 'deepgram' : 'browser'), canPushToTalk: () => !!SR, supported: () => !!SR || dg.ready, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), lastWordsAt: () => lastWordsAt, onTiming: (fn) => { timingHook = fn; }, usage: () => ({ sentMs: dg.sentMs, skippedMs: dg.skippedMs, cacheHits: dg.cacheHits || 0, pcm: !!(live && live.pcm) }), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
+  return { init, backend: () => (dg.ready ? 'deepgram' : 'browser'), canPushToTalk: () => !!SR, supported: () => !!SR || dg.ready, start, stop, abort, speak, cancelSpeech, startLive, stopLive, isLive: () => !!live, isListening: () => active || !!live, isEcho, forSpeech, liveRestarts: () => (live ? live.restarts : 0), engine, setEngine, preference: () => pref, auraAvailable: auraOk, kokoro: kokoroStatus, onKokoro: (fn) => kk.listeners.push(fn), lastWordsAt: () => lastWordsAt, onTiming: (fn) => { timingHook = fn; }, usage: () => ({ sentMs: dg.sentMs, skippedMs: dg.skippedMs, cacheHits: dg.cacheHits || 0, pcm: !!(live && live.pcm) }), quietFor: () => Date.now() - lastHeardAt, queued: () => queue.length };
 })();
 
 /* =====================================================================
@@ -3831,6 +3904,15 @@ const app = (() => {
     $('#latClose').addEventListener('click', () => latency.toggle(false));
     $('#latCopy').addEventListener('click', async () => { const j = latency.json(); try { await navigator.clipboard.writeText(j); $('#latCopy').textContent = 'Copied'; } catch (e) { console.log(j); $('#latCopy').textContent = 'Logged to console'; } setTimeout(() => ($('#latCopy').textContent = 'Copy JSON'), 1500); });
     voice.onTiming((e) => latency.tts(e));
+    // Voice switch (in the Latency panel): Aura / Kokoro / Browser, so the waterfall can compare first-audio times
+    const renderVoiceSwitch = () => {
+      const k = voice.kokoro(); const p = voice.preference(); const cur = voice.engine();
+      const kLabel = k.state === 'loading' ? `Kokoro ${k.progress}%` : k.state === 'failed' ? 'Kokoro (failed)' : 'Kokoro';
+      $('#latVoice').innerHTML = [['aura', 'Aura', !voice.auraAvailable()], ['kokoro', kLabel, false], ['browser', 'Browser', false]].map(([id, label, off]) => `<button type="button" class="chip" data-voice="${id}" aria-pressed="${cur === id || (id === 'kokoro' && p === 'kokoro')}" ${off ? 'disabled title="Deepgram is not configured"' : ''} ${id === 'kokoro' && k.error ? `title="${esc(k.error)}"` : ''}>${esc(label)}</button>`).join('');
+    };
+    $('#latVoice').addEventListener('click', (e) => { const b = e.target.closest('[data-voice]'); if (b && !b.disabled) { voice.setEngine(b.dataset.voice); renderVoiceSwitch(); } });
+    voice.onKokoro(renderVoiceSwitch);
+    voice.init().then(renderVoiceSwitch); renderVoiceSwitch();
     // warm the Moss router (embedding model + intent index) while you're still reading the start screen
     if (agent.isRemote()) setTimeout(() => fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"warm":true}' }).catch(() => {}), 1200);
     if (new URLSearchParams(location.search).has('debug')) latency.toggle(true);

@@ -135,6 +135,41 @@ const server = http.createServer((req, res) => {
   check('no console/page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
 
+  // Kokoro (open-source voice in the browser), with a fake worker and fake audio
+  const ctxK = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctxK.addInitScript(() => {
+    window.__worker = { msgs: [], failSpeak: false };
+    window.Worker = class { constructor(url, o) { window.__worker.opts = o; this.onmessage = null; }
+      postMessage(m) { window.__worker.msgs.push(m); const send = (d, ms) => setTimeout(() => this.onmessage && this.onmessage({ data: d }), ms);
+        if (m.type === 'load') { send({ type: 'progress', file: 'model.onnx', loaded: 46, total: 92 }, 20); send({ type: 'ready', device: m.device }, 250); }
+        if (m.type === 'speak') send(window.__worker.failSpeak ? { type: 'error', id: m.id, error: 'synth failed' } : { type: 'audio', id: m.id, wav: new ArrayBuffer(64) }, 60); } };
+    window.__plays = [];
+    window.Audio = class { constructor(src) { this.src = src; } play() { window.__plays.push(this.src); setTimeout(() => this.onended && this.onended(), 150); return Promise.resolve(); } pause() {} };
+    window.__spoken = [];
+    window.SpeechSynthesisUtterance = function (t) { this.text = t; };
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speaking: false, speak: (u) => { window.__spoken.push(u.text); setTimeout(() => u.onstart && u.onstart(), 30); }, cancel() {}, getVoices: () => [], addEventListener() {} } });
+  });
+  const pk = await ctxK.newPage(); const errK = []; pk.on('pageerror', (e) => errK.push(e.message));
+  await pk.goto(`${base}/?speed=0.03&debug&voice=kokoro`);
+  await pk.waitForFunction(() => window.__worker.msgs.some((m) => m.type === 'load'), null, { timeout: 3000 });
+  check('?voice=kokoro loads Kokoro in a module worker (WASM by default)', (await pk.evaluate(() => window.__worker.opts && window.__worker.opts.type === 'module' && window.__worker.msgs[0].device === 'wasm')));
+  await pk.waitForFunction(() => /Kokoro \d+%/.test(document.querySelector('#latVoice').textContent), null, { timeout: 2000 }).catch(() => {});
+  const prog = await pk.locator('#latVoice').textContent();
+  await pk.waitForFunction(() => window.moss.voice.kokoro().state === 'ready', null, { timeout: 3000 });
+  check('download progress shows on the Voice switch, then Kokoro is ready and selected', /Kokoro 50%/.test(prog) && (await pk.getAttribute('#latVoice [data-voice="kokoro"]', 'aria-pressed')) === 'true' && (await pk.evaluate(() => window.moss.voice.engine())) === 'kokoro', prog);
+  await pk.evaluate(() => window.moss.app.send('build a bakery called Crumb in Leeds', { voice: true, speechEndAt: performance.now() - 300 }));
+  await pk.evaluate(() => window.moss.app.whenIdle()); await pk.waitForTimeout(700);
+  const kt = JSON.parse(await pk.evaluate(() => window.moss.latency.json())).at(-1);
+  check('Moss speaks with Kokoro, sentence by sentence, not the browser voice', (await pk.evaluate(() => window.__worker.msgs.filter((m) => m.type === 'speak').length)) >= 1 && (await pk.evaluate(() => window.__plays.length)) >= 1 && (await pk.evaluate(() => window.__spoken.length)) === 0);
+  check('the waterfall labels first audio with the engine (Kokoro)', kt.spans.some((x) => x.name === 'first audio · kokoro'), kt.spans.map((x) => x.name).join());
+  await pk.evaluate(() => { window.__worker.failSpeak = true; window.moss.voice.speak('One more thing. And another.'); });
+  await pk.waitForTimeout(900);
+  check('if Kokoro fails, it falls back (here to the browser voice) and the switch says so', (await pk.evaluate(() => window.__spoken.length)) >= 1 && (await pk.evaluate(() => window.moss.voice.kokoro().state)) === 'failed' && /failed/.test(await pk.locator('#latVoice').textContent()));
+  await pk.click('#latVoice [data-voice="browser"]');
+  check('the switch remembers the choice', (await pk.evaluate(() => localStorage.getItem('moss-voice'))) === 'browser' && (await pk.evaluate(() => window.moss.voice.engine())) === 'browser');
+  check('no page errors (Kokoro)', errK.length === 0, errK.join(' | '));
+  await ctxK.close();
+
   // phone: the panel fits
   const ctx2 = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
   const p2 = await ctx2.newPage(); await p2.goto(`${base}/?speed=0.03&debug`);
